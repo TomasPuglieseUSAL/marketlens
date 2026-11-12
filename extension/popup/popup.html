@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MarketLens</title>
+  <link rel="stylesheet" href="popup.css">
+  <script src="popup.js" defer></script>
+</head>
+<body>
+  <main class="popup">
+    <header class="brand">
+      <div class="brand-icon" aria-hidden="true">◈</div>
+      <div>
+        <h1>MarketLens</h1>
+        <p>Evaluación de publicaciones</p>
+      </div>
+    </header>
+
+    <section class="card auth-card" aria-labelledby="auth-title">
+      <div class="section-heading">
+        <h2 id="auth-title">Tu cuenta</h2>
+        <button id="logout-button" type="button" class="link-button" hidden>Cerrar sesión</button>
+      </div>
+      <p id="auth-status" class="muted" role="status" aria-live="polite">Comprobando sesión…</p>
+      <form id="login-form" hidden>
+        <label for="login-username">Usuario</label>
+        <input id="login-username" type="text" autocomplete="username" required>
+        <label for="login-password">Contraseña</label>
+        <input id="login-password" type="password" autocomplete="current-password" required>
+        <button id="login-button" type="submit" class="primary">Iniciar sesión</button>
+      </form>
+    </section>
+
+    <div id="authenticated-content" hidden>
+      <section class="card analysis-card" aria-labelledby="analysis-title">
+        <div class="section-heading">
+          <h2 id="analysis-title">Analizar publicación</h2>
+          <span id="marketplace" class="small-tag">Detectando…</span>
+        </div>
+        <p id="page-title" class="listing-title">Consultando pestaña…</p>
+        <p id="status" class="muted" role="status" aria-live="polite">Identificando publicación…</p>
+
+        <button id="analyze-button" type="button" class="primary main-action" disabled>
+          <span aria-hidden="true" class="action-icon">◎</span>
+          <span>Analizar publicación</span>
+        </button>
+
+        <div id="loading-section" class="loading-state" role="status" aria-live="polite" hidden>
+          <span class="spinner" aria-hidden="true"></span>
+          <strong>Analizando publicación…</strong>
+          <span id="loading-message" class="muted">Preparando análisis…</span>
+        </div>
+
+        <section id="result-section" class="result-card" aria-label="Resultado del análisis" hidden>
+          <div class="result-header">
+            <span id="result-icon" class="risk-icon" aria-hidden="true">?</span>
+            <div>
+              <h3 id="result-level">Resultado</h3>
+              <p id="result-explanation" class="muted"></p>
+            </div>
+          </div>
+          <div class="stat-grid">
+            <div class="stat"><span>Puntaje</span><strong id="result-score">—</strong></div>
+            <div class="stat"><span>Cobertura</span><strong id="result-coverage">—</strong></div>
+          </div>
+          <p id="result-coverage-note" class="muted small"></p>
+          <ul id="result-factors" class="factor-list" hidden></ul>
+          <button id="open-publication-button" type="button" class="outline full-width">Ver en MarketLens ↗</button>
+          <button id="reanalyze-button" type="button" class="subtle-button full-width">Volver a analizar</button>
+        </section>
+
+        <div id="error-section" class="error-card" role="alert" hidden>
+          <strong>No pudimos completar el análisis</strong>
+          <p id="error-message"></p>
+          <button id="retry-button" type="button" class="outline">Reintentar</button>
+        </div>
+
+        <section id="facebook-correction" class="correction-card" aria-label="Completar datos de la publicación" hidden>
+          <h3>Completá los datos faltantes</h3>
+          <p class="muted small">Revisá o completá los campos que el sitio no permitió extraer automáticamente.</p>
+          <label for="fb-title">Título</label>
+          <input id="fb-title" type="text" maxlength="255">
+          <label for="fb-price">Precio (ARS)</label>
+          <input id="fb-price" type="text" placeholder="250000">
+          <label for="fb-seller">Vendedor</label>
+          <input id="fb-seller" type="text" maxlength="255">
+          <div id="fb-join-row">
+            <label for="fb-join-year">Año de ingreso a Facebook (opcional)</label>
+            <input id="fb-join-year" type="number" min="2004" max="2100">
+          </div>
+          <label for="fb-description">Descripción (opcional)</label>
+          <textarea id="fb-description" rows="3" maxlength="5000"></textarea>
+          <button id="facebook-continue-button" type="button" class="primary">Continuar</button>
+        </section>
+      </section>
+
+      <section class="card report-card" aria-labelledby="report-title">
+        <div class="section-heading">
+          <h2 id="report-title">Reporte manual</h2>
+          <span aria-hidden="true">⚑</span>
+        </div>
+        <p class="muted small">¿Notaste algo sospechoso? Tu reporte complementa el análisis automático.</p>
+        <form id="report-form">
+          <label for="report-reason">Motivo</label>
+          <select id="report-reason" required>
+            <option value="" selected disabled>Seleccioná un motivo</option>
+            <option value="SUSPICIOUS_PRICE">Precio sospechoso</option>
+            <option value="SUSPICIOUS_SELLER">Vendedor sospechoso</option>
+            <option value="SUSPICIOUS_DESCRIPTION">Descripción sospechosa</option>
+            <option value="PAYMENT_OUTSIDE_PLATFORM">Pago fuera de la plataforma</option>
+            <option value="POSSIBLE_IMPERSONATION">Posible suplantación de identidad</option>
+            <option value="OTHER">Otro motivo</option>
+          </select>
+          <label for="report-description">Descripción (opcional)</label>
+          <textarea id="report-description" rows="3" maxlength="2000" placeholder="Contanos qué observaste…"></textarea>
+          <button id="report-submit" type="submit" class="outline full-width" disabled>Enviar reporte</button>
+        </form>
+        <p id="report-status" role="status" aria-live="polite" class="muted small"></p>
+      </section>
+    </div>
+
+    <footer>MarketLens · Extensión experimental</footer>
+  </main>
+</body>
+</html>

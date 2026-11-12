@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "MarketLens",
+  "version": "0.4.1",
+  "description": "Analiza el riesgo de publicaciones y permite reportarlas.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["http://localhost/*"],
+  "background": {
+    "scripts": ["background.js"],
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "MarketLens",
+    "default_popup": "popup/popup.html"
+  },
+  "browser_specific_settings": {
+    "gecko": {"id": "marketlens@local.test"}
+  }
+}
