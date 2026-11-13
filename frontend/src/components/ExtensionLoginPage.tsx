@@ -28,7 +28,7 @@ function readHandoff(): Handoff | null {
 }
 
 async function redeemCode(code: string): Promise<StoredSession> {
-  const response = await fetch('http://localhost:8080/api/auth/extension-exchange', {
+  const response = await fetch('/api/auth/extension-exchange', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code }),

@@ -381,16 +381,7 @@ function App() {
         <AnimatedRoutes enabled={Boolean(token)}>
           <Route
             path="/auth/extension"
-            element={
-              token ? (
-                <Navigate
-                  to={getPublicationPath(new URLSearchParams(location.hash.slice(1)).toString()) ?? '/dashboard'}
-                  replace
-                />
-              ) : (
-                <ExtensionLoginPage onSession={acceptExtensionSession} />
-              )
-            }
+            element={<ExtensionLoginPage onSession={acceptExtensionSession} />}
           />
 
           <Route
