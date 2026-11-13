@@ -1228,3 +1228,31 @@ button:disabled {
     animation: none;
   }
 }
+/* Enlaces y ayuda para acceso/registro de usuarios. */
+.auth-switch {
+  margin: 17px 0 0;
+  color: var(--text-secondary);
+  font-size: .91rem;
+  text-align: center;
+}
+.auth-switch a {
+  color: var(--accent-strong);
+  font-weight: 750;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.auth-switch a:hover { color: var(--accent); }
+.auth-switch a:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+.auth-description {
+  color: var(--text-secondary);
+  margin-top: 8px;
+}
+.auth-hint {
+  color: var(--text-secondary);
+  font-size: .81rem;
+  margin: 5px 0 0;
+}

@@ -2,11 +2,20 @@
 
 Aplicación web de MarketLens, construida con **React, TypeScript y Vite**. Permite iniciar sesión, consultar el panel de estadísticas, administrar publicaciones y vendedores y solicitar evaluaciones de riesgo.
 
-> Para instalar y ejecutar **todo el sistema** (frontend, backend y PostgreSQL), consultá el [README principal](../README.md). La forma recomendada de iniciar la demostración es mediante Docker Compose desde la raíz del proyecto.
+> Para instalar y ejecutar **todo el sistema** (frontend, backend y PostgreSQL), consultá el [README principal](../README.md). La forma recomendada de iniciar MarketLens es mediante Docker Compose desde la raíz del proyecto.
 
-## Acceso en modo demostración
+## Registro e inicio de sesión
 
-Desde la raíz del proyecto, iniciá los tres servicios según el README principal. Luego abrí **http://localhost:5173** e iniciá sesión con el usuario `demo` y la contraseña `DEMO_PASSWORD` guardada en el archivo `.env` local (no debe publicarse).
+Iniciá los tres servicios según el [README principal](../README.md), preferentemente mediante `scripts/start-compose.ps1` en Windows. Después:
+
+1. Abrí **http://localhost:5173/login**.
+2. Seleccioná **Crear cuenta** (ruta `/register`).
+3. Ingresá nombre de usuario, correo y contraseña; confirmá la contraseña.
+4. Al completar el registro, el sistema vuelve al inicio de sesión.
+5. Ingresá con tu nuevo usuario y la contraseña elegida.
+
+El endpoint `POST /api/auth/register` ya está implementado en el backend. El modo `registration` no crea la cuenta `demo`, pero carga publicaciones ficticias.
+Si preferís la cuenta predefinida, iniciá `scripts/start-compose-demo.ps1` y consultá `DEMO_PASSWORD` en el archivo `.env` privado.
 
 Las secciones disponibles incluyen:
 

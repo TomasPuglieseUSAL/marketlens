@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useState, type FormEvent, type
 import {
   Navigate,
   NavLink,
+  Link,
   Route,
   Routes,
   useLocation,
@@ -28,6 +29,7 @@ import PublicationsPanel from './components/PublicationsPanel'
 import ProtectedRoute from './components/ProtectedRoute'
 import PublicationDetailsPage from './components/PublicationDetailsPage'
 import ExtensionLoginPage from './components/ExtensionLoginPage'
+import RegisterPage from './components/RegisterPage'
 
 import './App.css'
 
@@ -411,6 +413,12 @@ function App() {
                 <section className="login-container">
                   <h2>Iniciar sesión</h2>
 
+                  {new URLSearchParams(location.search).get('registered') === '1' && (
+                    <p className="session-message" role="status">
+                      Cuenta creada correctamente. Ya podés iniciar sesión.
+                    </p>
+                  )}
+
                   {sessionMessage && (
                     <p className="session-message" role="status">
                       {sessionMessage}
@@ -448,7 +456,24 @@ function App() {
                       {loading ? 'Ingresando...' : 'Ingresar'}
                     </button>
                   </form>
+                  <p className="auth-switch">
+                    ¿Todavía no tenés cuenta?{' '}
+                    <Link to={`/register?redirect=${encodeURIComponent(afterLoginPath)}`}>
+                      Crear cuenta
+                    </Link>
+                  </p>
                 </section>
+              )
+            }
+          />
+
+          <Route
+            path="/register"
+            element={
+              token ? (
+                <Navigate to={afterLoginPath} replace />
+              ) : (
+                <RegisterPage returnTo={afterLoginPath} />
               )
             }
           />

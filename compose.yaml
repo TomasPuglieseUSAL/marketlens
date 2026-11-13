@@ -1,4 +1,6 @@
-# MarketLens / Etapa 5: PostgreSQL + Spring Boot + Vite/React servido por Nginx.
+# MarketLens: PostgreSQL + Spring Boot + React servido por Nginx.
+# El perfil predeterminado es registration (sin usuario precreado).
+# El script start-compose-demo.ps1 fuerza el perfil demo si se desean credenciales demo.
 # Ejecutar desde la RAIZ del repositorio: docker compose up --build -d
 services:
   db:
@@ -27,10 +29,10 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      SPRING_PROFILES_ACTIVE: container,demo
+      SPRING_PROFILES_ACTIVE: container,${MARKETLENS_PROFILE:-registration}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Crea .env con POSTGRES_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?Crea .env con JWT_SECRET}
-      DEMO_PASSWORD: ${DEMO_PASSWORD:?Crea .env con DEMO_PASSWORD}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
     depends_on:
       db:
         condition: service_healthy

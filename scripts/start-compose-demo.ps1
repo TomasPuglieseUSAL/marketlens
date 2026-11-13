@@ -43,6 +43,9 @@ Ensure-Secret 'DEMO_PASSWORD' 24
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 [System.IO.File]::WriteAllLines($envPath, [string[]]$lines, $utf8NoBom)
 
+# El script de demostración conserva el comportamiento original.
+$oldProfile = $env:MARKETLENS_PROFILE
+$env:MARKETLENS_PROFILE = 'demo'
 Push-Location $root
 try {
     Write-Host 'Construyendo e iniciando PostgreSQL + backend + frontend...'
@@ -54,4 +57,11 @@ try {
     Write-Host 'Backend:  http://localhost:8080'
     Write-Host 'Usuario de prueba: demo (clave en .env / DEMO_PASSWORD).'
     Write-Host 'Si no responde aun, ver los logs: docker compose logs -f backend'
-} finally { Pop-Location }
+} finally {
+    Pop-Location
+    if ($null -eq $oldProfile) {
+        Remove-Item Env:MARKETLENS_PROFILE -ErrorAction SilentlyContinue
+    } else {
+        $env:MARKETLENS_PROFILE = $oldProfile
+    }
+}

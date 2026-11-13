@@ -12,9 +12,9 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.stereotype.Component;
 
-/** Inserta publicaciones ficticias identificables, solo en perfil demo. */
+/** Inserta publicaciones ficticias en los perfiles locales demo y registration. */
 @Component
-@Profile("demo")
+@Profile({"demo", "registration"})
 @Order(20)
 public class DemoFixturesInitializer implements ApplicationRunner {
 
