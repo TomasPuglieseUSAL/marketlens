@@ -6,6 +6,20 @@ export interface LoginResponse {
   expiresIn: number
 }
 
+export interface RegisterRequest {
+  username: string
+  email: string
+  password: string
+}
+
+export interface RegisterResponse {
+  id: number
+  username: string
+  email: string
+  role: 'USER' | 'ADMIN'
+  createdAt: string
+}
+
 export interface DashboardSummary {
   totalPublications: number
   totalSellers: number
@@ -63,6 +77,13 @@ export function login(username: string, password: string) {
   return apiRequest<LoginResponse>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
+  })
+}
+
+export function register(request: RegisterRequest) {
+  return apiRequest<RegisterResponse>('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(request),
   })
 }
 

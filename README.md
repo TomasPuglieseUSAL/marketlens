@@ -12,7 +12,7 @@ MarketLens es un prototipo académico que permite registrar y analizar publicaci
 - [Requisitos](#requisitos)
 - [Inicio rápido en Windows](#inicio-rápido-en-windows)
 - [Inicio en Linux o macOS](#inicio-en-linux-o-macos)
-- [Acceso y recorrido de demostración](#acceso-y-recorrido-de-demostración)
+- [Registro y recorrido de la aplicación](#registro-y-recorrido-de-la-aplicación)
 - [Extensión de navegador](#extensión-de-navegador)
 - [Comandos útiles de Docker](#comandos-útiles-de-docker)
 - [Desarrollo y pruebas](#desarrollo-y-pruebas)
@@ -60,61 +60,74 @@ docker compose version
 
 ## Inicio rápido en Windows
 
-Estas instrucciones están pensadas para PowerShell en Windows 10/11 con Docker Desktop.
+Estas instrucciones son para PowerShell en Windows 10/11 con Docker Desktop.
 
 ### 1. Obtener el proyecto
-
-Cloná el repositorio (si tenés permisos de acceso):
 
 ```powershell
 git clone https://github.com/TomasPuglieseUSAL/marketlens.git
 cd marketlens
 ```
 
-También podés utilizar **GitHub Desktop → File → Clone repository** o descargar un ZIP desde GitHub y abrir una terminal en la carpeta extraída, donde se encuentra `compose.yaml`.
+También podés utilizar GitHub Desktop o descargar el repositorio como ZIP.
 
-### 2. Crear la configuración local
+### 2. Configurar la instalación local
 
 ```powershell
 Copy-Item .env.example .env
 notepad .env
 ```
 
-En `.env`, reemplazá el valor de ejemplo de `POSTGRES_PASSWORD` por una **contraseña nueva de desarrollo**. No publiques este archivo ni sus valores.
+Reemplazá `POSTGRES_PASSWORD` por una contraseña local segura. **No publiques el archivo `.env`.**
+El script del paso siguiente genera automáticamente un `JWT_SECRET` si falta.
 
-No necesitás completar manualmente `JWT_SECRET` ni `DEMO_PASSWORD`: el script del siguiente paso las genera y conserva en `.env` si están ausentes o vacías.
-
-### 3. Construir e iniciar MarketLens
-
-Desde la **raíz del proyecto**:
+### 3. Levantar los servicios
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-compose-demo.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-compose.ps1
 ```
 
-El script prepara las claves locales que faltan y ejecuta `docker compose up --build -d`. La primera construcción puede descargar dependencias y tardar más que los arranques posteriores.
+Esta modalidad utiliza el perfil `registration` de Spring Boot. **No genera un usuario `demo` ni requiere `DEMO_PASSWORD`.**
+La primera ejecución puede tardar mientras Docker descarga imágenes y compila los servicios.
 
-> La opción `ExecutionPolicy Bypass` se aplica únicamente al proceso de PowerShell de ese comando. Revisá el script antes de ejecutarlo; no es necesario cambiar permanentemente la política del sistema.
+> El cambio de política de ejecución de PowerShell solo aplica al proceso invocado. Revisá el script antes de ejecutarlo.
 
-### 4. Comprobar los servicios
+### 4. Registrar la primera cuenta
+
+Abrí **http://localhost:5173/register** o entrá a **http://localhost:5173/login** y seleccioná **Crear cuenta**.
+Ingresá nombre de usuario, correo electrónico y contraseña de 8 a 100 caracteres.
+Una vez creada la cuenta, iniciá sesión normalmente con el usuario y la contraseña elegidos.
+
+### 5. Comprobar los servicios
 
 ```powershell
 docker compose ps
 ```
 
-Deben aparecer `db`, `backend` y `frontend`. La base de datos debería indicar `healthy`.
+Deben aparecer `db`, `backend` y `frontend`, con PostgreSQL en estado `healthy`.
 
-| Servicio | Dirección desde el equipo anfitrión |
+| Servicio | Dirección local |
 | --- | --- |
 | Aplicación web | **http://localhost:5173** |
 | API REST | `http://localhost:8080` |
-| PostgreSQL | `localhost:5433` (solo conexiones locales) |
+| PostgreSQL | `localhost:5433` |
 
-Al abrir la raíz de la API sin autenticar es posible recibir `401 Unauthorized`: **es un comportamiento previsto** por Spring Security, no una señal de que el contenedor esté caído.
+Las interfaces quedan limitadas a `127.0.0.1`. El backend puede devolver `401` al solicitar una ruta protegida sin JWT; esto es normal.
+
+### Alternativa: modo demo tradicional
+
+Si preferís una cuenta `demo` generada automáticamente (por ejemplo, para una exposición), ejecutá en su lugar:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-compose-demo.ps1
+```
+
+Ese script genera `DEMO_PASSWORD` si falta y arranca con el perfil `container,demo`.
+El usuario es `demo` y la contraseña queda en `.env`. Las cuentas ya creadas persisten en PostgreSQL y **no cambian su contraseña al reiniciar**.
 
 ## Inicio en Linux o macOS
 
-Si disponés de Docker Compose y una terminal compatible con POSIX, podés iniciar la aplicación sin el script de PowerShell:
+Para iniciar el sistema sin PowerShell, instalá Docker Engine/Compose o Docker Desktop:
 
 ```bash
 git clone https://github.com/TomasPuglieseUSAL/marketlens.git
@@ -122,42 +135,45 @@ cd marketlens
 cp .env.example .env
 ```
 
-Editá `.env` y asigná un valor seguro a `POSTGRES_PASSWORD`. También debés agregar **dos líneas** con valores aleatorios (estos comandos generan ejemplos para copiar en el archivo):
+Editá `.env`: asigná un valor nuevo a `POSTGRES_PASSWORD` y agregá una clave JWT aleatoria:
 
 ```bash
-openssl rand -hex 64  # valor para JWT_SECRET
-openssl rand -hex 24  # valor para DEMO_PASSWORD
+openssl rand -hex 64
 ```
 
-El archivo `.env` debe contener al menos:
+Copiá el resultado a `JWT_SECRET` en `.env`:
 
 ```dotenv
 POSTGRES_PASSWORD=REEMPLAZAR_POR_UNA_CLAVE_LOCAL
 JWT_SECRET=REEMPLAZAR_POR_UN_VALOR_ALEATORIO_LARGO
-DEMO_PASSWORD=REEMPLAZAR_POR_OTRO_VALOR_ALEATORIO
 ```
 
-Después ejecutá:
+Luego ejecutá:
 
 ```bash
 docker compose up --build -d
 docker compose ps
 ```
 
-**Nota para macOS:** los puertos están limitados a `127.0.0.1`, por lo que el acceso se realiza desde la misma computadora. Este procedimiento no reemplaza una configuración de producción.
+El perfil predeterminado es `registration`: abrí **http://localhost:5173/register** para crear tu cuenta.
+Para iniciar explícitamente el modo demo, agregá `MARKETLENS_PROFILE=demo` y `DEMO_PASSWORD` (de al menos 12 caracteres) a `.env` antes del arranque.
 
-## Acceso y recorrido de demostración
+**Nota:** esta instalación local no equivale a un despliegue de producción.
+
+## Registro y recorrido de la aplicación
 
 1. Abrí **http://localhost:5173**.
-2. Iniciá sesión con el usuario **`demo`**.
-3. Usá como contraseña el valor de **`DEMO_PASSWORD`** guardado en tu archivo local `.env`. Si utilizaste el script de Windows, lo generó automáticamente.
-4. Entrá en **Publicaciones** para consultar las publicaciones identificadas como `[DEMO]`.
-5. Elegí una publicación y presioná **Evaluar riesgo**. El motor calcula una evaluación y presenta los factores disponibles.
-6. Consultá **Dashboard** para observar las estadísticas actualizadas; también podés explorar **Vendedores**.
+2. En la pantalla de inicio de sesión elegí **Crear cuenta** (o ingresá a `/register`).
+3. Registrá un usuario nuevo con correo electrónico y contraseña.
+4. Volvé a la pantalla de login e iniciá sesión con tus credenciales.
+5. Entrá en **Publicaciones** para consultar las ocho publicaciones sintéticas marcadas como `[DEMO]`.
+6. Elegí una publicación y presioná **Evaluar riesgo** para visualizar el puntaje, nivel y factores de información disponible.
+7. Consultá **Dashboard** y **Vendedores** para explorar estadísticas y entidades.
 
-El perfil `demo` crea **una cuenta de demostración**, **tres vendedores** y **ocho publicaciones ficticias**. Los datos se identifican como ejemplos y no representan ofertas o personas reales. Las evaluaciones se generan mediante el motor de riesgo cuando se solicitan; no se insertan resultados de evaluación predeterminados.
-
-Las operaciones de inicio de sesión y la API requieren sus respectivas credenciales o un token JWT. Los JWT expiran según la configuración del backend.
+Los perfiles locales `registration` y `demo` cargan vendedores y publicaciones ficticias para facilitar las pruebas.
+**Solo el perfil `demo` crea la cuenta predefinida `demo`.** En ambos perfiles, cualquier usuario puede crear una cuenta desde el frontend y la API `POST /api/auth/register`.
+Las contraseñas se almacenan como hashes BCrypt; el registro no otorga permisos administrativos.
+No hay confirmación de correo ni recuperación de contraseña: es una instalación de desarrollo/demostración, no un servicio público de producción.
 
 ## Extensión de navegador
 
@@ -168,7 +184,7 @@ La carpeta [`extension/`](extension/) contiene una extensión **experimental** q
 1. Con la aplicación Docker encendida, abrí `about:debugging#/runtime/this-firefox`.
 2. Seleccioná **Cargar complemento temporal** (*Load Temporary Add-on*).
 3. Elegí `extension/manifest.json` dentro de la carpeta descargada del proyecto.
-4. Abrí el botón de la extensión e iniciá sesión con la cuenta de demostración.
+4. Abrí el botón de la extensión e iniciá sesión con tu cuenta registrada (o con `demo` si elegiste ese modo).
 5. Visitá una publicación compatible y utilizá **Analizar publicación** o las opciones de reporte.
 
 La instalación temporal normalmente se pierde al reiniciar Firefox.
@@ -185,8 +201,8 @@ La instalación temporal normalmente se pierde al reiniciar Firefox.
 ### Limitaciones de la demostración
 
 - La extensión se conecta al backend local mediante **`http://localhost:8080/api`**; no está configurada para un servidor remoto.
-- La integración **OAuth de Mercado Libre está deshabilitada** con el perfil `demo`. Las acciones que requieran autorización o validaciones autenticadas contra esa API no estarán disponibles; otras funciones pueden seguir utilizando datos visibles de la página.
-- Las integraciones externas opcionales, como Gemini, no están habilitadas en la demostración sin su propia configuración.
+- La integración **OAuth de Mercado Libre está deshabilitada** con los perfiles locales `registration` y `demo`. Las acciones que requieran autorización o validaciones autenticadas contra esa API no estarán disponibles; otras funciones pueden seguir utilizando datos visibles de la página.
+- Las integraciones externas opcionales, como Gemini, no están habilitadas en estos perfiles locales.
 - La compatibilidad de extracción depende del formato y de los cambios que realicen los marketplaces en sus páginas.
 
 ## Comandos útiles de Docker
@@ -212,7 +228,7 @@ docker compose down
 
 PostgreSQL utiliza un **volumen persistente**. `docker compose down` conserva los datos, mientras que **`docker compose down -v` elimina también el volumen** y puede destruir las publicaciones y cuentas guardadas. No lo utilices salvo que quieras reiniciar expresamente una instalación de prueba.
 
-**Importante:** cambiar `POSTGRES_PASSWORD` en `.env` luego de la inicialización no cambia automáticamente la contraseña del usuario dentro de una base que ya existe. Lo mismo sucede con la contraseña `demo` creada en la base: se conserva al reiniciar.
+**Importante:** cambiar `POSTGRES_PASSWORD` en `.env` luego de la inicialización no cambia automáticamente la contraseña del usuario dentro de una base que ya existe. Lo mismo sucede con la contraseña `demo` cuando se utiliza el perfil tradicional: se conserva al reiniciar.
 
 ## Desarrollo y pruebas
 
@@ -245,7 +261,8 @@ Las migraciones de Flyway se encuentran en [`backend/src/main/resources/db/migra
 - **`.env.example`**: plantilla pública de configuración sin secretos reales.
 - **`.env`**: configuración local privada (excluida por `.gitignore`).
 - **`application-container.properties`**: conexión interna de Spring Boot al servicio Docker `db:5432`.
-- **`application-demo.properties`**: usuario y datos de ejemplo; deshabilita OAuth y Gemini en el entorno de demostración.
+- **`application-demo.properties`**: usuario `demo` y datos de ejemplo; deshabilita OAuth y Gemini.
+- **`application-registration.properties`**: registro de usuarios sin cuenta precreada, con datos sintéticos; deshabilita OAuth y Gemini.
 - **`compose.yaml`**: red, puertos y dependencias de los tres servicios.
 
 No subas `.env`, contraseñas, claves JWT, tokens OAuth ni credenciales de proveedores externos al repositorio. Evitá compartir capturas o registros que contengan estos valores.
@@ -257,14 +274,14 @@ La configuración usa **HTTP local** y no incluye las medidas necesarias para ex
 | Problema | Qué revisar |
 | --- | --- |
 | `POSTGRES_PASSWORD` no definido | Crear `.env` a partir de `.env.example` y completar la contraseña. |
-| `JWT_SECRET` o `DEMO_PASSWORD` no definido | En Windows, iniciar con `scripts/start-compose-demo.ps1`. En Linux/macOS, incorporarlas manualmente a `.env`. |
+| `JWT_SECRET` no definido | En Windows, iniciar con `scripts/start-compose.ps1`. En Linux/macOS, agregar una clave larga y aleatoria a `.env`. |
 | El puerto `8080`, `5173` o `5433` ya está ocupado | Detener otros servidores locales que utilicen ese puerto; comprobar con `docker compose ps`. |
 | `docker compose` no responde | Iniciar Docker Desktop y comprobar que use contenedores Linux. |
 | `401` al abrir la raíz del backend | Es normal para una ruta protegida sin token; probar el login desde el frontend. |
-| No se puede iniciar sesión con `demo` | Consultar `DEMO_PASSWORD` en `.env`, revisar los logs y recordar que una cuenta existente conserva su contraseña original. |
+| No existe el usuario `demo` | Es normal en el perfil predeterminado `registration`. Crear una cuenta desde el frontend o elegir el modo demo tradicional. |
 | Falló el backend | Ejecutar `docker compose logs --tail=150 backend`. |
 | No funciona la extensión | Confirmar que el backend esté activo en `localhost:8080`, que la sesión esté vigente y que la página sea compatible. |
-| OAuth de Mercado Libre devuelve servicio no disponible | Esperable en modo `demo`, porque se encuentra deshabilitado. |
+| OAuth de Mercado Libre devuelve servicio no disponible | Es esperado en los perfiles locales `registration` y `demo`, porque está deshabilitado. |
 
 ## Estructura del proyecto
 
@@ -284,6 +301,7 @@ marketlens/
 │   └── nginx.conf
 ├── extension/              # Extensión experimental de navegador
 ├── scripts/
+│   ├── start-compose.ps1
 │   └── start-compose-demo.ps1
 ├── compose.yaml
 ├── .env.example             # Plantilla; sí se versiona
