@@ -1,75 +1,58 @@
-# React + TypeScript + Vite
+# Frontend de MarketLens
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicación web de MarketLens, construida con **React, TypeScript y Vite**. Permite iniciar sesión, consultar el panel de estadísticas, administrar publicaciones y vendedores y solicitar evaluaciones de riesgo.
 
-Currently, two official plugins are available:
+> Para instalar y ejecutar **todo el sistema** (frontend, backend y PostgreSQL), consultá el [README principal](../README.md). La forma recomendada de iniciar la demostración es mediante Docker Compose desde la raíz del proyecto.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Acceso en modo demostración
 
-## React Compiler
+Desde la raíz del proyecto, iniciá los tres servicios según el README principal. Luego abrí **http://localhost:5173** e iniciá sesión con el usuario `demo` y la contraseña `DEMO_PASSWORD` guardada en el archivo `.env` local (no debe publicarse).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Las secciones disponibles incluyen:
 
-## Expanding the ESLint configuration
+- **Dashboard:** resumen de publicaciones, vendedores, evaluaciones y reportes.
+- **Vendedores:** consulta y registro de vendedores.
+- **Publicaciones:** consulta, registro y evaluación de publicaciones; desde el detalle se pueden ver las evaluaciones y los reportes.
+- **Acceso desde la extensión:** la ruta `/auth/extension` recibe un código temporal de un solo uso generado por el backend cuando la extensión abre una publicación en MarketLens.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Los resultados de riesgo son **indicativos**, dependen de los datos disponibles y no certifican que una operación sea segura o fraudulenta.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Desarrollo local del frontend
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+Requisitos para esta modalidad: **Node.js y npm**, más el backend de MarketLens ejecutándose en `http://localhost:8080`.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Desde la carpeta `frontend/`:
 
+```bash
+npm ci
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+Vite sirve el frontend y redirige las peticiones a `/api` hacia `http://localhost:8080`, de acuerdo con `vite.config.ts`. El cliente HTTP utiliza rutas relativas `/api`, así que no es necesario escribir una URL absoluta del backend en el código.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+En la ejecución con Docker, Nginx sirve los archivos compilados y hace el proxy de `/api` al servicio `backend` de Compose. No confundas este modo con el servidor de desarrollo de Vite.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Comandos disponibles
 
+Desde `frontend/`:
+
+```bash
+npm ci           # instalar las dependencias fijadas en package-lock.json
+npm run dev      # servidor de desarrollo
+npm run build    # comprobar TypeScript y generar dist/
+npm run lint     # ejecutar ESLint
 ```
+
+La carpeta `dist/` es generada y no se incluye en Git. Tampoco se deben versionar `node_modules/` ni archivos locales `.env` con credenciales.
+
+## Código y rutas relevantes
+
+- `src/App.tsx`: navegación, sesión, páginas y tema visual.
+- `src/api/client.ts`: peticiones al backend mediante `/api`.
+- `src/auth/session.ts`: almacenamiento y vencimiento de la sesión.
+- `src/components/`: paneles, formularios y detalles de publicación.
+- `vite.config.ts`: proxy de desarrollo.
+- `nginx.conf`: frontend estático y proxy del backend en Docker.
+- `Dockerfile`: compilación de producción para la demostración.
+
+**Importante:** este frontend forma parte de un prototipo académico local. La configuración del repositorio no constituye un despliegue público de producción.
