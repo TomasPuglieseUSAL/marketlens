@@ -3,6 +3,42 @@ const API_BASE = 'http://localhost:8080/api';
 const AUTH_KEY = 'marketlensAuth';
 const $ = (id) => document.getElementById(id);
 
+// Esta preferencia es independiente de la sesion de MarketLens.
+// Se almacena en la extension, no en localStorage del sitio web.
+const THEME_STORAGE_KEY = 'marketlens.extension.theme';
+let currentTheme = 'light';
+
+function applyTheme(value) {
+    currentTheme = value === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = currentTheme;
+    const nextMode = currentTheme === 'light' ? 'oscuro' : 'claro';
+    const button = $('theme-toggle');
+    $('theme-toggle-icon').textContent = currentTheme === 'light' ? '\u263E' : '\u2600';
+    button.title = `Cambiar a modo ${nextMode}`;
+    button.setAttribute('aria-label', `Activar modo ${nextMode}`);
+    button.setAttribute('aria-pressed', String(currentTheme === 'dark'));
+}
+
+async function restoreTheme() {
+    try {
+        const stored = await ext.storage.local.get(THEME_STORAGE_KEY);
+        applyTheme(stored[THEME_STORAGE_KEY]);
+    } catch {
+        applyTheme('light');
+    }
+}
+
+async function toggleTheme() {
+    const next = currentTheme === 'light' ? 'dark' : 'light';
+    applyTheme(next);
+    try {
+        await ext.storage.local.set({[THEME_STORAGE_KEY]: next});
+    } catch {
+        // Si el almacenamiento no esta disponible, el tema sigue funcionando
+        // hasta que se cierre esta ventana del popup.
+    }
+}
+
 let activeTab = null;
 let pageKey = null;
 let currentMarketplace = 'OTHER';
@@ -1054,6 +1090,7 @@ async function continueFacebook() {
 
 $('login-form').addEventListener('submit', (event) => void handleLogin(event));
 $('logout-button').addEventListener('click', () => void handleLogout());
+$('theme-toggle').addEventListener('click', () => void toggleTheme());
 $('analyze-button').addEventListener('click', () => void analyzeClick());
 $('reanalyze-button').addEventListener('click', () => void analyzeClick());
 $('retry-button').addEventListener('click', () => void analyzeClick());
@@ -1108,6 +1145,7 @@ $('open-publication-button').addEventListener('click', () => {
 
 ext.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
+    if (changes[THEME_STORAGE_KEY]) applyTheme(changes[THEME_STORAGE_KEY].newValue);
     const taskKey = pageKey && pageStateKey();
     if (taskKey && changes[taskKey]) renderAnalysis(changes[taskKey].newValue);
     if (changes[AUTH_KEY] && !changes[AUTH_KEY].newValue) showLoggedOut('La sesión expiró o se cerró.');
@@ -1118,6 +1156,7 @@ ext.tabs.onUpdated.addListener((_id, changes, tab) => {
 });
 
 void (async () => {
+    await restoreTheme();
     await checkAuthentication();
     await loadCurrentPage();
 })().catch(error => showLoggedOut(`No se pudo iniciar la extensión: ${error.message}`));
