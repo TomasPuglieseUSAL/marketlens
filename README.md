@@ -26,7 +26,7 @@ MarketLens es un prototipo académico que permite registrar y analizar publicaci
 | --- | --- |
 | Backend | Java 21, Spring Boot 4, Spring Security, Spring Data JPA, Maven |
 | Autenticación | JWT y contraseñas protegidas mediante BCrypt |
-| Persistencia | PostgreSQL 17, Flyway (18 migraciones SQL) |
+| Persistencia | PostgreSQL 17, Flyway (19 migraciones SQL) |
 | Frontend | React, TypeScript y Vite |
 | Publicación del frontend | Nginx, con proxy de las rutas `/api` |
 | Extensión experimental | JavaScript y WebExtensions (Manifest V3) |
@@ -273,7 +273,7 @@ marketlens/
 ├── backend/                # API Spring Boot, seguridad, entidades y migraciones
 │   ├── src/main/java/
 │   ├── src/main/resources/
-│   │   ├── db/migration/   # Flyway: V1 a V18
+│   │   ├── db/migration/   # Flyway: V1 a V19
 │   │   └── demo/           # Datos sintéticos
 │   ├── src/test/
 │   ├── Dockerfile
