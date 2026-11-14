@@ -87,7 +87,8 @@ public class RiskCoverageCalculator {
         // Por eso no basta para acreditar cobertura de reputación.
         if (hasReputationLevel ||
                 hasLegacyReputation ||
-                hasCommercialEvidence) {
+                hasCommercialEvidence ||
+                TemuSellerRiskScoring.hasSupportedReputation(publication, LocalDateTime.now())) {
             available++;
         }
 

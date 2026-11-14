@@ -8,6 +8,7 @@ import com.marketlens.backend.entity.RiskLevel;
 import com.marketlens.backend.service.RiskCoverageCalculator;
 import com.marketlens.backend.service.SellerActivityEvidence;
 import com.marketlens.backend.service.PriceRiskScoring;
+import com.marketlens.backend.service.TemuSellerRiskScoring;
 
 import org.springframework.stereotype.Component;
 
@@ -72,6 +73,15 @@ public class RiskEngine {
         score += evaluatePriceAnomaly(
                 publication, evaluation, priceRiskPoints,
                 referenceMedian, referenceCount);
+
+        // Una única regla Temu evita duplicar señales de historial/valoración.
+        TemuSellerRiskScoring.Signal temuSignal =
+                TemuSellerRiskScoring.evaluate(publication, LocalDateTime.now());
+        if (temuSignal != null) {
+            addFactor(evaluation, temuSignal.code(),
+                    temuSignal.description(), temuSignal.points());
+            score += temuSignal.points();
+        }
 
         // Valor observado junto al nombre de la tienda; no usar aggregateRating
         // del PRODUCTO. El peso estadístico requiere más validación.

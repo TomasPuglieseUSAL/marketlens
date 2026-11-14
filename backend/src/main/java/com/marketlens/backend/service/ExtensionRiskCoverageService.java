@@ -52,9 +52,16 @@ public class ExtensionRiskCoverageService {
                 boolean hasReputation = reputationLevel != null &&
                                 reputationLevel >= 1 &&
                                 reputationLevel <= 5;
-                // Los valores Temu enviados desde el navegador se muestran
-                // como observaciones; todavía no acreditan la dimensión
-                // de reputación sin validación independiente.
+                // La dimensión Temu solo está suficientemente documentada si
+                // hay identidad de tienda y >=10 valoraciones exactas.
+                if ("TEMU".equals(imported.getMarketplace())
+                        && imported.getTemuStoreId() != null
+                        && Boolean.TRUE.equals(imported.getTemuSellerSectionObserved())
+                        && imported.getTemuSellerRating() != null
+                        && imported.getTemuSellerReviewCount() != null
+                        && imported.getTemuSellerReviewCount() >= 10) {
+                    hasReputation = true;
+                }
 
                 // 3. Antigüedad de la cuenta.
                 // Para Facebook utilizamos el año público de incorporación.
