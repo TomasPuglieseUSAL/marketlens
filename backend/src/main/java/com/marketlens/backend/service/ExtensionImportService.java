@@ -134,6 +134,27 @@ public class ExtensionImportService {
                     "Las valoraciones de Temu requieren inspección de la tienda.");
         }
         imported.setTemuSellerObservation(reviewCount, storeId, sectionObserved);
+
+        // La valoración del PRODUCTO es independiente de la valoración de tienda.
+        java.math.BigDecimal productRating = request.temuProductRating();
+        Integer productReviews = request.temuProductReviewCount();
+        if ((productRating != null || productReviews != null)
+                && !"TEMU".equals(request.marketplace())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Las opiniones de producto Temu no corresponden a este marketplace.");
+        }
+        if (productRating != null && (productRating.compareTo(java.math.BigDecimal.ZERO) <= 0
+                || productRating.compareTo(new java.math.BigDecimal("5.0")) > 0
+                || productRating.scale() > 1)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La calificación del producto Temu no es válida.");
+        }
+        if (productReviews != null && (productReviews < 0 || productReviews > 10000000)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La cantidad de reseñas del producto Temu no es válida.");
+        }
+        // Admitimos observaciones parciales, pero no cuentan como cobertura completa.
+        imported.setTemuProductReviews(productRating, productReviews);
         // Validar IDs antes de interpolarlos en comprobaciones de URL.
         validateSellerMetadata(request);
 
