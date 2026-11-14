@@ -1011,12 +1011,21 @@ async function prepareData(action) {
     }
     if (keyAtStart !== pageKey) throw new Error('La publicación cambió durante la extracción.');
     if (currentMarketplace === 'TEMU' && extractedData.currency !== 'ARS') {
-        throw new Error('Temu no mostró un precio confirmado en ARS; no se convierten monedas.');
+        throw new Error('No se encontró información suficiente para confirmar que el precio de Temu está en ARS.');
     }
     if (missingEssential(extractedData)) {
         if (extractedData.externalId) {
             pendingAction = action;
             fillFacebookForm(extractedData);
+            const temuHint = $('temu-price-hint');
+            temuHint.hidden = currentMarketplace !== 'TEMU';
+            if (currentMarketplace === 'TEMU') {
+                const candidates = Array.isArray(extractedData.priceCandidates)
+                    ? extractedData.priceCandidates : [];
+                temuHint.textContent = candidates.length
+                    ? `Importes ARS encontrados: ${candidates.map(value => 'ARS ' + value).join(', ')}. Confirmá el precio de venta aplicable a tu variante; no uses el valor tachado ni una promoción condicionada.`
+                    : 'No se obtuvo un precio único. Confirmá el importe actual del producto en ARS antes de continuar.';
+            }
             $('fb-join-row').hidden = currentMarketplace !== 'FACEBOOK_MARKETPLACE';
             $('fb-seller').disabled = currentMarketplace === 'TEMU';
             $('facebook-correction').hidden = false;
