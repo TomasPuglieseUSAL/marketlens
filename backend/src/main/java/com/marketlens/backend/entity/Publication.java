@@ -18,8 +18,8 @@ public class Publication {
     @Column(nullable = false, length = 255)
     private String title;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "seller_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "seller_id")
     private Seller seller;
 
     @Enumerated(EnumType.STRING)

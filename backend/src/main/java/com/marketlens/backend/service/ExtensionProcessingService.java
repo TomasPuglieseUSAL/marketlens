@@ -104,7 +104,13 @@ public class ExtensionProcessingService {
                                                 "La publicación existente tiene otro tipo de referencia.");
                         }
 
-                        if (marketplace == Marketplace.FACEBOOK_MARKETPLACE) {
+                        if (marketplace == Marketplace.TEMU) {
+                                // goods_id es un producto; si el precio cambió no reutilizar una observación antigua.
+                                if (publication.getPrice().compareTo(normalized.price()) != 0) {
+                                        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                                                "El precio del producto Temu cambió; se requiere una nueva observación.");
+                                }
+                        } else if (marketplace == Marketplace.FACEBOOK_MARKETPLACE) {
 
                                 // Facebook: el identificador externo identifica el anuncio,
                                 // pero el vendedor no dispone de una identidad verificada
@@ -180,9 +186,10 @@ public class ExtensionProcessingService {
                         Seller savedSeller;
 
                         if (marketplace == Marketplace.MERCADO_LIBRE) {
-
                                 savedSeller = resolveSeller(normalized, verified);
-
+                        } else if (marketplace == Marketplace.TEMU) {
+                                // No inventar vendedor cuando Temu no expone su identidad.
+                                savedSeller = null;
                         } else {
 
                                 Seller seller = new Seller();
@@ -283,7 +290,10 @@ public class ExtensionProcessingService {
                                                 "USER_PRODUCT".equals(referenceType)))
                                 ||
                                 ("FACEBOOK_MARKETPLACE".equals(marketplace) &&
-                                                "LISTING".equals(referenceType));
+                                                "LISTING".equals(referenceType))
+                                ||
+                                ("TEMU".equals(marketplace) &&
+                                                "PRODUCT".equals(referenceType));
 
                 if (!supported) {
                         throw new ResponseStatusException(
@@ -331,8 +341,9 @@ public class ExtensionProcessingService {
                                         "El precio tiene demasiados decimales.");
                 }
 
-                if (normalized.sellerName() == null ||
-                                normalized.sellerName().isBlank()) {
+                if (!"TEMU".equals(marketplace) &&
+                                (normalized.sellerName() == null ||
+                                normalized.sellerName().isBlank())) {
                         throw new ResponseStatusException(
                                         HttpStatus.UNPROCESSABLE_ENTITY,
                                         "No se identificó al vendedor.");

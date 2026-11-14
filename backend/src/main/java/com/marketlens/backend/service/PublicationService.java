@@ -77,8 +77,8 @@ public class PublicationService {
             publication.getTitle(),
             publication.getPrice(),
             publication.getMarketplace(),
-            publication.getSeller().getId(),
-            publication.getSeller().getName()
+            publication.getSeller() == null ? null : publication.getSeller().getId(),
+            publication.getSeller() == null ? null : publication.getSeller().getName()
         ));
     }
 
@@ -90,7 +90,7 @@ public class PublicationService {
         publication.getTitle(),
         publication.getDescription(),
         publication.getPrice(),
-        publication.getSeller().getId(),
+        publication.getSeller() == null ? null : publication.getSeller().getId(),
         publication.getMarketplace(),
         publication.getExternalId(),
         publication.getOriginalUrl(),
