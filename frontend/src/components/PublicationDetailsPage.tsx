@@ -139,10 +139,18 @@ export default function PublicationDetailsPage({
                 <small>Vendedor</small>
 
                 <strong>
-                  {publication.sellerId == null ? 'No identificado' : `#${publication.sellerId}`}
+                  {publication.sellerName || (publication.sellerId == null
+                    ? 'No identificado' : `#${publication.sellerId}`)}
                 </strong>
               </div>
             </div>
+
+            {publication.marketplace === 'TEMU' && publication.sellerBadge === 'TEMU_STAR_SELLER' && (
+              <p className="session-message" role="note">
+                <strong>Star Seller</strong> · Distintivo observado en Temu; no equivale
+                a reputación verificada ni garantiza que la compra sea segura.
+              </p>
+            )}
 
             <div className="publication-description">
               <h3>Descripción</h3>

@@ -11,6 +11,8 @@ public record PublicationResponse(
     String description,
     BigDecimal price,
     Long sellerId,
+    String sellerName,
+    String sellerBadge,
     Marketplace marketplace,
     String externalId,
     String originalUrl,

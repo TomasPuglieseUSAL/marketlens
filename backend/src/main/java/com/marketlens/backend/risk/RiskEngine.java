@@ -73,6 +73,16 @@ public class RiskEngine {
                 publication, evaluation, priceRiskPoints,
                 referenceMedian, referenceCount);
 
+        // Distintivo observado: dato contextual, NO reputación contrastada.
+        // No otorga cobertura adicional ni reduce automáticamente el puntaje.
+        if (publication.getMarketplace() == Marketplace.TEMU
+                && "TEMU_STAR_SELLER".equals(publication.getSellerBadge())) {
+            addFactor(evaluation, "TEMU_STAR_SELLER_OBSERVED",
+                    "La página de Temu mostraba la etiqueta Star Seller para la tienda. "
+                    + "MarketLens no ha verificado sus criterios ni que garantice una compra segura.",
+                    0);
+        }
+
         score = Math.min(score, 100);
 
         // 3. Guardar los resultados.

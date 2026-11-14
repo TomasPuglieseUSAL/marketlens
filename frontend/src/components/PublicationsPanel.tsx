@@ -260,7 +260,10 @@ export default function PublicationsPanel({
       <p><strong>Descripción:</strong> {publication.description}</p>
       <p><strong>Precio:</strong> {publication.price}</p>
       <p><strong>Marketplace:</strong> {publication.marketplace}</p>
-      <p><strong>Vendedor:</strong> {publication.sellerId ?? 'No identificado'}</p>
+      <p><strong>Vendedor:</strong> {publication.sellerName || (publication.sellerId ?? 'No identificado')}</p>
+      {publication.sellerBadge === 'TEMU_STAR_SELLER' && (
+        <p><strong>Etiqueta de la tienda:</strong> Star Seller (observada; no verificada por MarketLens)</p>
+      )}
 
       {publication.externalId && (
         <p>

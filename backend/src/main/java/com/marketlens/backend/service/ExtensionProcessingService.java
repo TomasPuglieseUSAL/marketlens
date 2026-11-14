@@ -105,10 +105,25 @@ public class ExtensionProcessingService {
                         }
 
                         if (marketplace == Marketplace.TEMU) {
-                                // goods_id es un producto; si el precio cambió no reutilizar una observación antigua.
+                                // goods_id no confirma la identidad de una tienda.
+                                // Conservar datos previos salvo información compatible con la observación.
                                 if (publication.getPrice().compareTo(normalized.price()) != 0) {
                                         throw new ResponseStatusException(HttpStatus.CONFLICT,
                                                 "El precio del producto Temu cambió; se requiere una nueva observación.");
+                                }
+                                String incomingName = normalized.sellerName();
+                                Seller previous = publication.getSeller();
+                                if (incomingName != null && !incomingName.isBlank()) {
+                                        if (previous == null) {
+                                                publication.setSeller(createObservedTemuSeller(incomingName));
+                                        } else if (!previous.getName().equalsIgnoreCase(incomingName.trim())) {
+                                                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                                                        "La tienda observada de Temu no coincide con la registrada.");
+                                        }
+                                }
+                                if ("TEMU_STAR_SELLER".equals(imported.getSellerBadge())
+                                        && incomingName != null && !incomingName.isBlank()) {
+                                        publication.setSellerBadge("TEMU_STAR_SELLER");
                                 }
                         } else if (marketplace == Marketplace.FACEBOOK_MARKETPLACE) {
 
@@ -188,8 +203,10 @@ public class ExtensionProcessingService {
                         if (marketplace == Marketplace.MERCADO_LIBRE) {
                                 savedSeller = resolveSeller(normalized, verified);
                         } else if (marketplace == Marketplace.TEMU) {
-                                // No inventar vendedor cuando Temu no expone su identidad.
-                                savedSeller = null;
+                                // Nombre de tienda observado en esta publicación; no identidad verificada.
+                                savedSeller = normalized.sellerName() == null
+                                        || normalized.sellerName().isBlank()
+                                        ? null : createObservedTemuSeller(normalized.sellerName());
                         } else {
 
                                 Seller seller = new Seller();
@@ -219,6 +236,10 @@ public class ExtensionProcessingService {
                         publication.setOriginalUrl(imported.getOriginalUrl());
 
                         publication.setSeller(savedSeller);
+                        if (marketplace == Marketplace.TEMU && savedSeller != null
+                                && "TEMU_STAR_SELLER".equals(imported.getSellerBadge())) {
+                                publication.setSellerBadge("TEMU_STAR_SELLER");
+                        }
 
                         // Conservar el año de incorporación observado en Facebook.
                         // No representa una antigüedad exacta en días.
@@ -358,6 +379,18 @@ public class ExtensionProcessingService {
                                         HttpStatus.UNPROCESSABLE_ENTITY,
                                         "Hay una inconsistencia entre los identificadores.");
                 }
+        }
+
+        private Seller createObservedTemuSeller(String name) {
+                Seller seller = new Seller();
+                seller.setName(name.trim());
+                seller.setMarketplace(Marketplace.TEMU);
+                // Sin identificador externo ni reputación comprobada.
+                seller.setExternalSellerId(null);
+                seller.setReputation(null);
+                seller.setReputationLevel(null);
+                seller.setAccountAgeDays(null);
+                return sellerRepository.save(seller);
         }
 
         private record VerifiedSeller(

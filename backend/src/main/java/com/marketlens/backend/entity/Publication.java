@@ -47,6 +47,10 @@ public class Publication {
     @Column(name = "facebook_join_year")
     private Integer facebookJoinYear;
 
+    // Distintivo observado en el producto, no acreditación de MarketLens.
+    @Column(name = "seller_badge", length = 80)
+    private String sellerBadge;
+
     @OneToMany(mappedBy = "publication", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<RiskEvaluation> evaluations = new ArrayList<>();
 
@@ -142,6 +146,14 @@ public class Publication {
 
     public void setReferenceType(String referenceType) {
         this.referenceType = referenceType;
+    }
+
+    public String getSellerBadge() {
+        return sellerBadge;
+    }
+
+    public void setSellerBadge(String sellerBadge) {
+        this.sellerBadge = sellerBadge;
     }
 
     public Integer getFacebookJoinYear() {

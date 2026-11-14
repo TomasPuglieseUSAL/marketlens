@@ -91,6 +91,8 @@ public class PublicationService {
         publication.getDescription(),
         publication.getPrice(),
         publication.getSeller() == null ? null : publication.getSeller().getId(),
+        publication.getSeller() == null ? null : publication.getSeller().getName(),
+        publication.getSellerBadge(),
         publication.getMarketplace(),
         publication.getExternalId(),
         publication.getOriginalUrl(),

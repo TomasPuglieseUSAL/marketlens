@@ -186,8 +186,10 @@ public class ExtensionImportService {
             }
         }
 
-        if (badge != null &&
-                !badge.equals("MERCADOLIDER")) {
+        if (badge != null && !(
+                ("MERCADO_LIBRE".equals(request.marketplace()) && "MERCADOLIDER".equals(badge))
+                || ("TEMU".equals(request.marketplace()) && "TEMU_STAR_SELLER".equals(badge)
+                        && request.seller() != null && !request.seller().isBlank()))) {
 
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,

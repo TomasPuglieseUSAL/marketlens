@@ -148,6 +148,8 @@ export interface Publication {
   externalId: string | null
   originalUrl: string | null
   sellerId: number | null
+  sellerName: string | null
+  sellerBadge: string | null
 }
 
 export interface CreatePublicationRequest {
