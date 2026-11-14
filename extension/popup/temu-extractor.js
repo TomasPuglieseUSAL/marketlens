@@ -155,6 +155,36 @@ function extractTemu() {
   );
   if (!observedStore && structuredName) observedStore = structuredName;
 
+  // Buscar la tienda por etiquetas independientes del distintivo. Las
+  // tiendas normales pueden no tener ningún sello de vendedor destacado.
+  if (!observedStore) {
+    const root = document.querySelector('main') || document.body;
+    const candidateNames = new Set();
+    const elements = Array.from(
+      root?.querySelectorAll?.('section, div, p, span') || []
+    ).slice(0, 1500);
+    for (const element of elements) {
+      const content = (element.innerText || element.textContent || '')
+        .replace(/\u00a0/g, ' ').trim();
+      if (content.length < 5 || content.length > 180
+          || /\bARS\s*\d/i.test(content)) continue;
+      const lines = content.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+      for (let i = 0; i < lines.length; i++) {
+        const prefixed = lines[i].match(
+          /^(?:sold by|sourced from|vendido por|tienda|store)\s*:\s*(.{2,100})$/i
+        );
+        const direct = lines[i].match(
+          /^(?:sold by|sourced from|vendido por)\s+(.{2,100})$/i
+        );
+        const next = /^(?:seller|vendedor|store|tienda)$/i.test(lines[i])
+          ? lines[i + 1] : null;
+        const name = cleanStoreName(prefixed?.[1] || direct?.[1] || next);
+        if (name) candidateNames.add(name);
+      }
+    }
+    if (candidateNames.size === 1) observedStore = [...candidateNames][0];
+  }
+
   // Una única tienda enlazada en el área principal constituye otra
   // fuente de nombre; varias tiendas posibles se consideran ambiguas.
   if (!observedStore) {
