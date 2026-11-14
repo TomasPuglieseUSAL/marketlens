@@ -1005,6 +1005,9 @@ function readFacebookForm(data) {
             ? null : data.temuSellerRating,
         temuSellerReviewCount: data.marketplace === 'TEMU' && !sameObservedSeller
             ? null : data.temuSellerReviewCount,
+        // Las opiniones del producto son independientes de la identidad de la tienda.
+        temuProductRating: data.temuProductRating ?? null,
+        temuProductReviewCount: data.temuProductReviewCount ?? null,
         temuStoreId: data.marketplace === 'TEMU' && !sameObservedSeller
             ? null : data.temuStoreId,
         temuSellerSectionObserved: data.marketplace === 'TEMU' && !sameObservedSeller
