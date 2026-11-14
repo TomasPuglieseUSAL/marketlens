@@ -12,6 +12,7 @@ public record ExtensionPreviewRequest(
 
     String sellerProfileUrl,
     String sellerBadge,
+    java.math.BigDecimal temuSellerRating,
     String sellerSalesText,
     Integer sellerReputationLevel,
     String sellerId,

@@ -145,6 +145,14 @@ export default function PublicationDetailsPage({
               </div>
             </div>
 
+            {publication.marketplace === 'TEMU' && publication.temuSellerRating != null && (
+              <p className="session-message" role="note">
+                <strong>Calificación de tienda:</strong>{' '}
+                {publication.temuSellerRating.toLocaleString('es-AR')} / 5
+                {' '}· Valor observado en Temu; distinto de la calificación del producto.
+              </p>
+            )}
+
             {publication.marketplace === 'TEMU' && publication.sellerBadge === 'TEMU_STAR_SELLER' && (
               <p className="session-message" role="note">
                 <strong>Star Seller</strong> · Distintivo observado en Temu; no equivale

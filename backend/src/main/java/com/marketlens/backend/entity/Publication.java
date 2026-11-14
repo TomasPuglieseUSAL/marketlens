@@ -51,6 +51,11 @@ public class Publication {
     @Column(name = "seller_badge", length = 80)
     private String sellerBadge;
 
+    // Puntuación observada de una tienda Temu, escala 0–5.
+    // Independiente de las valoraciones del producto y de Mercado Libre.
+    @Column(name = "temu_seller_rating", precision = 2, scale = 1)
+    private BigDecimal temuSellerRating;
+
     @OneToMany(mappedBy = "publication", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<RiskEvaluation> evaluations = new ArrayList<>();
 
@@ -150,6 +155,14 @@ public class Publication {
 
     public String getSellerBadge() {
         return sellerBadge;
+    }
+
+    public BigDecimal getTemuSellerRating() {
+        return temuSellerRating;
+    }
+
+    public void setTemuSellerRating(BigDecimal rating) {
+        this.temuSellerRating = rating;
     }
 
     public void setSellerBadge(String sellerBadge) {

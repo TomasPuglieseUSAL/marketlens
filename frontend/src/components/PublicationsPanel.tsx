@@ -261,6 +261,9 @@ export default function PublicationsPanel({
       <p><strong>Precio:</strong> {publication.price}</p>
       <p><strong>Marketplace:</strong> {publication.marketplace}</p>
       <p><strong>Vendedor:</strong> {publication.sellerName || (publication.sellerId ?? 'No identificado')}</p>
+      {publication.marketplace === 'TEMU' && publication.temuSellerRating != null && (
+        <p><strong>Calificación de tienda:</strong> {publication.temuSellerRating}/5 (observada en Temu)</p>
+      )}
       {publication.sellerBadge === 'TEMU_STAR_SELLER' && (
         <p><strong>Etiqueta de la tienda:</strong> Star Seller (observada; no verificada por MarketLens)</p>
       )}

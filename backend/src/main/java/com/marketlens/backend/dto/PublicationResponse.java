@@ -13,6 +13,7 @@ public record PublicationResponse(
     Long sellerId,
     String sellerName,
     String sellerBadge,
+    java.math.BigDecimal temuSellerRating,
     Marketplace marketplace,
     String externalId,
     String originalUrl,

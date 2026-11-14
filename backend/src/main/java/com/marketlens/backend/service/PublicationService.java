@@ -93,6 +93,7 @@ public class PublicationService {
         publication.getSeller() == null ? null : publication.getSeller().getId(),
         publication.getSeller() == null ? null : publication.getSeller().getName(),
         publication.getSellerBadge(),
+        publication.getTemuSellerRating(),
         publication.getMarketplace(),
         publication.getExternalId(),
         publication.getOriginalUrl(),

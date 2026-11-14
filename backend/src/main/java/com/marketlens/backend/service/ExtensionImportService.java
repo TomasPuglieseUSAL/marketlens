@@ -89,6 +89,18 @@ public class ExtensionImportService {
         imported.setExternalSellerId(externalSellerId);
 
         validateSellerMetadata(request);
+        java.math.BigDecimal temuRating = request.temuSellerRating();
+        if (temuRating != null) {
+            if (!"TEMU".equals(request.marketplace()) ||
+                    request.seller() == null || request.seller().isBlank() ||
+                    temuRating.compareTo(java.math.BigDecimal.ZERO) <= 0 ||
+                    temuRating.compareTo(new java.math.BigDecimal("5.0")) > 0 ||
+                    temuRating.scale() > 1) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "La puntuación de tienda Temu no es válida.");
+            }
+        }
+        imported.setTemuSellerRating(temuRating);
 
         imported.setSellerMetadata(
                 request.sellerProfileUrl(),

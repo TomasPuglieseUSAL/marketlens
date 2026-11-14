@@ -150,6 +150,7 @@ export interface Publication {
   sellerId: number | null
   sellerName: string | null
   sellerBadge: string | null
+  temuSellerRating: number | null
 }
 
 export interface CreatePublicationRequest {

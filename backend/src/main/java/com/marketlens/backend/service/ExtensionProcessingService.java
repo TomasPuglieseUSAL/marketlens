@@ -125,6 +125,12 @@ public class ExtensionProcessingService {
                                         && incomingName != null && !incomingName.isBlank()) {
                                         publication.setSellerBadge("TEMU_STAR_SELLER");
                                 }
+                                if (imported.getTemuSellerRating() != null &&
+                                        publication.getSeller() != null &&
+                                        incomingName != null &&
+                                        publication.getSeller().getName().equalsIgnoreCase(incomingName.trim())) {
+                                        publication.setTemuSellerRating(imported.getTemuSellerRating());
+                                }
                         } else if (marketplace == Marketplace.FACEBOOK_MARKETPLACE) {
 
                                 // Facebook: el identificador externo identifica el anuncio,
@@ -236,9 +242,11 @@ public class ExtensionProcessingService {
                         publication.setOriginalUrl(imported.getOriginalUrl());
 
                         publication.setSeller(savedSeller);
-                        if (marketplace == Marketplace.TEMU && savedSeller != null
-                                && "TEMU_STAR_SELLER".equals(imported.getSellerBadge())) {
-                                publication.setSellerBadge("TEMU_STAR_SELLER");
+                        if (marketplace == Marketplace.TEMU && savedSeller != null) {
+                                if ("TEMU_STAR_SELLER".equals(imported.getSellerBadge())) {
+                                        publication.setSellerBadge("TEMU_STAR_SELLER");
+                                }
+                                publication.setTemuSellerRating(imported.getTemuSellerRating());
                         }
 
                         // Conservar el año de incorporación observado en Facebook.

@@ -1,6 +1,7 @@
 package com.marketlens.backend.entity;
 
 import java.time.Instant;
+import java.math.BigDecimal;
 
 import jakarta.persistence.*;
 
@@ -61,6 +62,9 @@ public class ExtensionImport {
 
     @Column(name = "seller_badge", length = 80)
     private String sellerBadge;
+
+    @Column(name = "temu_seller_rating", precision = 2, scale = 1)
+    private BigDecimal temuSellerRating;
 
     @Column(name = "seller_sales_text", length = 120)
     private String sellerSalesText;
@@ -180,6 +184,14 @@ public class ExtensionImport {
 
     public String getSellerBadge() {
         return sellerBadge;
+    }
+
+    public BigDecimal getTemuSellerRating() {
+        return temuSellerRating;
+    }
+
+    public void setTemuSellerRating(BigDecimal rating) {
+        this.temuSellerRating = rating;
     }
 
     public String getSellerSalesText() {

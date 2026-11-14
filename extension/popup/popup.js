@@ -1001,6 +1001,8 @@ function readFacebookForm(data) {
         seller: chosenSeller || null,
         sellerBadge: data.marketplace === 'TEMU' && !sameObservedSeller
             ? null : data.sellerBadge,
+        temuSellerRating: data.marketplace === 'TEMU' && !sameObservedSeller
+            ? null : data.temuSellerRating,
         facebookJoinYear: joinYear,
         description: $('fb-description').value.trim() || null
     };

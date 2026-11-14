@@ -71,6 +71,7 @@ function importPayload(data) {
         url: data.url,
         sellerProfileUrl: data.sellerProfileUrl ?? null,
         sellerBadge: data.sellerBadge ?? null,
+        temuSellerRating: data.temuSellerRating ?? null,
         sellerSalesText: data.sellerSalesText ?? null,
         sellerReputationLevel: data.sellerReputationLevel ?? null,
         sellerId: data.sellerId ?? null,
