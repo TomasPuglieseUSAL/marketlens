@@ -4,7 +4,9 @@ Reconoce `goods.html?goods_id=<id>` y enlaces de producto `*-g-<id>.html`.
 La extensión lee solamente la página abierta: JSON-LD Product y metadatos del producto; no usa endpoints privados.
 
 - **Moneda:** solo ARS explícita. No hay conversiones automáticas de divisas ni inferencias a partir del símbolo `$`.
-- **Vendedor:** si no existe evidencia de una cuenta individual, queda como `seller_id = NULL` y se visualiza "No identificado".
+- **Vendedor:** cuando la página identifica una tienda, como `Tokki Shop`, la extensión intenta recuperar el nombre desde el panel cercano a `Star Seller`, un enlace de tienda o JSON-LD. Se crea un registro de vendedor observado para esa publicación, sin tratarlo como identidad comercial verificada ni unirlo automáticamente a otras ofertas. Si no se logra identificar, `seller_id = NULL` y se visualiza "No identificado".
+- **Star Seller:** el distintivo observado se almacena en la importación y en la publicación (`seller_badge`, migración V21); se muestra en el detalle y como factor informativo de **0 puntos**. No reduce el riesgo ni aumenta la cobertura de reputación por sí solo.
+- **Corrección:** el campo de vendedor en Temu es editable. Los importes ARS posibles aparecen como opciones destacadas y seleccionables; elegir uno llena el campo de precio. La persona debe verificar la variante y las promociones aplicables.
 - **Cobertura:** no se inventan reputación ni antigüedad; la clasificación puede ser `INDETERMINATE`.
 - **Precios:** no hay comparación automática para Temu ni se usan sus productos como referencias de otras plataformas.
 - **Identidad:** `goods_id` es un producto, que puede agrupar variantes. Si su precio cambió, la importación devuelve un conflicto en lugar de reemplazar silenciosamente el precio anterior.
