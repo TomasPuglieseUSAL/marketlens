@@ -129,7 +129,7 @@ async function ensurePublication(data, update) {
         const reference = await authenticatedRequest(
             `/extension/imports/${imported.id}/reference`, {method: 'POST'}
         );
-        if (!['LISTING', 'USER_PRODUCT', 'CATALOG_PRODUCT'].includes(reference?.referenceType)) {
+        if (!['LISTING', 'USER_PRODUCT', 'CATALOG_PRODUCT', 'PRODUCT'].includes(reference?.referenceType)) {
             throw new Error('La API devolvió una referencia externa no reconocida.');
         }
         if (reference.referenceType === 'CATALOG_PRODUCT') {
