@@ -301,10 +301,12 @@ function extractTemu() {
       const content = (element.innerText || element.textContent || '')
         .replace(/\u00a0/g, ' ').trim();
       if (content.length > 380 || !content.includes(observedStore)) continue;
+      // Separadores de miles exactos sí se admiten; "1.2K+" no es exacto.
+      const exactNumber = '(?:\\d{1,3}(?:[.,]\\d{3})+|\\d{1,8})';
       const matches = [
-        ...content.matchAll(/\b(\d{1,8})\s+(?:seller|store|shop|tienda|vendedor)\s+(?:reviews?|ratings?|valoraciones|reseñas)\b/gi),
-        ...content.matchAll(/\b(?:seller|store|shop|tienda|vendedor)\s+(?:reviews?|ratings?|valoraciones|reseñas)\s*:?\s*(\d{1,8})\b/gi),
-      ].map(m => Number(m[1]));
+        ...content.matchAll(new RegExp('\\b(' + exactNumber + ')\\s+(?:seller|store|shop|tienda|vendedor)\\s+(?:reviews?|ratings?|valoraciones|reseñas)\\b', 'gi')),
+        ...content.matchAll(new RegExp('\\b(?:seller|store|shop|tienda|vendedor)\\s+(?:reviews?|ratings?|valoraciones|reseñas)\\s*:?\\s*(' + exactNumber + ')\\b', 'gi')),
+      ].map(m => Number(m[1].replace(/[.,]/g, ''))).filter(n => n <= 10000000);
       const distinct = [...new Set(matches)];
       if (distinct.length === 1) { temuSellerReviewCount = distinct[0]; break; }
     }
