@@ -24,3 +24,54 @@ La extensión lee solamente la página abierta: JSON-LD Product y metadatos del 
 6. Comprobá el backend con `cd backend && ./mvnw test` y el frontend con `cd frontend && npm ci && npm run build`.
 
 Necesitamos probar productos reales de Temu en distintos navegadores: el DOM y los metadatos pueden variar por país, dispositivo y sesión.
+
+
+## Identidad, volumen de reseñas y reglas de riesgo (V23)
+
+La extensión busca `mall_id` en enlaces de tienda (`mall.html?mall_id=...` y enlaces `-m-<id>.html`).
+El `goods_id` del producto NO identifica a la tienda.
+Se registra `temu_seller_review_count` **solo** cuando el panel de tienda muestra un
+recuento exacto explícito de reseñas de tienda; ni los comentarios del producto,
+ni las ventas, ni las cifras abreviadas (por ejemplo, `1.2K+`) se convierten en
+recuentos exactos. Las métricas pueden faltar si Temu cambia su interfaz.
+
+La migración Flyway **V23** agrega estos datos a la importación y publicación,
+junto con `temu_seller_section_observed` y `temu_seller_observed_at`. Esta última
+fecha se registra en el backend al procesar una observación; las evidencias
+solo participan del puntaje durante **30 días**.
+
+La regla experimental `TemuSellerRiskScoring` aplica una sola señal:
+
+| Evidencia observada | Puntos |
+| --- | ---: |
+| No se pudo inspeccionar sección de tienda | 0 |
+| Se inspeccionó tienda pero no se muestra puntuación | **+5** |
+| La tienda declara exactamente 0 reseñas | **+10** (no equivale a 0 ventas) |
+| 1–4 reseñas de tienda | **+10** |
+| 5–9 reseñas de tienda | **+5** |
+| Al menos 10 reseñas, rating por debajo de 3,0/5 | **+15** |
+| Al menos 10 reseñas, rating desde 3,0 hasta menos de 4,0/5 | **+5** |
+| Al menos 10 reseñas, rating desde 4,0/5 | 0 |
+| Rating sin recuento de reseñas | 0 por rating (no atribuir representatividad) |
+
+Nunca se suman simultáneamente puntos por escasez de reseñas y calificación
+baja de la misma fuente. `Star Seller` continúa siendo informativo (0 puntos).
+Una reputación ausente **no** implica pocas ventas ni evidencia de fraude.
+
+La cobertura de reputación se considera suficientemente respaldada solo
+cuando existe una calificación válida de tienda, un `mall_id`, al menos
+10 reseñas exactas, inspección de la sección de tienda y evidencia reciente.
+El umbral de 10 y los pesos son exploratorios: necesitan pruebas con una
+muestra variada de tiendas antes de usarse para decisiones importantes.
+
+Pruebas:
+```powershell
+cd backend
+.\mvnw.cmd test
+cd ..
+node --test extension/tests/temu-extractor.test.cjs
+cd frontend
+npm run build
+cd ..
+docker compose up --build -d
+```

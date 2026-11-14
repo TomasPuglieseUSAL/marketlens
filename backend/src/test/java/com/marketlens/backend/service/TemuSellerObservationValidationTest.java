@@ -23,6 +23,45 @@ class TemuSellerObservationValidationTest {
                 null, null, rating, null, null, null, null, null, null, null);
     }
 
+    private ExtensionPreviewRequest withReviewEvidence(
+            Integer count, String storeId, Boolean inspected, String profileUrl) {
+        return new ExtensionPreviewRequest(
+                "TEMU", "Funda para teléfono", "9507", "ARS",
+                "Tokki Shop", "606892013277333", "Funda protectora",
+                "https://www.temu.com/ar-en/funda-g-606892013277333.html",
+                profileUrl, null, new BigDecimal("4.8"),
+                count, storeId, inspected,
+                null, null, null, null);
+    }
+
+    @Test
+    void rejectsNegativeStoreReviews() {
+        ExtensionImportService service = new ExtensionImportService(null);
+        var error = assertThrows(ResponseStatusException.class,
+                () -> service.importPublication(withReviewEvidence(
+                        -1, "613456789012345", true, null), "demo"));
+        assertEquals(400, error.getStatusCode().value());
+    }
+
+    @Test
+    void rejectsStoreReviewsWithoutSellerSectionEvidence() {
+        ExtensionImportService service = new ExtensionImportService(null);
+        var error = assertThrows(ResponseStatusException.class,
+                () -> service.importPublication(withReviewEvidence(
+                        15, "613456789012345", false, null), "demo"));
+        assertEquals(400, error.getStatusCode().value());
+    }
+
+    @Test
+    void rejectsInconsistentOrForeignStoreProfile() {
+        ExtensionImportService service = new ExtensionImportService(null);
+        var error = assertThrows(ResponseStatusException.class,
+                () -> service.importPublication(withReviewEvidence(
+                        15, "613456789012345", true,
+                        "https://other.example/mall.html?mall_id=613456789012345"), "demo"));
+        assertEquals(400, error.getStatusCode().value());
+    }
+
     @Test
     void doesNotAcceptProductRatingAsSellerName() {
         ExtensionImportService service = new ExtensionImportService(null);
