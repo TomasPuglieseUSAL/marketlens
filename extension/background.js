@@ -51,8 +51,9 @@ async function authenticatedRequest(path, options = {}) {
 }
 
 function requireExtractedData(data) {
-    if (!data || !['MERCADO_LIBRE', 'FACEBOOK_MARKETPLACE'].includes(data.marketplace) ||
-        !data.externalId || !data.title || !data.price || !data.seller) {
+    if (!data || !['MERCADO_LIBRE', 'FACEBOOK_MARKETPLACE', 'TEMU'].includes(data.marketplace) ||
+        !data.externalId || !data.title || !data.price ||
+        (data.marketplace !== 'TEMU' && !data.seller)) {
         throw new Error('Faltan datos esenciales del anuncio (título, precio, vendedor o ID).');
     }
     return data;
@@ -82,6 +83,7 @@ function identityKey(data) {
 }
 
 async function lookupSavedPublication(data) {
+    if (data.marketplace === 'TEMU') return null; // El precio podría haber cambiado.
     const key = `marketlens:publication:${identityKey(data)}`;
     const cachedId = (await ext.storage.local.get(key))[key];
     if (!Number.isSafeInteger(cachedId) || cachedId <= 0) return null;
