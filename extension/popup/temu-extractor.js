@@ -133,6 +133,63 @@ function extractTemu() {
       ? visibleDetails : null]
     .filter(Boolean).join('\n\n').slice(0, 5000) || null;
 
+  // Opiniones del PRODUCTO, distintas de las valoraciones de la tienda.
+  // Priorizar JSON-LD Product.aggregateRating; si no está presente, buscar
+  // etiquetas explícitas de estrellas y reviews junto al título principal.
+  // Nunca usar aggregateRating de otro objeto ni buscar en recomendaciones.
+  function readProductReviews() {
+    const toRating = value => {
+      if (value == null || !/^(?:[0-5](?:[.,]\d{1,3})?)$/.test(String(value).trim())) return null;
+      const n = Number(String(value).trim().replace(',', '.'));
+      return Number.isFinite(n) && n > 0 && n <= 5
+        ? Math.round(n * 10) / 10 : null;
+    };
+    const toExactCount = value => {
+      if (value == null) return null;
+      const str = String(value).trim();
+      if (!/^(?:\d{1,8}|\d{1,3}(?:[.,]\d{3})+)$/.test(str)) return null;
+      const n = Number(str.replace(/[.,]/g, ''));
+      return Number.isSafeInteger(n) && n >= 0 && n <= 10000000 ? n : null;
+    };
+    const aggregate = product?.aggregateRating;
+    const structuredRating = toRating(aggregate?.ratingValue);
+    // ratingCount puede incluir estrellas sin reseña escrita: no equipararlo
+    // automáticamente con reviewCount.
+    const structuredCount = toExactCount(aggregate?.reviewCount);
+
+    let visibleRating = null;
+    let visibleCount = null;
+    let parent = document.querySelector('h1')?.parentElement ?? null;
+    for (let depth = 0; parent && depth < 8; depth++, parent = parent.parentElement) {
+      const text = (parent.innerText || parent.textContent || '').replace(/\u00a0/g, ' ').trim();
+      if (text.length > 4500) break;
+      const labels = Array.from(parent.querySelectorAll?.('[aria-label], [title]') || [])
+        .slice(0, 250)
+        .map(el => [el.getAttribute?.('aria-label'), el.getAttribute?.('title')].filter(Boolean).join(' '))
+        .filter(Boolean).join(' ');
+      const combined = text + ' ' + labels;
+      const ratingMatches = [...combined.matchAll(/\b([0-5](?:[.,]\d{1,3})?)\s*(?:out of (?:five|5) stars|\/\s*5\s*stars?)\b/gi)]
+        .map(x => toRating(x[1])).filter(x => x != null);
+      const reviewMatches = [...combined.matchAll(/\b(\d{1,3}(?:[.,]\d{3})*|\d{1,8})\s+(?:product\s+)?reviews?\b/gi)]
+        .map(x => toExactCount(x[1])).filter(x => x != null);
+      const ratings = [...new Set(ratingMatches)];
+      const counts = [...new Set(reviewMatches)];
+      // Una única pareja en una región acotada cerca del título.
+      // No atribuir automáticamente las estrellas de la tienda al producto.
+      if (ratings.length === 1 && counts.length === 1) {
+        visibleRating = ratings[0];
+        visibleCount = counts[0];
+        break;
+      }
+    }
+    const rating = visibleRating ?? structuredRating;
+    const count = visibleCount ?? structuredCount;
+    // Requerimos la pareja para no presentar una cifra parcial como respaldo.
+    return rating != null && count != null && count > 0
+      ? {rating, count} : {rating:null, count:null};
+  }
+  const productReviews = readProductReviews();
+
   // La tienda se busca en el producto actual, sin tomar nombres de
   // recomendaciones ni confundir "Star Seller" con la identidad de la tienda.
   const cleanStoreName = value => {
@@ -367,6 +424,7 @@ function extractTemu() {
   return {found:true,title:title || null,price,currency:detectedCurrency,
     priceCandidates:prices,seller:observedStore,
     temuSellerRating,temuSellerReviewCount,temuSellerSectionObserved:storeSectionObserved,
+    temuProductRating:productReviews.rating,temuProductReviewCount:productReviews.count,
     temuStoreId,externalId:id,
     description,url:canonical.toString(),sellerProfileUrl:temuStoreProfile,
     sellerBadge:starSellerForStore ? 'TEMU_STAR_SELLER' : null,
