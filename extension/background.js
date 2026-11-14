@@ -44,8 +44,11 @@ async function authenticatedRequest(path, options = {}) {
     const result = await response.json().catch(() => null);
     if (!response.ok) {
         const raw = result?.message || result?.detail || result?.error;
-        const message = typeof raw === 'string' ? raw.slice(0, 350) : `Error HTTP ${response.status}`;
-        throw new Error(message);
+        const detail = typeof raw === 'string' ? raw.slice(0, 350) : 'Error de respuesta';
+        // El endpoint y el método permiten identificar la etapa fallida.
+        // No se registra ni muestra el encabezado de autorización.
+        const method = options.method ?? 'GET';
+        throw new Error(`${method} ${path} → HTTP ${response.status}: ${detail}`);
     }
     return result;
 }
