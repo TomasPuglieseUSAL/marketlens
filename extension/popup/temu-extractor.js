@@ -106,7 +106,8 @@ function extractTemu() {
       const target = new URL(href, url.href);
       const shopHost = target.hostname.toLowerCase();
       return (shopHost === 'temu.com' || shopHost.endsWith('.temu.com'))
-        && /(?:^|\/)(?:store|shop|mall)(?:\/|\.html|$)/i.test(target.pathname);
+        && (/^(?:\/mall\.html|\/store\.html|\/shop\.html)\/?$/i.test(target.pathname)
+            || /-m-\d{6,30}\.html\/?$/i.test(target.pathname));
     } catch { return false; }
   }
   const storeLinkName = element =>
@@ -260,10 +261,60 @@ function extractTemu() {
     if (candidates.length) temuSellerRating = candidates[0].value;
   }
 
+
+  // Identificador de tienda: solo proviene de un enlace de tienda
+  // asociado al nombre encontrado, jamás del goods_id del producto.
+  let temuStoreId = null;
+  let temuStoreProfile = null;
+  let temuSellerReviewCount = null;
+  const storeSectionObserved = Boolean(observedStore && storeEvidenceRoot);
+  if (observedStore) {
+    const scope = storeEvidenceRoot || document.querySelector('main') || document.body;
+    const storeLinks = Array.from(scope?.querySelectorAll?.('a[href]') || []);
+    if (scope?.matches?.('a[href]')) storeLinks.unshift(scope);
+    const links = storeLinks.filter(element => storeLinkName(element) === observedStore);
+    const unique = new Map();
+    for (const element of links) {
+      try {
+        const destination = new URL(element.getAttribute('href'), url.href);
+        const mall = destination.searchParams.get('mall_id');
+        const slug = destination.pathname.match(/-m-(\d{6,30})\.html\/?$/i);
+        const mallId = slug?.[1] || (
+          /^\/mall\.html\/?$/i.test(destination.pathname) &&
+          /^\d{6,30}$/.test(mall ?? '') ? mall : null
+        );
+        if (!mallId) continue;
+        const canonicalStore = slug
+          ? new URL(destination.pathname, destination.origin)
+          : new URL('/mall.html?mall_id=' + mallId, destination.origin);
+        unique.set(mallId, canonicalStore.toString());
+      } catch { /* ignorar links inválidos */ }
+    }
+    if (unique.size === 1) {
+      [temuStoreId, temuStoreProfile] = [...unique.entries()][0];
+    }
+
+    // Recuento EXPLÍCITO de reseñas de la tienda: nunca tomar el
+    // contador de reseñas del producto ni redondeos como "1.2K+".
+    let element = storeEvidenceRoot;
+    for (let depth = 0; element && depth < 3; depth++, element = element.parentElement) {
+      const content = (element.innerText || element.textContent || '')
+        .replace(/\u00a0/g, ' ').trim();
+      if (content.length > 380 || !content.includes(observedStore)) continue;
+      const matches = [
+        ...content.matchAll(/\b(\d{1,8})\s+(?:seller|store|shop|tienda|vendedor)\s+(?:reviews?|ratings?|valoraciones|reseñas)\b/gi),
+        ...content.matchAll(/\b(?:seller|store|shop|tienda|vendedor)\s+(?:reviews?|ratings?|valoraciones|reseñas)\s*:?\s*(\d{1,8})\b/gi),
+      ].map(m => Number(m[1]));
+      const distinct = [...new Set(matches)];
+      if (distinct.length === 1) { temuSellerReviewCount = distinct[0]; break; }
+    }
+  }
+
   return {found:true,title:title || null,price,currency:detectedCurrency,
     priceCandidates:prices,seller:observedStore,
-    temuSellerRating,externalId:id,
-    description,url:canonical.toString(),sellerProfileUrl:null,
+    temuSellerRating,temuSellerReviewCount,temuSellerSectionObserved:storeSectionObserved,
+    temuStoreId,externalId:id,
+    description,url:canonical.toString(),sellerProfileUrl:temuStoreProfile,
     sellerBadge:starSellerForStore ? 'TEMU_STAR_SELLER' : null,
     sellerSalesText:null,sellerReputationLevel:null,sellerId:null};
 }

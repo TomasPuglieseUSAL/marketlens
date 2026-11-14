@@ -1003,6 +1003,14 @@ function readFacebookForm(data) {
             ? null : data.sellerBadge,
         temuSellerRating: data.marketplace === 'TEMU' && !sameObservedSeller
             ? null : data.temuSellerRating,
+        temuSellerReviewCount: data.marketplace === 'TEMU' && !sameObservedSeller
+            ? null : data.temuSellerReviewCount,
+        temuStoreId: data.marketplace === 'TEMU' && !sameObservedSeller
+            ? null : data.temuStoreId,
+        temuSellerSectionObserved: data.marketplace === 'TEMU' && !sameObservedSeller
+            ? false : data.temuSellerSectionObserved,
+        sellerProfileUrl: data.marketplace === 'TEMU' && !sameObservedSeller
+            ? null : data.sellerProfileUrl,
         facebookJoinYear: joinYear,
         description: $('fb-description').value.trim() || null
     };
@@ -1066,9 +1074,12 @@ async function prepareData(action) {
             if (currentMarketplace === 'TEMU') {
                 const rating = extractedData.temuSellerRating;
                 const ratingText = typeof rating === 'number' && rating > 0
-                    ? `Calificación observada de tienda: ${rating.toLocaleString('es-AR')} / 5. `
+                    ? `Calificación de tienda: ${rating.toLocaleString('es-AR')} / 5. `
                     : '';
-                sellerHint.textContent = ratingText +
+                const count = extractedData.temuSellerReviewCount;
+                const reviewText = Number.isInteger(count) && count >= 0
+                    ? `Reseñas de tienda: ${count.toLocaleString('es-AR')}. ` : '';
+                sellerHint.textContent = ratingText + reviewText +
                     (extractedData.sellerBadge === 'TEMU_STAR_SELLER'
                         ? 'Star Seller aparece junto a la tienda. Ninguna señal implica seguridad garantizada.'
                         : 'Podés completar o corregir el nombre de la tienda si aparece en la publicación.');
