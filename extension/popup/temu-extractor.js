@@ -80,8 +80,94 @@ function extractTemu() {
     || meta('meta[property="og:title"]');
   const description = typeof product?.description === 'string'
     ? product.description.trim().slice(0, 5000) || null : null;
+
+  // La tienda se busca en el producto actual, sin tomar nombres de
+  // recomendaciones ni confundir "Star Seller" con la identidad de la tienda.
+  const cleanStoreName = value => {
+    if (typeof value !== 'string') return null;
+    const name = value.replace(/\s+/g, ' ').trim()
+      .replace(/^(?:sold by|sourced from|vendido por|tienda)\s*:?\s*/i, '')
+      .replace(/\s+star\s+seller$/i, '').trim();
+    if (name.length < 2 || name.length > 100
+        || !/[\p{L}]/u.test(name)
+        || /^(?:star seller|star store|seller|store|shop|visit store|store information|seller information|product details)$/i.test(name)
+        || /\bARS\s*\d/i.test(name)) return null;
+    return name;
+  };
+
+  function validStoreLink(element) {
+    const href = element?.getAttribute?.('href');
+    if (!href) return false;
+    try {
+      const target = new URL(href, url.href);
+      const shopHost = target.hostname.toLowerCase();
+      return (shopHost === 'temu.com' || shopHost.endsWith('.temu.com'))
+        && /(?:^|\/)(?:store|shop|mall)(?:\/|\.html|$)/i.test(target.pathname);
+    } catch { return false; }
+  }
+  const storeLinkName = element =>
+    validStoreLink(element)
+      ? cleanStoreName(element.innerText || element.textContent
+        || element.getAttribute?.('aria-label') || element.getAttribute?.('title'))
+      : null;
+
+  const badgeNodes = Array.from(document.querySelectorAll('span, strong, b, a, div')).filter(
+    element => /^\s*star\s+seller\s*$/i.test(element.textContent || '')
+      && (!element.children || element.children.length === 0)
+  ).slice(0, 15);
+
+  let observedStore = null;
+  let starSellerForStore = false;
+  for (const badge of badgeNodes) {
+    let container = badge.parentElement;
+    for (let depth = 0; container && depth < 6; depth++, container = container.parentElement) {
+      const text = (container.innerText || container.textContent || '').replace(/\u00a0/g, ' ');
+      if (text.length > 650) break; // Evitar toda la página y productos sugeridos.
+      const linkedNames = Array.from(container.querySelectorAll?.('a[href]') || [])
+        .map(storeLinkName).filter(Boolean);
+      let candidate = linkedNames.length === 1 ? linkedNames[0] : null;
+      if (!candidate) {
+        const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+        const index = lines.findIndex(line => /^star\s+seller$/i.test(line));
+        if (index > 0) candidate = cleanStoreName(lines[index - 1]);
+        if (!candidate && index >= 0 && index + 1 < lines.length)
+          candidate = cleanStoreName(lines[index + 1]);
+        if (!candidate) {
+          const combined = text.trim().match(/^([^\n]{2,100}?)\s+star\s+seller(?:\s|$)/i);
+          if (combined) candidate = cleanStoreName(combined[1]);
+        }
+      }
+      if (candidate) {
+        observedStore = candidate;
+        starSellerForStore = true;
+        break;
+      }
+    }
+    if (observedStore) break;
+  }
+
+  // Alternativa: vendedor explícito en JSON-LD, sin asumir que su
+  // presencia confirma la etiqueta visual.
+  const structuredSeller = offers?.seller || product?.seller;
+  const structuredName = cleanStoreName(
+    typeof structuredSeller === 'string'
+      ? structuredSeller : structuredSeller?.name
+  );
+  if (!observedStore && structuredName) observedStore = structuredName;
+
+  // Una única tienda enlazada en el área principal constituye otra
+  // fuente de nombre; varias tiendas posibles se consideran ambiguas.
+  if (!observedStore) {
+    const root = document.querySelector('main') || document.body;
+    const names = Array.from(root?.querySelectorAll?.('a[href]') || [])
+      .map(storeLinkName).filter(Boolean);
+    const unique = [...new Set(names)];
+    if (unique.length === 1) observedStore = unique[0];
+  }
+
   return {found:true,title:title || null,price,currency:detectedCurrency,
-    priceCandidates:prices,seller:null,externalId:id,
-    description,url:canonical.toString(),sellerProfileUrl:null,sellerBadge:null,
+    priceCandidates:prices,seller:observedStore,externalId:id,
+    description,url:canonical.toString(),sellerProfileUrl:null,
+    sellerBadge:starSellerForStore ? 'TEMU_STAR_SELLER' : null,
     sellerSalesText:null,sellerReputationLevel:null,sellerId:null};
 }

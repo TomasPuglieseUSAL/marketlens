@@ -987,6 +987,9 @@ function fillFacebookForm(data) {
     $('fb-description').value = data.description ?? '';
 }
 function readFacebookForm(data) {
+    const chosenSeller = $('fb-seller').value.trim();
+    const sameObservedSeller = chosenSeller.toLocaleLowerCase() ===
+        String(data.seller ?? '').trim().toLocaleLowerCase();
     const year = $('fb-join-year').value.trim();
     const joinYear = year ? Number(year) : null;
     if (joinYear !== null && (!Number.isInteger(joinYear) || joinYear < 2004 || joinYear > new Date().getFullYear())) {
@@ -995,10 +998,48 @@ function readFacebookForm(data) {
     return {...data,
         title: $('fb-title').value.trim(),
         price: $('fb-price').value.trim(),
-        seller: $('fb-seller').value.trim(),
+        seller: chosenSeller || null,
+        sellerBadge: data.marketplace === 'TEMU' && !sameObservedSeller
+            ? null : data.sellerBadge,
         facebookJoinYear: joinYear,
         description: $('fb-description').value.trim() || null
     };
+}
+function showTemuPrices(data) {
+    const panel = $('temu-price-panel');
+    panel.hidden = currentMarketplace !== 'TEMU';
+    if (panel.hidden) return;
+
+    const prices = Array.isArray(data.priceCandidates)
+        ? [...new Set(data.priceCandidates)].slice(0, 8) : [];
+    const options = $('temu-price-options');
+    options.replaceChildren();
+
+    const updateSelected = () => {
+        for (const button of options.querySelectorAll('button')) {
+            button.setAttribute('aria-pressed', String(button.dataset.price === $('fb-price').value.trim()));
+        }
+    };
+
+    for (const value of prices) {
+        if (typeof value !== 'string' || !/^\d[\d.,]{0,25}$/.test(value)) continue;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'temu-price-option';
+        button.dataset.price = value;
+        button.setAttribute('aria-label', `Usar ARS ${value} como precio de la publicación`);
+        button.textContent = `ARS ${value}`;
+        button.addEventListener('click', () => {
+            $('fb-price').value = value;
+            updateSelected();
+        });
+        options.appendChild(button);
+    }
+    options.hidden = options.children.length === 0;
+    $('temu-price-hint').textContent = prices.length > 1
+        ? 'Elegí el precio correspondiente a la variante y condiciones de compra. No selecciones el tachado ni promociones que no te correspondan.'
+        : 'Verificá el importe actual antes de continuar; puede depender de promociones.';
+    updateSelected();
 }
 function missingEssential(data) {
     return !data?.externalId || !data.title || !data.price ||
@@ -1017,17 +1058,16 @@ async function prepareData(action) {
         if (extractedData.externalId) {
             pendingAction = action;
             fillFacebookForm(extractedData);
-            const temuHint = $('temu-price-hint');
-            temuHint.hidden = currentMarketplace !== 'TEMU';
+            showTemuPrices(extractedData);
+            const sellerHint = $('temu-seller-hint');
+            sellerHint.hidden = currentMarketplace !== 'TEMU';
             if (currentMarketplace === 'TEMU') {
-                const candidates = Array.isArray(extractedData.priceCandidates)
-                    ? extractedData.priceCandidates : [];
-                temuHint.textContent = candidates.length
-                    ? `Importes ARS encontrados: ${candidates.map(value => 'ARS ' + value).join(', ')}. Confirmá el precio de venta aplicable a tu variante; no uses el valor tachado ni una promoción condicionada.`
-                    : 'No se obtuvo un precio único. Confirmá el importe actual del producto en ARS antes de continuar.';
+                sellerHint.textContent = extractedData.sellerBadge === 'TEMU_STAR_SELLER'
+                    ? 'La página muestra Star Seller junto a esta tienda. Es una etiqueta observada, no una reputación verificada por MarketLens.'
+                    : 'Podés completar o corregir el nombre de la tienda si aparece en la publicación.';
             }
             $('fb-join-row').hidden = currentMarketplace !== 'FACEBOOK_MARKETPLACE';
-            $('fb-seller').disabled = currentMarketplace === 'TEMU';
+            $('fb-seller').disabled = false;
             $('facebook-correction').hidden = false;
             $('status').textContent = 'Faltan datos. Completalos para continuar.';
             return null;
@@ -1120,6 +1160,11 @@ $('reanalyze-button').addEventListener('click', () => void analyzeClick());
 $('retry-button').addEventListener('click', () => void analyzeClick());
 $('report-form').addEventListener('submit', (event) => void reportSubmit(event));
 $('facebook-continue-button').addEventListener('click', () => void continueFacebook());
+$('fb-price').addEventListener('input', () => {
+    for (const button of $('temu-price-options').querySelectorAll('button')) {
+        button.setAttribute('aria-pressed', String(button.dataset.price === $('fb-price').value.trim()));
+    }
+});
 // Un vínculo temporal permite abrir el frontend sin enviar el JWT en la URL.
 async function openPublicationWithSession() {
     const id = lastPublicationId;
