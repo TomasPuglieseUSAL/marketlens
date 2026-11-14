@@ -59,6 +59,15 @@ public class Publication {
     @Column(name = "temu_seller_review_count")
     private Integer temuSellerReviewCount;
 
+    @Column(name = "temu_product_rating", precision = 2, scale = 1)
+    private BigDecimal temuProductRating;
+
+    @Column(name = "temu_product_review_count")
+    private Integer temuProductReviewCount;
+
+    @Column(name = "temu_product_observed_at")
+    private LocalDateTime temuProductObservedAt;
+
     @Column(name = "temu_store_id", length = 30)
     private String temuStoreId;
 
@@ -179,6 +188,12 @@ public class Publication {
 
     public Integer getTemuSellerReviewCount() { return temuSellerReviewCount; }
     public void setTemuSellerReviewCount(Integer count) { this.temuSellerReviewCount = count; }
+    public BigDecimal getTemuProductRating() { return temuProductRating; }
+    public void setTemuProductRating(BigDecimal rating) { this.temuProductRating = rating; }
+    public Integer getTemuProductReviewCount() { return temuProductReviewCount; }
+    public void setTemuProductReviewCount(Integer count) { this.temuProductReviewCount = count; }
+    public LocalDateTime getTemuProductObservedAt() { return temuProductObservedAt; }
+    public void setTemuProductObservedAt(LocalDateTime at) { this.temuProductObservedAt = at; }
     public String getTemuStoreId() { return temuStoreId; }
     public void setTemuStoreId(String id) { this.temuStoreId = id; }
     public Boolean getTemuSellerSectionObserved() { return temuSellerSectionObserved; }
