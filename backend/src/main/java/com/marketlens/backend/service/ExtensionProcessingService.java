@@ -144,6 +144,7 @@ public class ExtensionProcessingService {
                                 // cuando se creó esta publicación (p. ej., #goodsDetail de Temu).
                                 // Completar solo una descripción vacía, sin sobrescribir la anterior.
                                 fillMissingTemuDescription(publication, imported);
+                                applyTemuProductEvidence(publication, imported);
                         } else if (marketplace == Marketplace.FACEBOOK_MARKETPLACE) {
 
                                 // Facebook: el identificador externo identifica el anuncio,
@@ -246,6 +247,9 @@ public class ExtensionProcessingService {
 
                         publication.setTitle(imported.getTitle());
                         publication.setDescription(imported.getDescription());
+                        if (marketplace == Marketplace.TEMU) {
+                                applyTemuProductEvidence(publication, imported);
+                        }
 
                         publication.setPrice(normalized.price());
                         publication.setMarketplace(marketplace);
@@ -409,6 +413,19 @@ public class ExtensionProcessingService {
                 if ((previous == null || previous.isBlank())
                         && incoming != null && !incoming.isBlank()) {
                         publication.setDescription(incoming);
+                }
+        }
+
+        static void applyTemuProductEvidence(Publication publication, ExtensionImport imported) {
+                if (publication == null || imported == null) return;
+                // Conservar la observación anterior si la nueva extracción
+                // no trae ambos valores; la fecha antigua vencerá igualmente.
+                if (TemuProductReviewEvidence.hasMetrics(
+                        imported.getTemuProductRating(),
+                        imported.getTemuProductReviewCount())) {
+                        publication.setTemuProductRating(imported.getTemuProductRating());
+                        publication.setTemuProductReviewCount(imported.getTemuProductReviewCount());
+                        publication.setTemuProductObservedAt(java.time.LocalDateTime.now());
                 }
         }
 
