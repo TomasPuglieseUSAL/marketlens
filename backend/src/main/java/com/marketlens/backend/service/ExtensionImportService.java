@@ -89,6 +89,12 @@ public class ExtensionImportService {
         imported.setExternalSellerId(externalSellerId);
 
         validateSellerMetadata(request);
+        if ("TEMU".equals(request.marketplace()) && request.seller() != null
+                && request.seller().trim().matches(
+                   "(?i)^[0-5](?:[.,]\\d)?\\s+out\\s+of\\s+(?:five|5)\\s+stars?\\s*$")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El nombre de la tienda no puede ser una calificación del producto.");
+        }
         java.math.BigDecimal temuRating = request.temuSellerRating();
         if (temuRating != null) {
             if (!"TEMU".equals(request.marketplace()) ||

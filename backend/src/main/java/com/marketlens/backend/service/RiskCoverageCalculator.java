@@ -82,17 +82,12 @@ public class RiskCoverageCalculator {
                 seller, LocalDateTime.now())
                 != SellerActivityEvidence.ActivitySignal.NONE;
 
-        // Puntuación observada de una tienda Temu, no la del producto.
-        BigDecimal temuRating = publication.getTemuSellerRating();
-        boolean hasTemuSellerRating = publication.getMarketplace() == Marketplace.TEMU
-                && temuRating != null
-                && temuRating.compareTo(BigDecimal.ZERO) > 0
-                && temuRating.compareTo(new BigDecimal("5.0")) <= 0;
-
+        // La puntuación de Temu extraída por la extensión es una señal
+        // observada pero NO contrastada con una fuente independiente.
+        // Por eso no basta para acreditar cobertura de reputación.
         if (hasReputationLevel ||
                 hasLegacyReputation ||
-                hasCommercialEvidence ||
-                hasTemuSellerRating) {
+                hasCommercialEvidence) {
             available++;
         }
 

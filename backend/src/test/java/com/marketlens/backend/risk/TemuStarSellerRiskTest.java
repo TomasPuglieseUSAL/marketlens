@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class TemuStarSellerRiskTest {
 
     @Test
-    void observedSellerRatingAddsReputationCoverageButNotArbitraryRiskPoints() {
+    void observedSellerRatingIsInformativeWithoutGrantingVerifiedReputationCoverage() {
         Seller seller = new Seller();
         seller.setName("Tokki Shop");
         seller.setMarketplace(Marketplace.TEMU);
@@ -31,10 +31,10 @@ class TemuStarSellerRiskTest {
         RiskEvaluation result = new RiskEngine(new RiskCoverageCalculator())
                 .evaluate(publication);
 
-        assertEquals(2, result.getAvailableFactors());
+        assertEquals(1, result.getAvailableFactors());
         assertEquals(3, result.getTotalFactors());
         assertEquals(0, result.getScore());
-        assertEquals(RiskLevel.LOW, result.getLevel());
+        assertEquals(RiskLevel.INDETERMINATE, result.getLevel());
         assertTrue(result.getFactors().stream().anyMatch(f ->
                 "TEMU_SELLER_RATING_OBSERVED".equals(f.getCode())
                 && f.getScoreContribution() == 0));

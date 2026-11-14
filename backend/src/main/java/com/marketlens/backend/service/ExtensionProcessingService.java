@@ -116,7 +116,8 @@ public class ExtensionProcessingService {
                                 if (incomingName != null && !incomingName.isBlank()) {
                                         if (previous == null) {
                                                 publication.setSeller(createObservedTemuSeller(incomingName));
-                                        } else if (!previous.getName().equalsIgnoreCase(incomingName.trim())) {
+                                        } else if (previous.getName() == null ||
+                                                !previous.getName().equalsIgnoreCase(incomingName.trim())) {
                                                 // Corrección acotada para registros antiguos en los que
                                                 // un texto de puntuación del PRODUCTO se tomó por vendedor.
                                                 // No modificar un vendedor existente con nombre real.
