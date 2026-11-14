@@ -160,3 +160,71 @@ test('no inventa vendedor si aparecen distintas tiendas en un sector ambiguo', (
   assert.equal(result.seller,null);
   assert.equal(result.sellerBadge,null);
 });
+
+
+test('la valoración del producto 4.7 no sustituye a Tokki Shop y su calificación 4.8', () => {
+  const sellerPanel={
+    innerText:'Tokki Shop\n4.8\nStar Seller\n4.7 out of five stars',
+    textContent:'Tokki Shop\n4.8\nStar Seller\n4.7 out of five stars',
+    parentElement:null,
+    querySelectorAll:()=>[]
+  };
+  const badge={textContent:'Star Seller',children:[],parentElement:sellerPanel};
+  const document={
+    querySelectorAll:selector=>selector.startsWith('span, strong')?[badge]:[],
+    querySelector:selector=>selector==='h1'
+      ? {textContent:'Funda de teléfono',parentElement:{innerText:'ARS 9.507'}} : null
+  };
+  const context={
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL,document
+  };
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
+  const data=JSON.parse(JSON.stringify(context.result));
+  assert.equal(data.seller,'Tokki Shop');
+  assert.equal(data.temuSellerRating,4.8);
+  assert.equal(data.sellerBadge,'TEMU_STAR_SELLER');
+});
+
+test('una frase 4.7 out of five stars no es vendedor ni calificación de tienda', () => {
+  const sellerPanel={
+    innerText:'4.7 out of five stars\nStar Seller',
+    textContent:'4.7 out of five stars\nStar Seller',
+    parentElement:null,
+    querySelectorAll:()=>[]
+  };
+  const badge={textContent:'Star Seller',children:[],parentElement:sellerPanel};
+  const document={
+    querySelectorAll:selector=>selector.startsWith('span, strong')?[badge]:[],
+    querySelector:selector=>selector==='h1'
+      ? {textContent:'Funda de teléfono',parentElement:null}:null
+  };
+  const context={
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL,document
+  };
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
+  const data=JSON.parse(JSON.stringify(context.result));
+  assert.equal(data.seller,null);
+  assert.equal(data.temuSellerRating,null);
+  assert.equal(data.sellerBadge,null);
+});
+
+test('una tienda normal con ★4.8 puede tener rating sin sello Star Seller', () => {
+  const block={innerText:'Sold by Tokki Shop\n★ 4.8',textContent:'Sold by Tokki Shop\n★ 4.8',parentElement:null};
+  const root={querySelectorAll:selector=>selector==='section, div, p, span'?[block]:selector.includes('a[href]')?[block]:[]};
+  const document={
+    querySelectorAll:()=>[],
+    querySelector:selector=>selector==='main'?root:selector==='h1'
+      ? {textContent:'Funda',parentElement:null}:null
+  };
+  const context={
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL,document
+  };
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
+  const data=JSON.parse(JSON.stringify(context.result));
+  assert.equal(data.seller,'Tokki Shop');
+  assert.equal(data.temuSellerRating,4.8);
+  assert.equal(data.sellerBadge,null);
+});
