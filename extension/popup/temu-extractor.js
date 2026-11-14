@@ -53,9 +53,10 @@ function extractTemu() {
   for (let depth = 0; node && depth < 9; depth++, node = node.parentElement) {
     const content = (node.innerText || node.textContent || '').replace(/\u00a0/g, ' ');
     if (content.length > 6000) break; // No recorrer todas las recomendaciones.
-    if (/\bARS\s*\d/i.test(content)) {
+    // Tomar el mayor contexto acotado alrededor del título: puede separar
+    // el importe promocional del precio publicado y del tachado.
+    if (/\bARS\s*\d/i.test(content) && content.length > nearbyText.length) {
       nearbyText = content;
-      break;
     }
   }
 
