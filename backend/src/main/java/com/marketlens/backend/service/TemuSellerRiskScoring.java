@@ -26,17 +26,37 @@ public final class TemuSellerRiskScoring {
                 && !at.isBefore(now.minusDays(MAX_AGE_DAYS));
     }
 
-    public static boolean hasSupportedReputation(Publication publication, LocalDateTime now) {
-        if (publication.getMarketplace() != Marketplace.TEMU ||
-                publication.getSeller() == null || !isCurrent(publication, now) ||
-                !Boolean.TRUE.equals(publication.getTemuSellerSectionObserved()) ||
-                publication.getTemuStoreId() == null) return false;
-
-        BigDecimal rating = publication.getTemuSellerRating();
-        Integer reviews = publication.getTemuSellerReviewCount();
+    /** Validez de una calificación 0–5; no es una probabilidad de compra segura. */
+    public static boolean isValidSellerRating(BigDecimal rating) {
         return rating != null && rating.compareTo(BigDecimal.ZERO) > 0
-                && rating.compareTo(new BigDecimal("5.0")) <= 0
-                && reviews != null && reviews >= MIN_REVIEWS_FOR_RATING;
+                && rating.compareTo(new BigDecimal("5.0")) <= 0;
+    }
+
+    /**
+     * Disponibilidad del factor: puntuación atribuida a una tienda observada,
+     * con evidencia reciente, incluso sin ID o número exacto de reseñas.
+     */
+    public static boolean hasObservedReputation(Publication publication, LocalDateTime now) {
+        return publication.getMarketplace() == Marketplace.TEMU
+                && publication.getSeller() != null
+                && publication.getSeller().getName() != null
+                && !publication.getSeller().getName().isBlank()
+                && isCurrent(publication, now)
+                && Boolean.TRUE.equals(publication.getTemuSellerSectionObserved())
+                && isValidSellerRating(publication.getTemuSellerRating());
+    }
+
+    /**
+     * Evidencia más sólida para clasificar como riesgo bajo:
+     * la calificación observada tiene ID de tienda y >=10 reseñas exactas.
+     * Esto no significa que Temu o las reseñas hayan sido auditadas.
+     */
+    public static boolean hasSupportedReputation(Publication publication, LocalDateTime now) {
+        if (!hasObservedReputation(publication, now)
+                || publication.getTemuStoreId() == null
+                || publication.getTemuStoreId().isBlank()) return false;
+        Integer reviews = publication.getTemuSellerReviewCount();
+        return reviews != null && reviews >= MIN_REVIEWS_FOR_RATING;
     }
 
     public static Signal evaluate(Publication publication, LocalDateTime now) {

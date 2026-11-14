@@ -52,14 +52,14 @@ public class ExtensionRiskCoverageService {
                 boolean hasReputation = reputationLevel != null &&
                                 reputationLevel >= 1 &&
                                 reputationLevel <= 5;
-                // La dimensión Temu solo está suficientemente documentada si
-                // hay identidad de tienda y >=10 valoraciones exactas.
+                // La cobertura refleja DISPONIBILIDAD del dato, no el grado
+                // de confianza. El ID de tienda y la cantidad de valoraciones
+                // se utilizan por separado para medir su respaldo.
                 if ("TEMU".equals(imported.getMarketplace())
-                        && imported.getTemuStoreId() != null
+                        && imported.getSellerName() != null
+                        && !imported.getSellerName().isBlank()
                         && Boolean.TRUE.equals(imported.getTemuSellerSectionObserved())
-                        && imported.getTemuSellerRating() != null
-                        && imported.getTemuSellerReviewCount() != null
-                        && imported.getTemuSellerReviewCount() >= 10) {
+                        && TemuSellerRiskScoring.isValidSellerRating(imported.getTemuSellerRating())) {
                     hasReputation = true;
                 }
 

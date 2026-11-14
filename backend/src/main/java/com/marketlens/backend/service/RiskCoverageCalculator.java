@@ -82,13 +82,13 @@ public class RiskCoverageCalculator {
                 seller, LocalDateTime.now())
                 != SellerActivityEvidence.ActivitySignal.NONE;
 
-        // La puntuación de Temu extraída por la extensión es una señal
-        // observada pero NO contrastada con una fuente independiente.
-        // Por eso no basta para acreditar cobertura de reputación.
+        // Una calificación Temu de tienda identificada y observada
+        // recientemente cuenta como dato DISPONIBLE. El número de reseñas
+        // determina la confianza en esa evidencia, no su existencia.
         if (hasReputationLevel ||
                 hasLegacyReputation ||
                 hasCommercialEvidence ||
-                TemuSellerRiskScoring.hasSupportedReputation(publication, LocalDateTime.now())) {
+                TemuSellerRiskScoring.hasObservedReputation(publication, LocalDateTime.now())) {
             available++;
         }
 

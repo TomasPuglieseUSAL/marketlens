@@ -50,6 +50,25 @@ class TemuSellerRiskScoringTest {
         assertEquals(5,TemuSellerRiskScoring.evaluate(listing("3.8",50,true,true),now).points());
         assertNull(TemuSellerRiskScoring.evaluate(listing("4.8",50,true,true),now));
     }
+    @Test void observedRatingCountsWithoutStoreIdOrReviewCount() {
+        assertTrue(TemuSellerRiskScoring.hasObservedReputation(
+                listing("4.8", null, true, false), now));
+        assertTrue(TemuSellerRiskScoring.hasObservedReputation(
+                listing("4.8", 2, true, false), now));
+        assertFalse(TemuSellerRiskScoring.hasObservedReputation(
+                listing("4.8", null, false, true), now));
+        assertFalse(TemuSellerRiskScoring.hasObservedReputation(
+                listing(null, 25, true, true), now));
+        assertFalse(TemuSellerRiskScoring.hasObservedReputation(
+                listing("5.1", 20, true, true), now));
+    }
+
+    @Test void observedRatingExpiresAfter30Days() {
+        var old = listing("4.8", null, true, false);
+        old.setTemuSellerObservedAt(now.minusDays(31));
+        assertFalse(TemuSellerRiskScoring.hasObservedReputation(old, now));
+    }
+
     @Test void trustedCoverageRequiresStoreIdAndReviewCount() {
         assertFalse(TemuSellerRiskScoring.hasSupportedReputation(listing("4.8",null,true,true),now));
         assertFalse(TemuSellerRiskScoring.hasSupportedReputation(listing("4.8",55,true,false),now));

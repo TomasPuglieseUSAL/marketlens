@@ -472,6 +472,15 @@ public class RiskEngine {
             return RiskLevel.INDETERMINATE;
         }
 
+        // Temu: contar 4,8/5 como reputación disponible no equivale a
+        // acreditar una muestra representativa. No declarar LOW solamente
+        // con la descripción y un promedio sin respaldo verificable.
+        Publication publication = evaluation.getPublication();
+        if (publication != null && publication.getMarketplace() == Marketplace.TEMU
+                && !TemuSellerRiskScoring.hasSupportedReputation(publication, LocalDateTime.now())) {
+            return RiskLevel.INDETERMINATE;
+        }
+
         return RiskLevel.LOW;
     }
 }

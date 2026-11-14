@@ -58,9 +58,24 @@ Nunca se suman simultáneamente puntos por escasez de reseñas y calificación
 baja de la misma fuente. `Star Seller` continúa siendo informativo (0 puntos).
 Una reputación ausente **no** implica pocas ventas ni evidencia de fraude.
 
-La cobertura de reputación se considera suficientemente respaldada solo
-cuando existe una calificación válida de tienda, un `mall_id`, al menos
-10 reseñas exactas, inspección de la sección de tienda y evidencia reciente.
+La **disponibilidad** de reputación ahora cuenta con una calificación de tienda
+válida (por ejemplo, 4,8/5) asociada a una tienda identificada, sección
+inspeccionada y observación de los últimos 30 días. No es obligatorio
+conocer el `mall_id` ni el número exacto de reseñas para sumar esta
+dimensión en la cobertura (por ejemplo, pasar de 0/3 a 1/3 cuando
+las otras dos dimensiones no tienen datos).
+
+Distinto es considerar que la calificación está **suficientemente respaldada**
+para emitir LOW. Para ello seguimos requiriendo identificación `mall_id`,
+al menos 10 reseñas exactas, y observación reciente. De lo contrario,
+aunque haya 2/3 de cobertura, se mantiene INDETERMINATE para Temu
+si el puntaje no alcanza los umbrales MEDIUM/HIGH. Esto evita presentar
+un promedio aislado como garantía de compra segura.
+
+El valor original 4,8/5 se conserva en la base de datos: dividirlo por
+5 produce 0,96 solo si es necesario normalizar un cálculo; **0,96 no
+representa una probabilidad de seguridad**.
+
 El umbral de 10 y los pesos son exploratorios: necesitan pruebas con una
 muestra variada de tiendas antes de usarse para decisiones importantes.
 
