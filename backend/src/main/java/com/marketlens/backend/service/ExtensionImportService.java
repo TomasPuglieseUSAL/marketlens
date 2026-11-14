@@ -88,7 +88,6 @@ public class ExtensionImportService {
 
         imported.setExternalSellerId(externalSellerId);
 
-        validateSellerMetadata(request);
         if ("TEMU".equals(request.marketplace()) && request.seller() != null
                 && request.seller().trim().matches(
                    "(?i)^[0-5](?:[.,]\\d)?\\s+out\\s+of\\s+(?:five|5)\\s+stars?\\s*$")) {
@@ -135,6 +134,8 @@ public class ExtensionImportService {
                     "Las valoraciones de Temu requieren inspección de la tienda.");
         }
         imported.setTemuSellerObservation(reviewCount, storeId, sectionObserved);
+        // Validar IDs antes de interpolarlos en comprobaciones de URL.
+        validateSellerMetadata(request);
 
         imported.setSellerMetadata(
                 request.sellerProfileUrl(),
