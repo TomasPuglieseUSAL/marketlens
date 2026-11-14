@@ -78,8 +78,60 @@ function extractTemu() {
   const title = document.querySelector('h1')?.textContent?.trim()
     || (typeof product?.name === 'string' ? product.name.trim() : null)
     || meta('meta[property="og:title"]');
-  const description = typeof product?.description === 'string'
-    ? product.description.trim().slice(0, 5000) || null : null;
+  // Temu puede incluir información útil en #goodsDetail aunque no publique
+  // Product.description en JSON-LD. Limitarse a atributos y texto de aviso:
+  // imágenes, ALT, botones y paneles de tienda no describen el producto.
+  function extractProductDetails() {
+    const root = document.querySelector('#goodsDetail');
+    if (!root) return null;
+    const clean = value => typeof value === 'string'
+      ? value.replace(/\s+/g, ' ').trim() : '';
+    const lines = [];
+    const seen = new Set();
+    function addField(rawLabel, rawValue) {
+      const label = clean(rawLabel).replace(/:\s*$/, '');
+      const value = clean(rawValue);
+      if (!label || !value || label.length > 80 || value.length > 1500
+          || /^(?:item id|id del artículo)$/i.test(label)) return;
+      const key = (label + ':' + value).toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      lines.push(label + ': ' + value);
+    }
+
+    // Pares clave/valor en la sección superior (Feature, Popular Elements...).
+    for (const entry of root.querySelectorAll('._3zjMlOk4')) {
+      addField(entry.querySelector('._5pgrvPWK')?.textContent,
+        entry.querySelector('._2N4zowM4')?.textContent);
+    }
+    // Especificaciones inferiores (Main Material, Origin...).
+    for (const entry of root.querySelectorAll('._1YBVObhm')) {
+      const labelNode = entry.querySelector('._3c5b9cNv');
+      const label = clean(labelNode?.firstChild?.textContent
+        || labelNode?.textContent);
+      const separator = label.indexOf(':');
+      if (separator > 0 && separator < 80) {
+        addField(label.slice(0, separator),
+          entry.querySelector('._2bgv8UEs > span')?.textContent);
+      }
+    }
+
+    // Advertencia sobre las características o presentación del artículo.
+    const note = clean(root.querySelector('._2lHZTmSd')?.textContent);
+    if (note.length >= 40 && note.length <= 2000 && !seen.has(note.toLowerCase())) {
+      lines.push(note);
+    }
+
+    const details = lines.join('\n');
+    return details.length >= 25 ? details.slice(0, 5000) : null;
+  }
+  const structuredDescription = typeof product?.description === 'string'
+    ? product.description.trim() : '';
+  const visibleDetails = extractProductDetails();
+  const description = [structuredDescription,
+    visibleDetails && !structuredDescription.includes(visibleDetails)
+      ? visibleDetails : null]
+    .filter(Boolean).join('\n\n').slice(0, 5000) || null;
 
   // La tienda se busca en el producto actual, sin tomar nombres de
   // recomendaciones ni confundir "Star Seller" con la identidad de la tienda.
