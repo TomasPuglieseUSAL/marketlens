@@ -63,27 +63,20 @@ public class ExtensionRiskCoverageService {
                     hasReputation = true;
                 }
 
-                // 3. Antigüedad de la cuenta.
-                // Para Facebook utilizamos el año público de incorporación.
-                // Este dato indica disponibilidad de información,
-                // no una antigüedad exacta en días.
-                Integer facebookJoinYear = imported.getFacebookJoinYear();
-
-                boolean hasAccountAge = facebookJoinYear != null;
-
-                List<RiskCoverageFactorResponse> factors = List.of(
-                                new RiskCoverageFactorResponse(
-                                                "DESCRIPTION",
-                                                "Descripción de la publicación",
-                                                hasDescription),
-                                new RiskCoverageFactorResponse(
-                                                "SELLER_REPUTATION",
-                                                "Reputación del vendedor",
-                                                hasReputation),
-                                new RiskCoverageFactorResponse(
-                                                "SELLER_ACCOUNT_AGE",
-                                                "Antigüedad de la cuenta",
-                                                hasAccountAge));
+                // La antigüedad deja de ser una dimensión obligatoria.
+                // Sólo Temu dispone por ahora de extracción de opiniones del producto.
+                List<RiskCoverageFactorResponse> factors = new java.util.ArrayList<>();
+                factors.add(new RiskCoverageFactorResponse(
+                        "DESCRIPTION", "Información del producto", hasDescription));
+                factors.add(new RiskCoverageFactorResponse(
+                        "SELLER_REPUTATION", "Reputación del vendedor", hasReputation));
+                if ("TEMU".equals(imported.getMarketplace())) {
+                        factors.add(new RiskCoverageFactorResponse(
+                                "PRODUCT_REVIEWS", "Opiniones del producto",
+                                TemuProductReviewEvidence.hasMetrics(
+                                        imported.getTemuProductRating(),
+                                        imported.getTemuProductReviewCount())));
+                }
 
                 int availableFactors = (int) factors.stream()
                                 .filter(RiskCoverageFactorResponse::available)
