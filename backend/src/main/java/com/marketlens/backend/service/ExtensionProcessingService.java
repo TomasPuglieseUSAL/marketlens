@@ -117,8 +117,17 @@ public class ExtensionProcessingService {
                                         if (previous == null) {
                                                 publication.setSeller(createObservedTemuSeller(incomingName));
                                         } else if (!previous.getName().equalsIgnoreCase(incomingName.trim())) {
-                                                throw new ResponseStatusException(HttpStatus.CONFLICT,
-                                                        "La tienda observada de Temu no coincide con la registrada.");
+                                                // Corrección acotada para registros antiguos en los que
+                                                // un texto de puntuación del PRODUCTO se tomó por vendedor.
+                                                // No modificar un vendedor existente con nombre real.
+                                                if (previous.getName() != null &&
+                                                        previous.getName().matches(
+                                                            "(?i)^\\s*[0-5](?:[.,]\\d)?\\s+out\\s+of\\s+(?:five|5)\\s+stars?\\s*$")) {
+                                                        publication.setSeller(createObservedTemuSeller(incomingName));
+                                                } else {
+                                                        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                                                                "La tienda observada de Temu no coincide con la registrada.");
+                                                }
                                         }
                                 }
                                 if ("TEMU_STAR_SELLER".equals(imported.getSellerBadge())
