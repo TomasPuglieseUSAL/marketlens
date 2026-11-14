@@ -20,7 +20,7 @@ class TemuSellerObservationValidationTest {
                 "606892013277333",
                 "Funda protectora",
                 "https://www.temu.com/ar-en/funda-g-606892013277333.html",
-                null, null, rating, null, null, null, null, null, null, null);
+                null, null, rating, null, null, null, null, null, null, null, null, null);
     }
 
     private ExtensionPreviewRequest withReviewEvidence(
@@ -30,7 +30,7 @@ class TemuSellerObservationValidationTest {
                 "Tokki Shop", "606892013277333", "Funda protectora",
                 "https://www.temu.com/ar-en/funda-g-606892013277333.html",
                 profileUrl, null, new BigDecimal("4.8"),
-                count, storeId, inspected,
+                count, null, null, storeId, inspected,
                 null, null, null, null);
     }
 
