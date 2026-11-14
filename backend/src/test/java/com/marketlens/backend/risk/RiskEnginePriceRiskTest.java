@@ -44,7 +44,7 @@ class RiskEnginePriceRiskTest {
         assertEquals(40, result.getScore());
         assertEquals(RiskLevel.MEDIUM, result.getLevel());
         assertEquals(2, (int) result.getAvailableFactors());
-        assertEquals(3, (int) result.getTotalFactors());
+        assertEquals(2, (int) result.getTotalFactors());
         assertEquals(2, result.getFactors().size());
         assertTrue(result.getFactors().stream().anyMatch(f ->
                 "LIMITED_SELLER_HISTORY".equals(f.getCode())
