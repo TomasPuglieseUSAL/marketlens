@@ -90,3 +90,28 @@ npm run build
 cd ..
 docker compose up --build -d
 ```
+
+
+## Opiniones del producto y cobertura adaptable (V25)
+
+- El extractor devuelve `temuProductRating` y `temuProductReviewCount` cuando obtiene una **pareja explícita** de calificación y número exacto de reseñas del **producto**, desde `Product.aggregateRating` (JSON-LD) o etiquetas claras próximas al título. No utiliza `ratingCount` como sustituto de reseñas ni valores abreviados como `1.2K+`.
+- No confundir estos campos con `temuSellerRating` y `temuSellerReviewCount`, que describen la **tienda**. Las opiniones pueden abarcar variantes y no demuestran el número de ventas ni la autenticidad del producto.
+- La migración Flyway V25 conserva la evidencia en importaciones y publicaciones, junto a `temu_product_observed_at`. Las observaciones valen **30 días** para la cobertura y el puntaje. Una reimportación compatible actualiza los datos de una publicación existente; una extracción sin opiniones no borra el dato anterior ni renueva su fecha.
+- Cobertura de Temu: **información del producto**, **reputación del vendedor**, **opiniones del producto** (0–3 factores disponibles). Las dos métricas del producto deben ser válidas para sumar esa tercera dimensión.
+- Cobertura de Mercado Libre y Facebook Marketplace: **información del producto** y **reputación del vendedor** (0–2), mientras no haya extracción fiable de opiniones específicas. La antigüedad de la cuenta deja de ser un factor obligatorio de cobertura, pero su regla de riesgo sigue operativa cuando existe.
+- Puntuación exploratoria de producto: con **10 o más** reseñas exactas, una calificación menor a **3,0** suma **15 puntos**; entre **3,0 y menos de 4,0**, **5 puntos**. Las calificaciones positivas, pocas reseñas o reseñas no disponibles no restan puntos ni implican seguridad o fraude. Una calificación observada también se muestra como factor informativo de 0 puntos.
+- Mantener la regla: Temu **no** puede obtener LOW por tener buenas opiniones de producto si la reputación de la tienda no cumple los requisitos propios (ID, al menos 10 reseñas de tienda exactas, calificación observada y reciente).
+
+Pruebas de esta fase:
+
+```powershell
+node --test extension/tests/temu-extractor.test.cjs
+cd backend
+.\mvnw.cmd test
+cd ../frontend
+npm run build
+cd ..
+docker compose up --build -d
+```
+
+La extracción del DOM de Temu puede variar: si la publicación sigue en 2/3, inspeccionar el bloque de calificación junto al título sin asumir que los 286 comentarios están disponibles al abrir la página.
