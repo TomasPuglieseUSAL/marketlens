@@ -119,3 +119,44 @@ test('lee la identidad estructurada sin inventar el distintivo Star Seller', () 
   assert.equal(data.seller,'Tokki Shop');
   assert.equal(data.sellerBadge,null);
 });
+
+
+test('detecta tienda normal sin Star Seller mediante Sold by', () => {
+  const sellerBlock={innerText:'Sold by Tokki Shop',textContent:'Sold by Tokki Shop'};
+  const root={querySelectorAll:selector=>
+    selector==='section, div, p, span' ? [sellerBlock] : []};
+  const document={
+    querySelectorAll:()=>[],
+    querySelector:selector=> selector==='main'?root
+      : selector==='h1'
+        ? {textContent:'Funda',parentElement:{innerText:'ARS 9.507'}}
+        : null
+  };
+  const context={
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL,document
+  };
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
+  const result=JSON.parse(JSON.stringify(context.result));
+  assert.equal(result.seller,'Tokki Shop');
+  assert.equal(result.sellerBadge,null);
+});
+
+test('no inventa vendedor si aparecen distintas tiendas en un sector ambiguo', () => {
+  const blocks=['Sold by Tienda Uno','Sold by Tienda Dos'].map(innerText=>({innerText}));
+  const root={querySelectorAll:selector=>
+    selector==='section, div, p, span' ? blocks : []};
+  const document={
+    querySelectorAll:()=>[],
+    querySelector:selector=> selector==='main'?root
+      : selector==='h1'?{textContent:'Funda',parentElement:null}:null
+  };
+  const context={
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL,document
+  };
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
+  const result=JSON.parse(JSON.stringify(context.result));
+  assert.equal(result.seller,null);
+  assert.equal(result.sellerBadge,null);
+});
