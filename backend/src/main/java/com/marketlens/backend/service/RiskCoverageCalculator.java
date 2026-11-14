@@ -14,17 +14,21 @@ import java.time.LocalDateTime;
 @Component
 public class RiskCoverageCalculator {
 
-    private static final int TOTAL_FACTORS = 3;
+    // La tercera dimensión sólo aplica donde se extraen opiniones de producto.
+    private static int totalFactors(Publication publication) {
+        return publication.getMarketplace() == Marketplace.TEMU ? 3 : 2;
+    }
 
     public void applyCoverage(
             Publication publication,
             RiskEvaluation evaluation) {
 
         int available = countAvailableFactors(publication);
+        int total = totalFactors(publication);
 
         RiskCoverageStatus status;
 
-        if (available == TOTAL_FACTORS) {
+        if (available == total) {
             status = RiskCoverageStatus.COMPLETE;
 
         } else if (available == 0) {
@@ -36,82 +40,41 @@ public class RiskCoverageCalculator {
 
         evaluation.setCoverageStatus(status);
         evaluation.setAvailableFactors(available);
-        evaluation.setTotalFactors(TOTAL_FACTORS);
+        evaluation.setTotalFactors(total);
     }
 
     private int countAvailableFactors(Publication publication) {
 
         int available = 0;
 
-        // -------------------------------------
-        // 1. Descripción de la publicación
-        // -------------------------------------
-
+        // 1. Información de producto.
         String description = publication.getDescription();
+        if (description != null && !description.isBlank()) available++;
 
-        if (description != null && !description.isBlank()) {
-            available++;
-        }
-
+        // 2. Reputación o historial comercial observado del vendedor.
         Seller seller = publication.getSeller();
-
-        if (seller == null) {
-            return available;
+        if (seller != null) {
+            Integer reputationLevel = seller.getReputationLevel();
+            BigDecimal reputation = seller.getReputation();
+            boolean hasReputationLevel = reputationLevel != null
+                    && reputationLevel >= 1 && reputationLevel <= 5;
+            boolean hasLegacyReputation = reputation != null
+                    && reputation.compareTo(BigDecimal.ZERO) >= 0
+                    && reputation.compareTo(BigDecimal.ONE) <= 0;
+            boolean hasCommercialEvidence = SellerActivityEvidence.detect(
+                    seller, LocalDateTime.now())
+                    != SellerActivityEvidence.ActivitySignal.NONE;
+            if (hasReputationLevel || hasLegacyReputation || hasCommercialEvidence ||
+                    TemuSellerRiskScoring.hasObservedReputation(publication, LocalDateTime.now())) {
+                available++;
+            }
         }
 
-        // -------------------------------------
-        // 2. Reputación del vendedor
-        // -------------------------------------
-
-        Integer reputationLevel = seller.getReputationLevel();
-
-        BigDecimal reputation = seller.getReputation();
-
-        boolean hasReputationLevel = reputationLevel != null &&
-                reputationLevel >= 1 &&
-                reputationLevel <= 5;
-
-        boolean hasLegacyReputation = reputation != null &&
-                reputation.compareTo(BigDecimal.ZERO) >= 0 &&
-                reputation.compareTo(BigDecimal.ONE) <= 0;
-
-        // Una observación comercial verificable también cubre esta dimensión:
-        // ventas numéricas, ventas insuficientes declaradas por la fuente,
-        // o un catálogo pequeño observado recientemente.
-        boolean hasCommercialEvidence = SellerActivityEvidence.detect(
-                seller, LocalDateTime.now())
-                != SellerActivityEvidence.ActivitySignal.NONE;
-
-        // Una calificación Temu de tienda identificada y observada
-        // recientemente cuenta como dato DISPONIBLE. El número de reseñas
-        // determina la confianza en esa evidencia, no su existencia.
-        if (hasReputationLevel ||
-                hasLegacyReputation ||
-                hasCommercialEvidence ||
-                TemuSellerRiskScoring.hasObservedReputation(publication, LocalDateTime.now())) {
+        // 3. Opiniones del producto: disponible para Temu.
+        // No usar la edad de la cuenta como requisito de cobertura.
+        if (TemuProductReviewEvidence.hasObservedEvidence(publication, LocalDateTime.now())) {
             available++;
         }
-
-        // -------------------------------------
-        // 3. Antigüedad de la cuenta
-        // -------------------------------------
-
-        Integer accountAgeDays = seller.getAccountAgeDays();
-
-        boolean hasExactAccountAge = accountAgeDays != null &&
-                accountAgeDays >= 0;
-
-        Integer facebookJoinYear = publication.getFacebookJoinYear();
-
-        boolean hasFacebookJoinYear = publication.getMarketplace() == Marketplace.FACEBOOK_MARKETPLACE &&
-                facebookJoinYear != null &&
-                facebookJoinYear >= 2004 &&
-                facebookJoinYear <= java.time.Year.now().getValue();
-
-        if (hasExactAccountAge || hasFacebookJoinYear) {
-            available++;
-        }
-
         return available;
     }
 
