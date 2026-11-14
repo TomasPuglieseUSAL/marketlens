@@ -93,6 +93,7 @@ function extractTemu() {
         || /^(?:star seller|star store|seller|store|shop|visit store|store information|seller information|product details)$/i.test(name)
         || /\bARS\s*\d/i.test(name)
         || /\b(?:stars?|rating|review score|out of (?:five|5))\b/i.test(name)
+        || /\b[0-5][.,]\d\b/.test(name)
         || /^[0-5](?:[.,]\d)?\s*(?:\/\s*5)?$/i.test(name)
         || /^\d+(?:[.,]\d+)?\s+out\s+of\s+(?:five|5)\s+stars?\b/i.test(name)) return null;
     return name;
@@ -133,12 +134,16 @@ function extractTemu() {
       if (!candidate) {
         const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
         const index = lines.findIndex(line => /^star\s+seller$/i.test(line));
-        if (index > 0) candidate = cleanStoreName(lines[index - 1]);
-        if (!candidate && index >= 0 && index + 1 < lines.length)
-          candidate = cleanStoreName(lines[index + 1]);
-        if (!candidate) {
-          const combined = text.trim().match(/^([^\n]{2,100}?)\s+star\s+seller(?:\s|$)/i);
-          if (combined) candidate = cleanStoreName(combined[1]);
+        if (index >= 0) {
+          // La línea inmediatamente superior puede ser "4.8" (rating) o
+          // "4.7 out of five stars" (opiniones del PRODUCTO). Buscar nombre
+          // de tienda entre líneas anteriores sin confundir estos valores.
+          const around = [...lines.slice(Math.max(0, index - 5), index).reverse(),
+              ...lines.slice(index + 1, index + 3)];
+          const storeLike = around
+            .map(cleanStoreName)
+            .filter(name => name && /(?:shop|store|tienda|official)/i.test(name));
+          if (storeLike.length === 1) candidate = storeLike[0];
         }
       }
       if (candidate) {
