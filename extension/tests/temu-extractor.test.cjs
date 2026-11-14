@@ -350,3 +350,82 @@ test('mantiene la descripción JSON-LD si goodsDetail no está presente', () => 
       offers:{price:'9507',priceCurrency:'ARS'}});
   assert.equal(data.description,'Funda compatible con carga inalámbrica');
 });
+
+
+test('separa 4.7 y 286 reseñas del producto de 4.8 de la tienda en JSON-LD', () => {
+  const data=extract('https://www.temu.com/ar-en/funda-g-606892013277333.html',
+    {'@type':'Product',aggregateRating:{'@type':'AggregateRating',
+      ratingValue:'4.7',reviewCount:'286'},offers:{
+        price:'9507',priceCurrency:'ARS',seller:{name:'Tokki Shop'}}});
+  assert.equal(data.temuProductRating,4.7);
+  assert.equal(data.temuProductReviewCount,286);
+  assert.equal(data.temuSellerRating,null);
+  assert.equal(data.seller,'Tokki Shop');
+});
+
+test('extrae la pareja cercana al título con etiquetas visibles de producto', () => {
+  const header={innerText:'4.7 out of five stars\n286 reviews',parentElement:null,
+    querySelectorAll:()=>[]};
+  const document={
+    querySelectorAll:()=>[],
+    querySelector:selector=>selector==='h1'
+      ? {textContent:'Funda',parentElement:header}:null
+  };
+  const context={
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL,document
+  };
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
+  const data=JSON.parse(JSON.stringify(context.result));
+  assert.equal(data.temuProductRating,4.7);
+  assert.equal(data.temuProductReviewCount,286);
+  assert.equal(data.temuSellerRating,null);
+});
+
+test('no usa ratingCount como cantidad de reseñas escritas del producto', () => {
+  const data=extract('https://www.temu.com/ar-en/funda-g-606892013277333.html',
+    {'@type':'Product',aggregateRating:{ratingValue:'4.7',ratingCount:'286'}});
+  assert.equal(data.temuProductRating,null);
+  assert.equal(data.temuProductReviewCount,null);
+});
+
+test('rechaza reseñas abreviadas sin recuento exacto', () => {
+  const header={innerText:'4.7 out of five stars\n1.2K+ reviews',parentElement:null,
+    querySelectorAll:()=>[]};
+  const document={
+    querySelectorAll:()=>[],
+    querySelector:selector=>selector==='h1'
+      ? {textContent:'Funda',parentElement:header}:null
+  };
+  const context={
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL,document
+  };
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
+  const data=JSON.parse(JSON.stringify(context.result));
+  assert.equal(data.temuProductRating,null);
+  assert.equal(data.temuProductReviewCount,null);
+});
+
+test('no toma reseñas de tienda si faltan opiniones identificadas del producto', () => {
+  const sellerPanel={
+    innerText:'Tokki Shop\n4.8\n286 store reviews\nStar Seller',
+    textContent:'Tokki Shop\n4.8\n286 store reviews\nStar Seller',
+    parentElement:null,querySelectorAll:()=>[]
+  };
+  const badge={textContent:'Star Seller',children:[],parentElement:sellerPanel};
+  const document={
+    querySelectorAll:selector=>selector.startsWith('span, strong')?[badge]:[],
+    querySelector:selector=>selector==='h1'
+      ? {textContent:'Funda',parentElement:null}:null
+  };
+  const context={
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL,document
+  };
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
+  const data=JSON.parse(JSON.stringify(context.result));
+  assert.equal(data.temuProductRating,null);
+  assert.equal(data.temuProductReviewCount,null);
+  assert.equal(data.temuSellerReviewCount,286);
+});
