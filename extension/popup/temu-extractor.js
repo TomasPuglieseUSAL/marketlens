@@ -91,7 +91,10 @@ function extractTemu() {
     if (name.length < 2 || name.length > 100
         || !/[\p{L}]/u.test(name)
         || /^(?:star seller|star store|seller|store|shop|visit store|store information|seller information|product details)$/i.test(name)
-        || /\bARS\s*\d/i.test(name)) return null;
+        || /\bARS\s*\d/i.test(name)
+        || /\b(?:stars?|rating|review score|out of (?:five|5))\b/i.test(name)
+        || /^[0-5](?:[.,]\d)?\s*(?:\/\s*5)?$/i.test(name)
+        || /^\d+(?:[.,]\d+)?\s+out\s+of\s+(?:five|5)\s+stars?\b/i.test(name)) return null;
     return name;
   };
 
@@ -118,6 +121,7 @@ function extractTemu() {
 
   let observedStore = null;
   let starSellerForStore = false;
+  let storeEvidenceRoot = null;
   for (const badge of badgeNodes) {
     let container = badge.parentElement;
     for (let depth = 0; container && depth < 6; depth++, container = container.parentElement) {
@@ -140,6 +144,7 @@ function extractTemu() {
       if (candidate) {
         observedStore = candidate;
         starSellerForStore = true;
+        storeEvidenceRoot = container;
         break;
       }
     }
@@ -182,7 +187,12 @@ function extractTemu() {
         if (name) candidateNames.add(name);
       }
     }
-    if (candidateNames.size === 1) observedStore = [...candidateNames][0];
+    if (candidateNames.size === 1) {
+      observedStore = [...candidateNames][0];
+      storeEvidenceRoot = elements.find(element =>
+        (element.innerText || element.textContent || '').includes(observedStore)
+      ) || null;
+    }
   }
 
   // Una única tienda enlazada en el área principal constituye otra
@@ -192,11 +202,62 @@ function extractTemu() {
     const names = Array.from(root?.querySelectorAll?.('a[href]') || [])
       .map(storeLinkName).filter(Boolean);
     const unique = [...new Set(names)];
-    if (unique.length === 1) observedStore = unique[0];
+    if (unique.length === 1) {
+      observedStore = unique[0];
+      const link = Array.from(root?.querySelectorAll?.('a[href]') || [])
+        .find(element => storeLinkName(element) === observedStore);
+      storeEvidenceRoot = link?.parentElement || link || null;
+    }
+  }
+
+
+  // Las estrellas del PRODUCTO no son reputación de la TIENDA.
+  // Solo intentar atribuir un número a la tienda si ya hay un nombre
+  // fiable y una región DOM cercana a esa identidad.
+  let temuSellerRating = null;
+  if (observedStore) {
+    const candidates = [];
+    const storeRoots = [];
+    if (storeEvidenceRoot) storeRoots.push(storeEvidenceRoot);
+    const main = document.querySelector('main') || document.body;
+    for (const element of Array.from(
+        main?.querySelectorAll?.('a[href], section, div, p, span') || []
+      ).slice(0, 1500)) {
+      const t = (element.innerText || element.textContent || '').trim();
+      if (t.length <= 180 && t.includes(observedStore)) storeRoots.push(element);
+    }
+    const seenNodes = new Set();
+    for (const root of storeRoots) {
+      let current = root;
+      for (let depth = 0; current && depth < 4; depth++, current = current.parentElement) {
+        if (seenNodes.has(current)) continue;
+        seenNodes.add(current);
+        const raw = (current.innerText || current.textContent || '').replace(/\u00a0/g, ' ');
+        if (raw.length < observedStore.length || raw.length > 380
+            || !raw.includes(observedStore)) continue;
+        // Eliminar descripciones de estrellas del producto, e.g.
+        // "4.7 out of five stars". No parsear aggregateRating de JSON-LD.
+        const cleaned = raw.replace(
+          /\b[0-5](?:[.,]\d)?\s+out\s+of\s+(?:five|5)\s+stars?\b/gi, ' '
+        );
+        const ratings = [...cleaned.matchAll(/\b([0-5][.,]\d)\b/g)]
+          .map(match => Number(match[1].replace(',', '.')))
+          .filter(value => value > 0 && value <= 5);
+        const uniqueRatings = [...new Set(ratings)];
+        if (uniqueRatings.length === 1) {
+          candidates.push({value: uniqueRatings[0], size: raw.length});
+        }
+      }
+    }
+    // Elegir el área más pequeña que vincula el nombre con un único
+    // puntaje; no usar un número aislado del encabezado del producto.
+    candidates.sort((a, b) => a.size - b.size);
+    if (candidates.length) temuSellerRating = candidates[0].value;
   }
 
   return {found:true,title:title || null,price,currency:detectedCurrency,
-    priceCandidates:prices,seller:observedStore,externalId:id,
+    priceCandidates:prices,seller:observedStore,
+    temuSellerRating,externalId:id,
     description,url:canonical.toString(),sellerProfileUrl:null,
     sellerBadge:starSellerForStore ? 'TEMU_STAR_SELLER' : null,
     sellerSalesText:null,sellerReputationLevel:null,sellerId:null};
