@@ -140,6 +140,10 @@ public class ExtensionProcessingService {
                                         publication.getSeller().getName().equalsIgnoreCase(incomingName.trim())) {
                                         applyTemuSellerEvidence(publication, imported);
                                 }
+                                // Una extracción más reciente puede incluir detalles que faltaban
+                                // cuando se creó esta publicación (p. ej., #goodsDetail de Temu).
+                                // Completar solo una descripción vacía, sin sobrescribir la anterior.
+                                fillMissingTemuDescription(publication, imported);
                         } else if (marketplace == Marketplace.FACEBOOK_MARKETPLACE) {
 
                                 // Facebook: el identificador externo identifica el anuncio,
@@ -395,6 +399,16 @@ public class ExtensionProcessingService {
                         throw new ResponseStatusException(
                                         HttpStatus.UNPROCESSABLE_ENTITY,
                                         "Hay una inconsistencia entre los identificadores.");
+                }
+        }
+
+        static void fillMissingTemuDescription(Publication publication, ExtensionImport imported) {
+                if (publication == null || imported == null) return;
+                String previous = publication.getDescription();
+                String incoming = imported.getDescription();
+                if ((previous == null || previous.isBlank())
+                        && incoming != null && !incoming.isBlank()) {
+                        publication.setDescription(incoming);
                 }
         }
 
