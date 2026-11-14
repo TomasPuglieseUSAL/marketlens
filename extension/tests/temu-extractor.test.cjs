@@ -425,6 +425,9 @@ test('no toma reseñas de tienda si faltan opiniones identificadas del producto'
   };
   vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
   const data=JSON.parse(JSON.stringify(context.result));
+  assert.equal(data.seller,'Tokki Shop');
+  assert.equal(data.temuSellerRating,4.8);
+  assert.equal(data.temuSellerSectionObserved,true);
   assert.equal(data.temuProductRating,null);
   assert.equal(data.temuProductReviewCount,null);
   assert.equal(data.temuSellerReviewCount,286);
