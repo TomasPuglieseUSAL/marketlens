@@ -201,6 +201,10 @@ function extractTemu() {
         || !/[\p{L}]/u.test(name)
         || /^(?:star seller|star store|seller|store|shop|visit store|store information|seller information|product details)$/i.test(name)
         || /\bARS\s*\d/i.test(name)
+        // El contador "286 store reviews" no es un nombre de tienda.
+        // Si lo aceptamos como nombre, compite con "Tokki Shop" y
+        // la extracción de reseñas termina sin vendedor identificado.
+        || /^\d[\d.,]*\s+(?:seller|store|shop|tienda|vendedor)\s+(?:reviews?|ratings?|valoraciones|reseñas)\b/i.test(name)
         || /\b(?:stars?|rating|review score|out of (?:five|5))\b/i.test(name)
         || /\b[0-5][.,]\d\b/.test(name)
         || /^[0-5](?:[.,]\d)?\s*(?:\/\s*5)?$/i.test(name)
