@@ -9,6 +9,7 @@ import com.marketlens.backend.service.RiskCoverageCalculator;
 import com.marketlens.backend.service.SellerActivityEvidence;
 import com.marketlens.backend.service.PriceRiskScoring;
 import com.marketlens.backend.service.TemuSellerRiskScoring;
+import com.marketlens.backend.service.TemuProductReviewEvidence;
 
 import org.springframework.stereotype.Component;
 
@@ -81,6 +82,16 @@ public class RiskEngine {
             addFactor(evaluation, temuSignal.code(),
                     temuSignal.description(), temuSignal.points());
             score += temuSignal.points();
+        }
+
+        // Opiniones observadas del PRODUCTO: independientes de la tienda
+        // y no interpretadas como ventas. Una puntuación buena no resta riesgo.
+        TemuProductReviewEvidence.Signal productSignal =
+                TemuProductReviewEvidence.evaluate(publication, LocalDateTime.now());
+        if (productSignal != null) {
+            addFactor(evaluation, productSignal.code(),
+                    productSignal.description(), productSignal.points());
+            score += productSignal.points();
         }
 
         // Valor observado junto al nombre de la tienda; no usar aggregateRating
@@ -466,7 +477,7 @@ public class RiskEngine {
             return RiskLevel.INDETERMINATE;
         }
 
-        // Exigir al menos 2/3 de cobertura para emitir
+        // Exigir al menos 2/3 de la cobertura aplicable para emitir
         // una clasificación de riesgo bajo.
         if (availableFactors * 3 < totalFactors * 2) {
             return RiskLevel.INDETERMINATE;
