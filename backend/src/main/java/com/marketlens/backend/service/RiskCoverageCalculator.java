@@ -82,9 +82,17 @@ public class RiskCoverageCalculator {
                 seller, LocalDateTime.now())
                 != SellerActivityEvidence.ActivitySignal.NONE;
 
+        // Puntuación observada de una tienda Temu, no la del producto.
+        BigDecimal temuRating = publication.getTemuSellerRating();
+        boolean hasTemuSellerRating = publication.getMarketplace() == Marketplace.TEMU
+                && temuRating != null
+                && temuRating.compareTo(BigDecimal.ZERO) > 0
+                && temuRating.compareTo(new BigDecimal("5.0")) <= 0;
+
         if (hasReputationLevel ||
                 hasLegacyReputation ||
-                hasCommercialEvidence) {
+                hasCommercialEvidence ||
+                hasTemuSellerRating) {
             available++;
         }
 

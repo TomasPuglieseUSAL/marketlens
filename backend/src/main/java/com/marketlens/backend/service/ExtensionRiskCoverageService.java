@@ -52,6 +52,15 @@ public class ExtensionRiskCoverageService {
                 boolean hasReputation = reputationLevel != null &&
                                 reputationLevel >= 1 &&
                                 reputationLevel <= 5;
+                java.math.BigDecimal temuRating = imported.getTemuSellerRating();
+                if ("TEMU".equals(imported.getMarketplace())
+                        && imported.getSellerName() != null
+                        && !imported.getSellerName().isBlank()
+                        && temuRating != null
+                        && temuRating.compareTo(java.math.BigDecimal.ZERO) > 0
+                        && temuRating.compareTo(new java.math.BigDecimal("5.0")) <= 0) {
+                    hasReputation = true;
+                }
 
                 // 3. Antigüedad de la cuenta.
                 // Para Facebook utilizamos el año público de incorporación.

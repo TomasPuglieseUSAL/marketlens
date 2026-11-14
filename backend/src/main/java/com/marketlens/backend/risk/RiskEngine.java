@@ -73,6 +73,18 @@ public class RiskEngine {
                 publication, evaluation, priceRiskPoints,
                 referenceMedian, referenceCount);
 
+        // Valor observado junto al nombre de la tienda; no usar aggregateRating
+        // del PRODUCTO. El peso estadístico requiere más validación.
+        if (publication.getMarketplace() == Marketplace.TEMU
+                && publication.getSeller() != null
+                && publication.getTemuSellerRating() != null) {
+            addFactor(evaluation, "TEMU_SELLER_RATING_OBSERVED",
+                    "La tienda aparece con una calificación de "
+                    + publication.getTemuSellerRating().toPlainString()
+                    + "/5 en Temu. Es una señal observada, no una verificación de MarketLens.",
+                    0);
+        }
+
         // Distintivo observado: dato contextual, NO reputación contrastada.
         // No otorga cobertura adicional ni reduce automáticamente el puntaje.
         if (publication.getMarketplace() == Marketplace.TEMU

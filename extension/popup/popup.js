@@ -1064,9 +1064,14 @@ async function prepareData(action) {
             const sellerHint = $('temu-seller-hint');
             sellerHint.hidden = currentMarketplace !== 'TEMU';
             if (currentMarketplace === 'TEMU') {
-                sellerHint.textContent = extractedData.sellerBadge === 'TEMU_STAR_SELLER'
-                    ? 'La página muestra Star Seller junto a esta tienda. Es una etiqueta observada, no una reputación verificada por MarketLens.'
-                    : 'Podés completar o corregir el nombre de la tienda si aparece en la publicación.';
+                const rating = extractedData.temuSellerRating;
+                const ratingText = typeof rating === 'number' && rating > 0
+                    ? `Calificación observada de tienda: ${rating.toLocaleString('es-AR')} / 5. `
+                    : '';
+                sellerHint.textContent = ratingText +
+                    (extractedData.sellerBadge === 'TEMU_STAR_SELLER'
+                        ? 'Star Seller aparece junto a la tienda. Ninguna señal implica seguridad garantizada.'
+                        : 'Podés completar o corregir el nombre de la tienda si aparece en la publicación.');
             }
             $('fb-join-row').hidden = currentMarketplace !== 'FACEBOOK_MARKETPLACE';
             $('fb-seller').disabled = false;
