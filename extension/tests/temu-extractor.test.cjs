@@ -302,3 +302,51 @@ test('tienda inspeccionada sin puntuación: reputación desconocida, no 0 ventas
   assert.equal(data.temuSellerReviewCount,null);
   assert.equal(data.temuSellerSectionObserved,true);
 });
+
+
+test('extrae los atributos y la aclaración de goodsDetail sin tomar imágenes ni Item ID', () => {
+  const field = (label, value) => ({
+    querySelector: selector => selector === '._5pgrvPWK'
+      ? {textContent:label} : selector === '._2N4zowM4'
+        ? {textContent:value}:null
+  });
+  const specification = (label, value) => ({
+    querySelector: selector => selector === '._3c5b9cNv'
+      ? {firstChild:{textContent:label + ':'}} :
+      selector === '._2bgv8UEs > span' ? {textContent:value}:null
+  });
+  const details = {
+    querySelectorAll: selector => selector === '._3zjMlOk4'
+      ? [field('Feature', 'Air Cushion, Wireless Charging, Compatible With Magsafe')]
+      : selector === '._1YBVObhm'
+        ? [specification('Main Material', 'EVA'),
+          specification('Item ID', '35M226G90Q')]
+        : [],
+    querySelector: selector => selector === '._2lHZTmSd'
+      ? {textContent:'The packaging box shown in the image is for display purposes only and does not come with the product.'}
+      : null
+  };
+  const document = {
+    querySelectorAll:()=>[],
+    querySelector: selector => selector === '#goodsDetail' ? details
+      : selector === 'h1' ? {textContent:'Funda magnética',parentElement:null}:null
+  };
+  const context = {
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL,document
+  };
+  vm.runInNewContext(source+'\\nthis.result = extractTemu();',context);
+  const data=JSON.parse(JSON.stringify(context.result));
+  assert.match(data.description,/Feature: Air Cushion, Wireless Charging/);
+  assert.match(data.description,/Main Material: EVA/);
+  assert.match(data.description,/packaging box shown/);
+  assert.doesNotMatch(data.description,/35M226G90Q/);
+  assert.doesNotMatch(data.description,/Item ID/);
+});
+
+test('mantiene la descripción JSON-LD si goodsDetail no está presente', () => {
+  const data=extract('https://www.temu.com/ar-en/funda-g-606892013277333.html',
+    {'@type':'Product',description:'Funda compatible con carga inalámbrica',
+      offers:{price:'9507',priceCurrency:'ARS'}});
+  assert.equal(data.description,'Funda compatible con carga inalámbrica');
+});
