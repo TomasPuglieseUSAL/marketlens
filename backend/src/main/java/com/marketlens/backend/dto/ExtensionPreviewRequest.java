@@ -14,6 +14,8 @@ public record ExtensionPreviewRequest(
     String sellerBadge,
     java.math.BigDecimal temuSellerRating,
     Integer temuSellerReviewCount,
+    java.math.BigDecimal temuProductRating,
+    Integer temuProductReviewCount,
     String temuStoreId,
     Boolean temuSellerSectionObserved,
     String sellerSalesText,
