@@ -151,6 +151,9 @@ export interface Publication {
   sellerName: string | null
   sellerBadge: string | null
   temuSellerRating: number | null
+  temuSellerReviewCount: number | null
+  temuStoreId: string | null
+  temuSellerObservedAt: string | null
 }
 
 export interface CreatePublicationRequest {

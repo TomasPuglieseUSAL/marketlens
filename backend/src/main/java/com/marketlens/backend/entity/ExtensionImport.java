@@ -66,6 +66,15 @@ public class ExtensionImport {
     @Column(name = "temu_seller_rating", precision = 2, scale = 1)
     private BigDecimal temuSellerRating;
 
+    @Column(name = "temu_seller_review_count")
+    private Integer temuSellerReviewCount;
+
+    @Column(name = "temu_store_id", length = 30)
+    private String temuStoreId;
+
+    @Column(name = "temu_seller_section_observed")
+    private Boolean temuSellerSectionObserved;
+
     @Column(name = "seller_sales_text", length = 120)
     private String sellerSalesText;
 
@@ -192,6 +201,17 @@ public class ExtensionImport {
 
     public void setTemuSellerRating(BigDecimal rating) {
         this.temuSellerRating = rating;
+    }
+
+    public Integer getTemuSellerReviewCount() { return temuSellerReviewCount; }
+    public String getTemuStoreId() { return temuStoreId; }
+    public Boolean getTemuSellerSectionObserved() { return temuSellerSectionObserved; }
+
+    public void setTemuSellerObservation(
+            Integer reviewCount, String storeId, Boolean sectionObserved) {
+        this.temuSellerReviewCount = reviewCount;
+        this.temuStoreId = storeId;
+        this.temuSellerSectionObserved = sectionObserved;
     }
 
     public String getSellerSalesText() {

@@ -108,6 +108,34 @@ public class ExtensionImportService {
         }
         imported.setTemuSellerRating(temuRating);
 
+        Integer reviewCount = request.temuSellerReviewCount();
+        String storeId = request.temuStoreId();
+        Boolean sectionObserved = request.temuSellerSectionObserved();
+        boolean anyTemuObservation = temuRating != null || reviewCount != null
+                || storeId != null || sectionObserved != null;
+        if (anyTemuObservation && !"TEMU".equals(request.marketplace())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Los datos de tienda Temu no corresponden a este marketplace.");
+        }
+        if (reviewCount != null && (reviewCount < 0 || reviewCount > 10000000)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El número de valoraciones de Temu no es válido.");
+        }
+        if (storeId != null && !storeId.matches("\\d{6,30}")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El identificador de tienda Temu no es válido.");
+        }
+        if ((reviewCount != null || storeId != null || Boolean.TRUE.equals(sectionObserved))
+                && (request.seller() == null || request.seller().isBlank())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Los datos comerciales de Temu requieren una tienda identificada.");
+        }
+        if (reviewCount != null && !Boolean.TRUE.equals(sectionObserved)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Las valoraciones de Temu requieren inspección de la tienda.");
+        }
+        imported.setTemuSellerObservation(reviewCount, storeId, sectionObserved);
+
         imported.setSellerMetadata(
                 request.sellerProfileUrl(),
                 request.sellerBadge(),
@@ -187,11 +215,20 @@ public class ExtensionImportService {
                 boolean validHost = host != null &&
                         (host.equalsIgnoreCase("mercadolibre.com.ar") ||
                                 host.equalsIgnoreCase("www.mercadolibre.com.ar"));
-
+                boolean validPath = path != null && path.startsWith("/pagina/");
+                if ("TEMU".equals(request.marketplace())) {
+                    validHost = host != null && (host.equalsIgnoreCase("temu.com")
+                            || host.toLowerCase(java.util.Locale.ROOT).endsWith(".temu.com"));
+                    String wanted = request.temuStoreId();
+                    validPath = wanted != null && path != null &&
+                        (path.matches("(?i)^/.*-m-" + wanted + "\\.html/?$")
+                        || path.matches("(?i)^/mall\\.html/?$")
+                           && uri.getRawQuery() != null &&
+                              java.util.Arrays.stream(uri.getRawQuery().split("&"))
+                              .anyMatch(value -> value.equals("mall_id=" + wanted)));
+                }
                 if (!"https".equalsIgnoreCase(uri.getScheme()) ||
-                        !validHost ||
-                        path == null ||
-                        !path.startsWith("/pagina/") ||
+                        !validHost || !validPath ||
                         uri.getUserInfo() != null) {
 
                     throw new IllegalArgumentException();

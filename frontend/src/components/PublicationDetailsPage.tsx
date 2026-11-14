@@ -145,6 +145,18 @@ export default function PublicationDetailsPage({
               </div>
             </div>
 
+            {publication.marketplace === 'TEMU' && publication.temuSellerReviewCount != null && (
+              <p className="session-message" role="note">
+                <strong>Valoraciones de tienda:</strong> {publication.temuSellerReviewCount.toLocaleString('es-AR')}
+                {' '}· Recuento observado, no cantidad de ventas.
+              </p>
+            )}
+            {publication.marketplace === 'TEMU' && publication.temuStoreId && (
+              <p><strong>ID de tienda Temu:</strong> {publication.temuStoreId}</p>
+            )}
+            {publication.marketplace === 'TEMU' && publication.temuSellerObservedAt && (
+              <p><small>Datos de tienda observados: {new Date(publication.temuSellerObservedAt).toLocaleString('es-AR')}</small></p>
+            )}
             {publication.marketplace === 'TEMU' && publication.temuSellerRating != null && (
               <p className="session-message" role="note">
                 <strong>Calificación de tienda:</strong>{' '}

@@ -20,7 +20,7 @@ class TemuSellerObservationValidationTest {
                 "606892013277333",
                 "Funda protectora",
                 "https://www.temu.com/ar-en/funda-g-606892013277333.html",
-                null, null, rating, null, null, null, null);
+                null, null, rating, null, null, null, null, null, null, null);
     }
 
     @Test

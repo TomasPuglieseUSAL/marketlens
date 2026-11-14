@@ -135,11 +135,10 @@ public class ExtensionProcessingService {
                                         && incomingName != null && !incomingName.isBlank()) {
                                         publication.setSellerBadge("TEMU_STAR_SELLER");
                                 }
-                                if (imported.getTemuSellerRating() != null &&
-                                        publication.getSeller() != null &&
+                                if (publication.getSeller() != null &&
                                         incomingName != null &&
                                         publication.getSeller().getName().equalsIgnoreCase(incomingName.trim())) {
-                                        publication.setTemuSellerRating(imported.getTemuSellerRating());
+                                        applyTemuSellerEvidence(publication, imported);
                                 }
                         } else if (marketplace == Marketplace.FACEBOOK_MARKETPLACE) {
 
@@ -256,7 +255,7 @@ public class ExtensionProcessingService {
                                 if ("TEMU_STAR_SELLER".equals(imported.getSellerBadge())) {
                                         publication.setSellerBadge("TEMU_STAR_SELLER");
                                 }
-                                publication.setTemuSellerRating(imported.getTemuSellerRating());
+                                applyTemuSellerEvidence(publication, imported);
                         }
 
                         // Conservar el año de incorporación observado en Facebook.
@@ -396,6 +395,26 @@ public class ExtensionProcessingService {
                         throw new ResponseStatusException(
                                         HttpStatus.UNPROCESSABLE_ENTITY,
                                         "Hay una inconsistencia entre los identificadores.");
+                }
+        }
+
+        private void applyTemuSellerEvidence(Publication publication, ExtensionImport imported) {
+                String incomingStoreId = imported.getTemuStoreId();
+                String previousId = publication.getTemuStoreId();
+                if (previousId != null && incomingStoreId != null &&
+                        !previousId.equals(incomingStoreId)) {
+                        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                                "La tienda de Temu no coincide con el identificador anteriormente registrado.");
+                }
+                if (incomingStoreId != null) publication.setTemuStoreId(incomingStoreId);
+
+                if (Boolean.TRUE.equals(imported.getTemuSellerSectionObserved())
+                        || imported.getTemuSellerRating() != null
+                        || imported.getTemuSellerReviewCount() != null) {
+                        publication.setTemuSellerRating(imported.getTemuSellerRating());
+                        publication.setTemuSellerReviewCount(imported.getTemuSellerReviewCount());
+                        publication.setTemuSellerSectionObserved(imported.getTemuSellerSectionObserved());
+                        publication.setTemuSellerObservedAt(java.time.LocalDateTime.now());
                 }
         }
 

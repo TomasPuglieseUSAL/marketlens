@@ -56,6 +56,18 @@ public class Publication {
     @Column(name = "temu_seller_rating", precision = 2, scale = 1)
     private BigDecimal temuSellerRating;
 
+    @Column(name = "temu_seller_review_count")
+    private Integer temuSellerReviewCount;
+
+    @Column(name = "temu_store_id", length = 30)
+    private String temuStoreId;
+
+    @Column(name = "temu_seller_section_observed")
+    private Boolean temuSellerSectionObserved;
+
+    @Column(name = "temu_seller_observed_at")
+    private LocalDateTime temuSellerObservedAt;
+
     @OneToMany(mappedBy = "publication", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<RiskEvaluation> evaluations = new ArrayList<>();
 
@@ -164,6 +176,15 @@ public class Publication {
     public void setTemuSellerRating(BigDecimal rating) {
         this.temuSellerRating = rating;
     }
+
+    public Integer getTemuSellerReviewCount() { return temuSellerReviewCount; }
+    public void setTemuSellerReviewCount(Integer count) { this.temuSellerReviewCount = count; }
+    public String getTemuStoreId() { return temuStoreId; }
+    public void setTemuStoreId(String id) { this.temuStoreId = id; }
+    public Boolean getTemuSellerSectionObserved() { return temuSellerSectionObserved; }
+    public void setTemuSellerSectionObserved(Boolean observed) { this.temuSellerSectionObserved = observed; }
+    public LocalDateTime getTemuSellerObservedAt() { return temuSellerObservedAt; }
+    public void setTemuSellerObservedAt(LocalDateTime observedAt) { this.temuSellerObservedAt = observedAt; }
 
     public void setSellerBadge(String sellerBadge) {
         this.sellerBadge = sellerBadge;
