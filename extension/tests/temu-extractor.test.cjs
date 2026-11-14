@@ -335,7 +335,7 @@ test('extrae los atributos y la aclaración de goodsDetail sin tomar imágenes n
     window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
     URL,document
   };
-  vm.runInNewContext(source+'\\nthis.result = extractTemu();',context);
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
   const data=JSON.parse(JSON.stringify(context.result));
   assert.match(data.description,/Feature: Air Cushion, Wireless Charging/);
   assert.match(data.description,/Main Material: EVA/);
