@@ -76,6 +76,8 @@ function importPayload(data) {
         sellerBadge: data.sellerBadge ?? null,
         temuSellerRating: data.temuSellerRating ?? null,
         temuSellerReviewCount: data.temuSellerReviewCount ?? null,
+        temuProductRating: data.temuProductRating ?? null,
+        temuProductReviewCount: data.temuProductReviewCount ?? null,
         temuStoreId: data.temuStoreId ?? null,
         temuSellerSectionObserved: data.temuSellerSectionObserved ?? null,
         sellerSalesText: data.sellerSalesText ?? null,
