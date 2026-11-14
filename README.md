@@ -177,7 +177,7 @@ No hay confirmación de correo ni recuperación de contraseña: es una instalaci
 
 ## Extensión de navegador
 
-La carpeta [`extension/`](extension/) contiene una extensión **experimental** que permite trabajar con páginas compatibles de Mercado Libre y Facebook Marketplace, a partir de la información visible y los servicios disponibles en el backend.
+La carpeta [`extension/`](extension/) contiene una extensión **experimental** que permite trabajar con páginas compatibles de Mercado Libre, Facebook Marketplace y, experimentalmente, Temu, a partir de la información visible y los servicios disponibles en el backend.
 
 ### Firefox: instalación temporal
 
@@ -204,6 +204,7 @@ La instalación temporal normalmente se pierde al reiniciar Firefox.
 - La integración **OAuth de Mercado Libre está deshabilitada** con los perfiles locales `registration` y `demo`. Las acciones que requieran autorización o validaciones autenticadas contra esa API no estarán disponibles; otras funciones pueden seguir utilizando datos visibles de la página.
 - Las integraciones externas opcionales, como Gemini, no están habilitadas en estos perfiles locales.
 - La compatibilidad de extracción depende del formato y de los cambios que realicen los marketplaces en sus páginas.
+- **Temu (experimental):** reconoce `goods.html?goods_id=...` y `*-g-<id>.html`. Solo importa precios cuya moneda ARS esté identificada explícitamente, no inventa identidad del vendedor y todavía no realiza comparaciones automáticas de precios. Consultá [TEMU-MVP.md](extension/TEMU-MVP.md).
 
 ## Comandos útiles de Docker
 

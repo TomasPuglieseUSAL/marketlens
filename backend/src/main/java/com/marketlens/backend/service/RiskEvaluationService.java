@@ -49,7 +49,10 @@ public class RiskEvaluationService {
 
         // Si todavía no hay un precio válido, el resto de factores de riesgo
         // puede seguir evaluándose de forma independiente.
-        if (publication.getPrice() != null
+        // Temu: todavía no hay una muestra comercial comparable y validada.
+        // Nunca convertir esto en una penalización de precio automática.
+        if (publication.getMarketplace() != com.marketlens.backend.entity.Marketplace.TEMU
+                && publication.getPrice() != null
                 && publication.getPrice().signum() > 0) {
             AutomaticPriceAnalysisResponse priceAnalysis =
                     priceAnalysisService.analyze(publicationId);

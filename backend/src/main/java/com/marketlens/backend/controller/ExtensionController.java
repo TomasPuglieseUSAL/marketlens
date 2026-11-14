@@ -60,7 +60,8 @@ public class ExtensionController {
 
         // 1. Validar marketplace.
         boolean supported = "MERCADO_LIBRE".equals(marketplace) ||
-                "FACEBOOK_MARKETPLACE".equals(marketplace);
+                "FACEBOOK_MARKETPLACE".equals(marketplace) ||
+                "TEMU".equals(marketplace);
 
         if (!supported) {
             throw new ResponseStatusException(
@@ -88,6 +89,8 @@ public class ExtensionController {
 
             case "FACEBOOK_MARKETPLACE" ->
                 isFacebookMarketplaceUrl(request.url());
+
+            case "TEMU" -> com.marketlens.backend.service.TemuProductUrls.parse(request.url()) != null;
 
             default -> false;
         };

@@ -139,7 +139,7 @@ export default function PublicationDetailsPage({
                 <small>Vendedor</small>
 
                 <strong>
-                  #{publication.sellerId}
+                  {publication.sellerId == null ? 'No identificado' : `#${publication.sellerId}`}
                 </strong>
               </div>
             </div>

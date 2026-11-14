@@ -30,7 +30,8 @@ public class ExtensionImportService {
             String username) {
 
         if (!"MERCADO_LIBRE".equals(request.marketplace()) &&
-                !"FACEBOOK_MARKETPLACE".equals(request.marketplace())) {
+                !"FACEBOOK_MARKETPLACE".equals(request.marketplace()) &&
+                !"TEMU".equals(request.marketplace())) {
 
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,

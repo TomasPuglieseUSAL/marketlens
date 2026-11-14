@@ -107,7 +107,11 @@ public class ExtensionNormalizationService {
 
                 String marketplace = imported.getMarketplace();
 
-                if ("FACEBOOK_MARKETPLACE".equals(marketplace)) {
+                if ("TEMU".equals(marketplace)) {
+                    referenceId = TemuProductUrls.parse(imported.getOriginalUrl());
+                    if (referenceId != null) referenceType = "PRODUCT";
+
+                } else if ("FACEBOOK_MARKETPLACE".equals(marketplace)) {
 
                     String host = uri.getHost();
 
@@ -225,6 +229,9 @@ public class ExtensionNormalizationService {
 
         String normalized = raw.trim();
 
+        if ("TEMU".equals(marketplace)) {
+            return normalized.matches("\\d{6,30}") ? normalized : null;
+        }
         if ("FACEBOOK_MARKETPLACE".equals(marketplace)) {
             return normalized.matches("\\d{6,30}")
                     ? normalized

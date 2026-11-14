@@ -260,7 +260,7 @@ export default function PublicationsPanel({
       <p><strong>Descripción:</strong> {publication.description}</p>
       <p><strong>Precio:</strong> {publication.price}</p>
       <p><strong>Marketplace:</strong> {publication.marketplace}</p>
-      <p><strong>Vendedor:</strong> {publication.sellerId}</p>
+      <p><strong>Vendedor:</strong> {publication.sellerId ?? 'No identificado'}</p>
 
       {publication.externalId && (
         <p>

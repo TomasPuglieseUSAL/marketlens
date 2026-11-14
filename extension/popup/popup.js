@@ -53,6 +53,7 @@ let preparing = false;
 const marketplaceLabels = {
     MERCADO_LIBRE: 'Mercado Libre',
     FACEBOOK_MARKETPLACE: 'Facebook Marketplace',
+    TEMU: 'Temu',
     OTHER: 'No compatible'
 };
 
@@ -66,6 +67,7 @@ function detectMarketplace(url) {
             matchesDomain(host, 'mercadolibre.com') ||
             matchesDomain(host, 'mercadolivre.com.br')) return 'MERCADO_LIBRE';
         if (matchesDomain(host, 'facebook.com')) return 'FACEBOOK_MARKETPLACE';
+        if (matchesDomain(host, 'temu.com')) return 'TEMU';
         return 'OTHER';
     } catch { return 'OTHER'; }
 }
@@ -74,6 +76,12 @@ function isSupportedPage(url, marketplace) {
         const path = new URL(url).pathname;
         if (marketplace === 'FACEBOOK_MARKETPLACE')
             return /^\/marketplace\/item\/\d{6,30}\/?$/.test(path);
+        if (marketplace === 'TEMU') {
+            const address = new URL(url);
+            const id = address.searchParams.get('goods_id');
+            return (/^\/goods\.html\/?$/i.test(path) && /^\d{6,30}$/.test(id ?? '')) ||
+                /-g-\d{6,30}\.html\/?$/i.test(path);
+        }
         if (marketplace === 'MERCADO_LIBRE')
             return /\/up\/MLAU\d{6,}/i.test(path) ||
                 /(?:^|\/)MLA-?\d{6,}/i.test(path) ||
@@ -274,7 +282,7 @@ async function loadCurrentPage() {
         if (!pageSupported) {
             setPanelState('initial');
             $('status').textContent = currentMarketplace === 'OTHER'
-                ? 'Abrí una publicación de Mercado Libre o Facebook Marketplace.'
+                ? 'Abrí una publicación de Mercado Libre, Facebook Marketplace o Temu.'
                 : 'Abrí una publicación individual antes de analizar.';
         } else await restoreAnalysis(nextKey);
         updateActions();
@@ -960,7 +968,8 @@ function extractFacebookMarketplace() {
 async function extractCurrentListing() {
     if (!activeTab?.id || !pageSupported) throw new Error('Abrí una publicación compatible.');
     const extractor = currentMarketplace === 'MERCADO_LIBRE'
-        ? extractMercadoLibre : extractFacebookMarketplace;
+        ? extractMercadoLibre : currentMarketplace === 'TEMU'
+            ? extractTemu : extractFacebookMarketplace;
     const results = await ext.scripting.executeScript({
         target: {tabId: activeTab.id}, func: extractor
     });
@@ -992,19 +1001,24 @@ function readFacebookForm(data) {
     };
 }
 function missingEssential(data) {
-    return !data?.externalId || !data.title || !data.price || !data.seller;
+    return !data?.externalId || !data.title || !data.price ||
+        (data.marketplace !== 'TEMU' && !data.seller);
 }
 async function prepareData(action) {
     const keyAtStart = pageKey;
-    if (!extractedData || currentMarketplace === 'MERCADO_LIBRE') {
+    if (!extractedData || currentMarketplace === 'MERCADO_LIBRE' || currentMarketplace === 'TEMU') {
         extractedData = await extractCurrentListing();
     }
     if (keyAtStart !== pageKey) throw new Error('La publicación cambió durante la extracción.');
+    if (currentMarketplace === 'TEMU' && extractedData.currency !== 'ARS') {
+        throw new Error('Temu no mostró un precio confirmado en ARS; no se convierten monedas.');
+    }
     if (missingEssential(extractedData)) {
         if (extractedData.externalId) {
             pendingAction = action;
             fillFacebookForm(extractedData);
             $('fb-join-row').hidden = currentMarketplace !== 'FACEBOOK_MARKETPLACE';
+            $('fb-seller').disabled = currentMarketplace === 'TEMU';
             $('facebook-correction').hidden = false;
             $('status').textContent = 'Faltan datos. Completalos para continuar.';
             return null;
@@ -1076,7 +1090,8 @@ async function continueFacebook() {
     if (!pendingAction || !extractedData) return;
     try {
         const data = readFacebookForm(extractedData);
-        if (missingEssential(data)) throw new Error('Completá título, precio y nombre del vendedor.');
+        if (missingEssential(data)) throw new Error(data.marketplace === 'TEMU'
+            ? 'Completá título y precio en ARS.' : 'Completá título, precio y nombre del vendedor.');
         extractedData = data;
         $('facebook-correction').hidden = true;
         const action = pendingAction;

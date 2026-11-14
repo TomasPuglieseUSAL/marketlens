@@ -147,7 +147,7 @@ export interface Publication {
   marketplace: Marketplace
   externalId: string | null
   originalUrl: string | null
-  sellerId: number
+  sellerId: number | null
 }
 
 export interface CreatePublicationRequest {
@@ -279,8 +279,8 @@ export interface PublicationListItem {
   title: string
   price: number
   marketplace: Marketplace
-  sellerId: number
-  sellerName: string
+  sellerId: number | null
+  sellerName: string | null
 }
 
 export interface PageResponse<T> {

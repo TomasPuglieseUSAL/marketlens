@@ -104,10 +104,10 @@ public class AutomaticPriceAnalysisService {
             String status;
             String reason;
 
-            if ("OTHER".equals(candidate.marketplace())) {
+            if ("OTHER".equals(candidate.marketplace()) || "TEMU".equals(candidate.marketplace())) {
 
                 status = "INSUFFICIENT_DATA";
-                reason = "Origen OTHER excluido de las "
+                reason = "Origen sin equivalencia comercial verificada excluido de las "
                         + "referencias automáticas.";
 
             } else {
