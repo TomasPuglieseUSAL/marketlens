@@ -165,6 +165,18 @@ export default function PublicationDetailsPage({
               </p>
             )}
 
+            {publication.marketplace === 'TEMU' && publication.temuProductRating != null
+              && publication.temuProductReviewCount != null && (
+              <p className="session-message" role="note">
+                <strong>Opiniones del producto:</strong>{' '}
+                {publication.temuProductRating.toLocaleString('es-AR')} / 5
+                {' '}· {publication.temuProductReviewCount.toLocaleString('es-AR')} reseñas.
+                {' '}Estas opiniones no equivalen a ventas verificadas ni garantizan autenticidad.
+                {publication.temuProductObservedAt &&
+                  <> Observadas: {new Date(publication.temuProductObservedAt).toLocaleString('es-AR')}.</>}
+              </p>
+            )}
+
             {publication.marketplace === 'TEMU' && publication.sellerBadge === 'TEMU_STAR_SELLER' && (
               <p className="session-message" role="note">
                 <strong>Star Seller</strong> · Distintivo observado en Temu; no equivale
