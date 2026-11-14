@@ -58,3 +58,64 @@ test('extrae un único importe ARS sin metadatos cuando el producto es inequívo
   assert.equal(data.currency,'ARS');
   assert.equal(data.price,'9.507');
 });
+
+
+test('reconoce la tienda junto al distintivo Star Seller y conserva ambos datos', () => {
+  const anchor={
+    textContent:'Tokki Shop', innerText:'Tokki Shop',
+    getAttribute:name=> name==='href' ? '/store.html?store_id=12345' : null
+  };
+  const storePanel={
+    innerText:'Tokki Shop\nStar Seller',
+    textContent:'Tokki Shop\nStar Seller',
+    querySelectorAll:selector=>selector==='a[href]' ? [anchor] : [],
+    parentElement:null
+  };
+  const badge={textContent:'Star Seller',children:[],parentElement:storePanel};
+  const head={textContent:'Funda',parentElement:{innerText:'ARS 9.507',parentElement:null}};
+  const document={
+    querySelectorAll:selector=>selector.includes('span, strong') ? [badge] : [],
+    querySelector:selector=>selector==='h1'?head:null
+  };
+  const context={
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL, document
+  };
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
+  const data=JSON.parse(JSON.stringify(context.result));
+  assert.equal(data.seller,'Tokki Shop');
+  assert.equal(data.sellerBadge,'TEMU_STAR_SELLER');
+  assert.equal(data.currency,'ARS');
+});
+
+test('no convierte una etiqueta Star Seller sin tienda en una identidad', () => {
+  const panel={
+    innerText:'Star Seller',
+    textContent:'Star Seller',
+    querySelectorAll:()=>[],
+    parentElement:null
+  };
+  const badge={textContent:'Star Seller',children:[],parentElement:panel};
+  const document={
+    querySelectorAll:selector=>selector.includes('span, strong') ? [badge] : [],
+    querySelector:selector=>selector==='h1'?{textContent:'Funda',parentElement:null}:null
+  };
+  const context={
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL, document
+  };
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
+  const data=JSON.parse(JSON.stringify(context.result));
+  assert.equal(data.seller,null);
+  assert.equal(data.sellerBadge,null);
+});
+
+test('lee la identidad estructurada sin inventar el distintivo Star Seller', () => {
+  const data=extract('https://www.temu.com/ar-en/funda-g-606892013277333.html',
+    {'@type':'Product',offers:{
+      price:'9507',priceCurrency:'ARS',
+      seller:{'@type':'Organization',name:'Tokki Shop'}
+    }});
+  assert.equal(data.seller,'Tokki Shop');
+  assert.equal(data.sellerBadge,null);
+});
