@@ -44,8 +44,14 @@ function popup() {
     let animatedHeight = null;
     const heightAnimations = [];
     const popupStyle = {height: ''};
+    const popupClasses = new Set();
     const popupSurface = {
         style: popupStyle,
+        classList: {
+            add(...names) { for (const name of names) popupClasses.add(name); },
+            remove(...names) { for (const name of names) popupClasses.delete(name); },
+            contains(name) { return popupClasses.has(name); }
+        },
         getBoundingClientRect() {
             if (animatedHeight !== null) return {height: animatedHeight};
             if (popupStyle.height) return {height: parseFloat(popupStyle.height)};
