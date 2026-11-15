@@ -105,9 +105,19 @@ function detectMarketplace(url) {
         return 'OTHER';
     } catch { return 'OTHER'; }
 }
+function isMercadoLibreCatalogUrl(url) {
+    try {
+        return detectMarketplace(url) === 'MERCADO_LIBRE'
+            && /^\/p\/MLA\d{6,}\/?$/i.test(new URL(url).pathname);
+    } catch {
+        return false;
+    }
+}
 function isSupportedPage(url, marketplace) {
     try {
         const path = new URL(url).pathname;
+        if (marketplace === 'MERCADO_LIBRE' && isMercadoLibreCatalogUrl(url))
+            return false;
         if (marketplace === 'FACEBOOK_MARKETPLACE')
             return /^\/marketplace\/item\/\d{6,30}\/?$/.test(path);
         if (marketplace === 'TEMU') {
@@ -118,8 +128,7 @@ function isSupportedPage(url, marketplace) {
         }
         if (marketplace === 'MERCADO_LIBRE')
             return /\/up\/MLAU\d{6,}/i.test(path) ||
-                /(?:^|\/)MLA-?\d{6,}/i.test(path) ||
-                /\/p\/MLA\d{6,}/i.test(path);
+                /(?:^|\/)MLA-?\d{6,}/i.test(path);
         return false;
     } catch {return false;}
 }
@@ -575,9 +584,11 @@ async function loadCurrentPage() {
         }
         if (!pageSupported) {
             setPanelState('initial');
-            $('status').textContent = currentMarketplace === 'OTHER'
-                ? 'Abrí una publicación de Mercado Libre, Facebook Marketplace o Temu.'
-                : 'Abrí una publicación individual antes de analizar.';
+            $('status').textContent = isMercadoLibreCatalogUrl(tab.url)
+                ? 'Esta es una ficha de catálogo. Abrí una oferta de un vendedor para analizarla.'
+                : currentMarketplace === 'OTHER'
+                    ? 'Abrí una publicación de Mercado Libre, Facebook Marketplace o Temu.'
+                    : 'Abrí una publicación individual antes de analizar.';
         } else await restoreAnalysis(nextKey);
         updateActions();
     } catch (error) {
@@ -588,6 +599,15 @@ async function loadCurrentPage() {
 }
 
 function extractMercadoLibre() {
+    // En /p/MLA... el identificador pertenece al catálogo de productos.
+    // No se debe usar como MLA de una oferta concreta, aun si el DOM
+    // muestra un precio o el bloque de un vendedor destacado.
+    if (/^\/p\/MLA\d{6,}\/?$/i.test(window.location.pathname)) {
+        return {
+            found: false,
+            message: 'Esta es una ficha de catálogo de Mercado Libre. Abrí una oferta individual de un vendedor para analizarla.'
+        };
+    }
     function getText(selector) {
         return document.querySelector(selector)?.textContent?.trim() || null;
     }
