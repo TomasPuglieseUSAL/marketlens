@@ -477,3 +477,25 @@ test('no confunde un 4.8 de la tienda y 286 reviews con opiniones del producto',
   assert.equal(data.temuProductRating,null);
   assert.equal(data.temuProductReviewCount,null);
 });
+
+
+test('no atribuye la calificación explícita de una tienda a las reseñas de producto', () => {
+  const panel={
+    innerText:'Tokki Shop\n4.8 out of five stars\n286 reviews',
+    textContent:'Tokki Shop\n4.8 out of five stars\n286 reviews',
+    parentElement:null,querySelectorAll:()=>[]
+  };
+  const document={
+    querySelectorAll:()=>[],
+    querySelector:selector=>selector==='h1'
+      ? {textContent:'Funda',parentElement:panel}:null
+  };
+  const context={
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL,document
+  };
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
+  const data=JSON.parse(JSON.stringify(context.result));
+  assert.equal(data.temuProductRating,null);
+  assert.equal(data.temuProductReviewCount,null);
+});
