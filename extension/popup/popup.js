@@ -105,6 +105,8 @@ async function getSession() {
 }
 function showLoggedOut(message = 'Iniciá sesión para usar MarketLens.') {
     authenticated = false;
+    // Nunca ocultar el formulario de acceso por el estado del análisis.
+    $('auth-card').hidden = false;
     $('auth-status').textContent = message;
     $('login-form').hidden = false;
     $('logout-button').hidden = true;
@@ -211,6 +213,9 @@ function setPanelState(state) {
     $('result-section').hidden = state !== 'success';
     $('error-section').hidden = state !== 'error';
     $('report-section').hidden = busy;
+    // Durante un análisis se prioriza la información de la publicación.
+    // La sección de usuario reaparece al mostrar el resultado o un error.
+    $('auth-card').hidden = authenticated && busy;
 }
 function scrollToAnalysisResult() {
     // Ejecutar después de renderizar y actualizar el layout: el header sticky
