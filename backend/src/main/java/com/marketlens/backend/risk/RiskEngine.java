@@ -95,9 +95,9 @@ public class RiskEngine {
             score += productSignal.points();
         }
 
-        // Antigüedad aproximada de la tienda y ventas mostradas del PRODUCTO.
-        // Mantener ambas señales separadas de la reputación y de las
-        // ventas verificadas del vendedor; no cambian la cobertura.
+        // Antigüedad aproximada y ventas mostradas de la TIENDA,
+        // independientes de las ventas observadas del PRODUCTO.
+        // Nunca interpretarlas como transacciones verificadas; no cambian la cobertura.
         TemuCommercialEvidence.Signal tenureSignal =
                 TemuCommercialEvidence.evaluateStoreAge(publication, LocalDateTime.now());
         if (tenureSignal != null) {
