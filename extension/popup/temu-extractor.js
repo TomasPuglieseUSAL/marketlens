@@ -514,14 +514,40 @@ function extractTemu() {
     }
     return results.size === 1 ? [...results][0] : null;
   }
+  function readStoreSoldText() {
+    if (!observedStore) return null;
+    const scope = document.querySelector('#rightContent') ||
+      document.querySelector('main');
+    if (!scope) return null;
+    const anchors = Array.from(scope.querySelectorAll?.('[aria-label]') || [])
+      .filter(el => (el.getAttribute?.('aria-label') || '').trim()
+        .toLowerCase() === observedStore.trim().toLowerCase()
+        && (el.getAttribute?.('role') === 'link' || el.tagName === 'A'));
+    const results = new Set();
+    for (const anchor of anchors.slice(0, 12)) {
+      let ancestor = anchor.parentElement;
+      for (let depth = 0; ancestor && depth < 7; depth++, ancestor = ancestor.parentElement) {
+        const content = (ancestor.innerText || ancestor.textContent || '')
+          .replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+        if (content.length > 700) break;
+        if (!content.includes(observedStore)) continue;
+        const matches = [...content.matchAll(
+          /\b\d{1,8}(?:[.,]\d)?\s*[kKmM]?\+?\s+sold\b/gi
+        )].map(match => match[0].replace(/\s+/g, ' ').trim());
+        if (matches.length === 1) { results.add(matches[0]); break; }
+      }
+    }
+    return results.size === 1 ? [...results][0] : null;
+  }
   const temuStoreTenureText = readStoreTenureText();
+  const temuStoreSoldText = readStoreSoldText();
   const temuProductSoldText = readProductSoldText();
 
   return {found:true,title:title || null,price,currency:detectedCurrency,
     priceCandidates:prices,seller:observedStore,
     temuSellerRating,temuSellerReviewCount,temuSellerSectionObserved:storeSectionObserved,
     temuProductRating:productReviews.rating,temuProductReviewCount:productReviews.count,
-    temuStoreTenureText,temuProductSoldText,
+    temuStoreTenureText,temuProductSoldText,temuStoreSoldText,
     temuStoreId,externalId:id,
     description,url:canonical.toString(),sellerProfileUrl:temuStoreProfile,
     sellerBadge:starSellerForStore ? 'TEMU_STAR_SELLER' : null,
