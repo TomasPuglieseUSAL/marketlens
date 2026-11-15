@@ -80,6 +80,7 @@ function importPayload(data) {
         temuProductReviewCount: data.temuProductReviewCount ?? null,
         temuStoreTenureText: data.temuStoreTenureText ?? null,
         temuProductSoldText: data.temuProductSoldText ?? null,
+        temuStoreSoldText: data.temuStoreSoldText ?? null,
         temuStoreId: data.temuStoreId ?? null,
         temuSellerSectionObserved: data.temuSellerSectionObserved ?? null,
         sellerSalesText: data.sellerSalesText ?? null,
