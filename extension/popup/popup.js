@@ -1009,6 +1009,8 @@ function readFacebookForm(data) {
         temuProductRating: data.temuProductRating ?? null,
         temuProductReviewCount: data.temuProductReviewCount ?? null,
         temuProductSoldText: data.temuProductSoldText ?? null,
+        temuStoreSoldText: data.marketplace === 'TEMU' && !sameObservedSeller
+            ? null : data.temuStoreSoldText,
         temuStoreTenureText: data.marketplace === 'TEMU' && !sameObservedSeller
             ? null : data.temuStoreTenureText,
         temuStoreId: data.marketplace === 'TEMU' && !sameObservedSeller
