@@ -195,6 +195,13 @@ function setPanelState(state) {
     // Los pasos son excluyentes: elección de precio -> corrección -> resultado.
     // Los paneles entran con una transición CSS respetando reduced-motion.
     const busy = state === 'price' || state === 'correction' || state === 'loading';
+    $('analysis-title').textContent = ({
+        price: 'Confirmar precio',
+        correction: 'Completar datos',
+        loading: 'Analizando publicación',
+        success: 'Resultado del análisis',
+        error: 'Análisis incompleto'
+    })[state] || 'Analizar publicación';
     $('analysis-overview').hidden = busy;
     $('analyze-button').hidden = state !== 'initial';
     $('temu-price-panel').hidden = state !== 'price';
@@ -1060,8 +1067,10 @@ function temuPriceCandidates(data) {
         : [];
 }
 function requiresTemuPriceConfirmation(data) {
-    return data?.marketplace === 'TEMU' &&
-        (!validTemuPrice(data.price) || temuPriceCandidates(data).length > 1);
+    if (data?.marketplace !== 'TEMU') return false;
+    const candidates = temuPriceCandidates(data);
+    return !validTemuPrice(data.price) || candidates.length > 1
+        || (candidates.length === 1 && candidates[0] !== String(data.price).trim());
 }
 function updateTemuPriceSelection() {
     const chosen = $('temu-confirm-price').value.trim();
