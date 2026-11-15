@@ -104,12 +104,14 @@ public class RiskEngine {
         if (mlSignal != null) {
             addFactor(evaluation, mlSignal.code(), mlSignal.description(), mlSignal.points());
         }
-        if (MercadoLibreSellerEvidence.hasObservedReputation(publication, LocalDateTime.now())
-                && publication.getSeller().getReputationLevel() == null) {
-            addFactor(evaluation, "ML_SELLER_REPUTATION_OBSERVED",
-                    "El termómetro público del vendedor muestra el nivel "
-                    + publication.getMlSellerReputationObserved()
-                    + "/5. Es una observación de Mercado Libre, no corroborada por OAuth.", 0);
+        // Reputación observada (sin OAuth): puntuar una sola vez si NO
+        // existe un nivel verificado. Nunca sumarla duplicada.
+        MercadoLibreSellerEvidence.Signal mlSellerSignal =
+                MercadoLibreSellerEvidence.evaluateObserved(publication, LocalDateTime.now());
+        if (mlSellerSignal != null) {
+            addFactor(evaluation, mlSellerSignal.code(),
+                    mlSellerSignal.description(), mlSellerSignal.points());
+            score += mlSellerSignal.points();
         }
 
         // Antigüedad aproximada y ventas mostradas de la TIENDA,
@@ -213,8 +215,17 @@ public class RiskEngine {
                 return 15;
             }
 
-            // Niveles 3, 4 y 5: sin penalización por esta regla.
-            if (reputationLevel >= 3 && reputationLevel <= 5) {
+            // El nivel 3 refleja una reputación intermedia: menor señal
+            // de riesgo que 1–2, pero no debería ser neutral.
+            if (reputationLevel == 3) {
+                addFactor(evaluation, "MODERATE_SELLER_REPUTATION",
+                        "El vendedor presenta una reputación intermedia (3/5).",
+                        MercadoLibreSellerEvidence.INTERMEDIATE_REPUTATION_POINTS);
+                return MercadoLibreSellerEvidence.INTERMEDIATE_REPUTATION_POINTS;
+            }
+
+            // Niveles buenos 4 y 5: sin penalización.
+            if (reputationLevel == 4 || reputationLevel == 5) {
                 return 0;
             }
 
