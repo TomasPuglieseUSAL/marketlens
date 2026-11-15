@@ -120,7 +120,7 @@ class TemuProductReviewEvidenceTest {
         p.setSeller(s);
         var result = new RiskEngine(new RiskCoverageCalculator()).evaluate(p);
         assertEquals(1, result.getAvailableFactors());
-        assertEquals(2, result.getTotalFactors());
+        assertEquals(3, result.getTotalFactors());
         assertTrue(result.getFactors().stream().anyMatch(f ->
                 "NEW_SELLER_ACCOUNT".equals(f.getCode())
                         && f.getScoreContribution() == 20));
