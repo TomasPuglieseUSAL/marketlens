@@ -54,17 +54,19 @@ async function authenticatedRequest(path, options = {}) {
 }
 
 function requireExtractedData(data) {
-    // Segunda barrera: una ficha de catálogo /p/MLA... no identifica una
-    // oferta individual y jamás debe ingresar como publicación MLA.
+    // En el catálogo el MLA de la URL identifica al producto. Solo aceptar
+    // el item_id individual si el formulario de compra lo corroboró.
     if (data?.marketplace === 'MERCADO_LIBRE' && typeof data.url === 'string') {
+        let catalog = false;
         try {
-            const address = new URL(data.url);
-            if (/\/(?:[^/]+\/)?p\/MLA\d{6,}\/?$/i.test(address.pathname)) {
-                throw new Error('Esta es una ficha de catálogo de Mercado Libre. Abrí una oferta de un vendedor para analizarla.');
-            }
-        } catch (error) {
-            if (error instanceof Error && error.message.includes('ficha de catálogo')) throw error;
-            // Las URLs no válidas serán rechazadas por la API.
+            catalog = /\/(?:[^/]+\/)?p\/MLA\d{6,}\/?$/i
+                .test(new URL(data.url).pathname);
+        } catch {
+            // La validación de URL del backend emitirá el error pertinente.
+        }
+        if (catalog && (!/^MLA[1-9]\d{5,}$/i.test(data.selectedOfferId ?? '')
+                || data.selectedOfferId !== data.externalId || !data.seller)) {
+            throw new Error('No se pudo confirmar la oferta elegida. Seleccioná una oferta con precio y vendedor identificados.');
         }
     }
     if (!data || !['MERCADO_LIBRE', 'FACEBOOK_MARKETPLACE', 'TEMU'].includes(data.marketplace) ||
@@ -83,6 +85,7 @@ function importPayload(data) {
         currency: data.currency,
         seller: data.seller,
         externalId: data.externalId,
+        selectedOfferId: data.selectedOfferId ?? null,
         description: data.description,
         url: data.url,
         sellerProfileUrl: data.sellerProfileUrl ?? null,
