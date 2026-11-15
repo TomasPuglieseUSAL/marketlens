@@ -321,16 +321,24 @@ function applyPanelState(state) {
     $('auth-card').hidden = authenticated && busy;
 }
 function scrollToAnalysisResult() {
-    // Ejecutar después de renderizar y actualizar el layout: el header sticky
-    // permanece visible y CSS scroll-margin-top deja espacio para el resultado.
-    if (typeof requestAnimationFrame !== 'function') return;
-    requestAnimationFrame(() => {
-        const result = $('result-section');
-        if (result.hidden) return; // El usuario pudo cambiar de pantalla.
-        const reducedMotion = typeof matchMedia === 'function'
-            && matchMedia('(prefers-reduced-motion: reduce)').matches;
-        result.scrollIntoView?.({behavior: reducedMotion ? 'auto' : 'smooth', block: 'start'});
-    });
+    // Desplazar recién cuando el popup recuperó su altura final.
+    // Si otro estado interrumpe la transición, no robar el scroll al usuario.
+    const scroll = () => {
+        if (typeof requestAnimationFrame !== 'function') return;
+        requestAnimationFrame(() => {
+            const result = $('result-section');
+            if (result.hidden) return;
+            result.scrollIntoView?.({
+                behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+                block: 'start'
+            });
+        });
+    };
+    if (popupHeightAnimation) {
+        popupHeightAnimation.addEventListener('finish', scroll, {once: true});
+    } else {
+        scroll();
+    }
 }
 function renderAnalysis(value) {
     if (!authenticated) return;
@@ -367,10 +375,11 @@ function renderAnalysis(value) {
         resetLoadingTransition();
     }
 
+    const previousStatus = lastRenderedPanelStatus;
     withPopupHeightTransition(() => applyRenderedAnalysis(value, status));
+    if (status === 'success' && previousStatus !== 'success') scrollToAnalysisResult();
 }
 function applyRenderedAnalysis(value, status) {
-    const previousStatus = lastRenderedPanelStatus;
     lastRenderedPanelStatus = status;
     setPanelState(status);
     if (status === 'loading') {
@@ -385,9 +394,8 @@ function applyRenderedAnalysis(value, status) {
             ? 'Publicación existente evaluada nuevamente.'
             : 'Análisis completado.') +
             (value.sellerRefreshWarning ? ` ${value.sellerRefreshWarning}` : '');
-        // Desplazar una sola vez al entrar en éxito; las actualizaciones
-        // repetidas de storage no deben robar el scroll manual del usuario.
-        if (previousStatus !== 'success') scrollToAnalysisResult();
+        // El foco de scroll se aplica fuera de la mutación, después de
+        // iniciar (o terminar) la interpolación de altura.
     } else if (pageSupported) {
         $('status').textContent = 'Publicación compatible detectada.';
     }
