@@ -535,7 +535,7 @@ function renderRisk(value) {
         .map(item => item.name).filter(Boolean);
     const detail = missing.length
         ? 'Falta: ' + missing.join(', ') + '. '
-        : factorDetails.length ? 'Los tres factores se observaron. ' : '';
+        : factorDetails.length ? 'Todos los factores disponibles fueron observados. ' : '';
     $('result-coverage-note').textContent = detail + (
         level === 'INDETERMINATE'
             ? 'La cobertura mide datos disponibles, no su fiabilidad.'
