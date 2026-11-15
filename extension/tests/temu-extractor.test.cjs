@@ -499,3 +499,98 @@ test('no atribuye la calificación explícita de una tienda a las reseñas de pr
   assert.equal(data.temuProductRating,null);
   assert.equal(data.temuProductReviewCount,null);
 });
+
+
+test('Temu: obtiene 4.7 y 286 del resumen #reviewContent lejos del título', () => {
+  // Reproduce el sector compartido desde Inspeccionar elemento:
+  // <div id="reviewContent"><div><div class="UadtlhRd">
+  // <div class="pkFBdEpJ">286 reviews</div>
+  // <div role="link" aria-label="4.7 out of five stars"><span>4.7</span></div>
+  const summary={
+    innerText:'286 reviews\n4.7',textContent:'286 reviews4.7'
+  };
+  const aggregatedRating={
+    parentElement:summary,
+    getAttribute:key=>key==='aria-label'?'4.7 out of five stars':null
+  };
+  const reviewRoot={
+    querySelectorAll:selector=>selector==='[role="link"][aria-label]'
+      ? [aggregatedRating]:[]
+  };
+  const document={
+    querySelectorAll:()=>[],
+    querySelector:selector=>selector==='#reviewContent' ? reviewRoot
+      : selector==='h1' ? {textContent:'Funda',parentElement:null}:null
+  };
+  const context={
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL,document
+  };
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
+  const data=JSON.parse(JSON.stringify(context.result));
+  assert.equal(data.temuProductRating,4.7);
+  assert.equal(data.temuProductReviewCount,286);
+  assert.equal(data.temuSellerRating,null);
+  assert.equal(data.temuSellerReviewCount,null);
+});
+
+test('Temu: no confunde el promedio con las estrellas de las reseñas individuales', () => {
+  const summary={
+    innerText:'286 reviews\n4.7',textContent:'286 reviews4.7'
+  };
+  const productRating={
+    parentElement:summary,
+    getAttribute:key=>key==='aria-label'?'4.7 out of five stars':null
+  };
+  const individualReview={
+    parentElement:{innerText:'A review'},
+    getAttribute:key=>key==='aria-label'?'5 out of five stars':null
+  };
+  const reviewRoot={
+    // Un rating individual no tiene role="link"; no se incluye en esta lista.
+    querySelectorAll:selector=>selector==='[role="link"][aria-label]'
+      ? [productRating]:[]
+  };
+  const document={
+    querySelectorAll:()=>[],
+    querySelector:selector==='#reviewContent'?reviewRoot:
+      selector==='h1'?{textContent:'Funda',parentElement:null}:null
+  };
+  const context={
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL,document
+  };
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
+  const data=JSON.parse(JSON.stringify(context.result));
+  assert.equal(data.temuProductRating,4.7);
+  assert.equal(data.temuProductReviewCount,286);
+  assert.equal(individualReview.getAttribute('aria-label'),'5 out of five stars');
+});
+
+test('Temu: un resumen de reseñas ambiguo no genera métricas de producto', () => {
+  const summary={
+    innerText:'286 reviews\n240 reviews\n4.7',
+    textContent:'286 reviews 240 reviews 4.7'
+  };
+  const productRating={
+    parentElement:summary,
+    getAttribute:key=>key==='aria-label'?'4.7 out of five stars':null
+  };
+  const reviewRoot={
+    querySelectorAll:selector=>selector==='[role="link"][aria-label]'
+      ? [productRating]:[]
+  };
+  const document={
+    querySelectorAll:()=>[],
+    querySelector:selector==='#reviewContent'?reviewRoot:
+      selector==='h1'?{textContent:'Funda',parentElement:null}:null
+  };
+  const context={
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL,document
+  };
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
+  const data=JSON.parse(JSON.stringify(context.result));
+  assert.equal(data.temuProductRating,null);
+  assert.equal(data.temuProductReviewCount,null);
+});
