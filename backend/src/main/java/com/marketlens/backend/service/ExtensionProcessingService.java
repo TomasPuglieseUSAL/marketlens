@@ -184,17 +184,29 @@ public class ExtensionProcessingService {
                         } else {
 
                                 // Mercado Libre: conservar la verificación original.
-                                Long existingSellerId = publication.getSeller().getExternalSellerId();
-
-                                if (verified == null ||
-                                                !Objects.equals(
-                                                                existingSellerId,
-                                                                verified.id())) {
-
+                                Seller previousSeller = publication.getSeller();
+                                Long existingSellerId = previousSeller == null ? null
+                                                : previousSeller.getExternalSellerId();
+                                String previousSellerName = previousSeller == null ? null
+                                                : previousSeller.getName();
+                                // La misma referencia MLA/MLAU y el mismo nombre
+                                // observado permiten actualizar señales públicas
+                                // sin OAuth. Nunca cambiar ni inventar un ID verificado.
+                                boolean sameObservedName = previousSellerName != null
+                                                && normalized.sellerName() != null
+                                                && previousSellerName.trim().equalsIgnoreCase(
+                                                                normalized.sellerName().trim());
+                                Long incomingObservedId = imported.getExternalSellerId();
+                                boolean idConflict = existingSellerId != null
+                                                && incomingObservedId != null
+                                                && !Objects.equals(existingSellerId, incomingObservedId);
+                                boolean verifiedConflict = verified != null
+                                                && existingSellerId != null
+                                                && !Objects.equals(existingSellerId, verified.id());
+                                if (!sameObservedName || idConflict || verifiedConflict) {
                                         throw new ResponseStatusException(
                                                         HttpStatus.CONFLICT,
-                                                        "No se pudo confirmar que la publicación " +
-                                                                        "pertenezca al mismo vendedor.");
+                                                        "La publicación ya existe, pero no coincide la identidad del vendedor.");
                                 }
 
                                 if (publication.getPrice().compareTo(
@@ -207,9 +219,12 @@ public class ExtensionProcessingService {
                                 }
                         }
 
-                        if (marketplace == Marketplace.MERCADO_LIBRE && verified != null) {
-                                updateVerifiedSeller(publication.getSeller(), verified);
-                                sellerRepository.save(publication.getSeller());
+                        if (marketplace == Marketplace.MERCADO_LIBRE) {
+                                if (verified != null) {
+                                        updateVerifiedSeller(publication.getSeller(), verified);
+                                        sellerRepository.save(publication.getSeller());
+                                }
+                                applyMercadoLibreObservedEvidence(publication, imported);
                         }
 
                         status = "REUSED";
@@ -260,6 +275,9 @@ public class ExtensionProcessingService {
                         publication.setOriginalUrl(imported.getOriginalUrl());
 
                         publication.setSeller(savedSeller);
+                        if (marketplace == Marketplace.MERCADO_LIBRE) {
+                                applyMercadoLibreObservedEvidence(publication, imported);
+                        }
                         if (marketplace == Marketplace.TEMU && savedSeller != null) {
                                 if ("TEMU_STAR_SELLER".equals(imported.getSellerBadge())) {
                                         publication.setSellerBadge("TEMU_STAR_SELLER");
@@ -405,6 +423,23 @@ public class ExtensionProcessingService {
                         throw new ResponseStatusException(
                                         HttpStatus.UNPROCESSABLE_ENTITY,
                                         "Hay una inconsistencia entre los identificadores.");
+                }
+        }
+
+        static void applyMercadoLibreObservedEvidence(
+                        Publication publication, ExtensionImport imported) {
+                if (publication.getMarketplace() != Marketplace.MERCADO_LIBRE) return;
+                if (MercadoLibreProductReviewEvidence.hasMetrics(
+                        imported.getMlProductRating(), imported.getMlProductReviewCount())) {
+                        publication.setMlProductRating(imported.getMlProductRating());
+                        publication.setMlProductReviewCount(imported.getMlProductReviewCount());
+                        publication.setMlProductObservedAt(java.time.LocalDateTime.now());
+                }
+                Integer observedLevel = imported.getSellerReputationLevel();
+                if (publication.getSeller() != null
+                        && observedLevel != null && observedLevel >= 1 && observedLevel <= 5) {
+                        publication.setMlSellerReputationObserved(observedLevel);
+                        publication.setMlSellerReputationObservedAt(java.time.LocalDateTime.now());
                 }
         }
 
