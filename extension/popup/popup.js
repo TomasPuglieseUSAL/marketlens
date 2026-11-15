@@ -87,6 +87,10 @@ function withPopupHeightTransition(update) {
     popupHeightTransitionDepth++;
     try {
         update();
+    } catch (error) {
+        // Un error de renderizado no debe dejar el popup a altura fija.
+        popup.style.height = '';
+        throw error;
     } finally {
         popupHeightTransitionDepth--;
     }
