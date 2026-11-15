@@ -20,7 +20,7 @@ class TemuProductReviewImportValidationTest {
                 "https://www.temu.com/goods.html?goods_id=606892013277333",
                 null, null, null, null,
                 rating == null ? null : new BigDecimal(rating), count,
-                null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null);
     }
 
     @Test void acceptsValidProductReviewsWithoutStoreReviews() {
