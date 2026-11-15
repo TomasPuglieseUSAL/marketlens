@@ -12,7 +12,8 @@ import java.util.regex.Pattern;
 /**
  * Actividad comercial OBSERVADA, no verificada:
  * - antigüedad aproximada de la tienda ("1 year on Temu")
- * - ventas aproximadas del PRODUCTO ("15K+ sold"), nunca ventas del vendedor.
+ * - ventas mostradas del PRODUCTO ("15K+ sold") y de la TIENDA ("300K+ Sold"),
+ *   en observaciones independientes y nunca como ventas verificadas.
  * No modifica los tres factores de cobertura.
  */
 public final class TemuCommercialEvidence {
