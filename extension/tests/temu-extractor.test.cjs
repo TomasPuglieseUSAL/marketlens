@@ -432,3 +432,48 @@ test('no toma reseñas de tienda si faltan opiniones identificadas del producto'
   assert.equal(data.temuProductReviewCount,null);
   assert.equal(data.temuSellerReviewCount,286);
 });
+
+
+test('detecta 4.7 y 286 reviews juntos aunque no diga out of five stars', () => {
+  const ratingBlock={
+    innerText:'4.7\n286 reviews',
+    textContent:'4.7\n286 reviews',
+    parentElement:null,
+    querySelectorAll:()=>[]
+  };
+  const document={
+    querySelectorAll:()=>[],
+    querySelector:selector=>selector==='h1'
+      ? {textContent:'Funda',parentElement:ratingBlock}:null
+  };
+  const context={
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL,document
+  };
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
+  const data=JSON.parse(JSON.stringify(context.result));
+  assert.equal(data.temuProductRating,4.7);
+  assert.equal(data.temuProductReviewCount,286);
+  assert.equal(data.temuSellerRating,null);
+});
+
+test('no confunde un 4.8 de la tienda y 286 reviews con opiniones del producto', () => {
+  const nearTitle={
+    innerText:'Tokki Shop\n4.8\n286 reviews',
+    textContent:'Tokki Shop\n4.8\n286 reviews',
+    parentElement:null,querySelectorAll:()=>[]
+  };
+  const document={
+    querySelectorAll:()=>[],
+    querySelector:selector=>selector==='h1'
+      ? {textContent:'Funda',parentElement:nearTitle}:null
+  };
+  const context={
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL,document
+  };
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
+  const data=JSON.parse(JSON.stringify(context.result));
+  assert.equal(data.temuProductRating,null);
+  assert.equal(data.temuProductReviewCount,null);
+});
