@@ -651,7 +651,7 @@ function extractMercadoLibre() {
                 const checkoutId = form.querySelector(
                     'input[type="hidden"][name="item_id"]'
                 )?.value;
-                if (!/^MLA[1-9]\\d{5,}$/i.test(inputId || '')
+                if (!/^MLA[1-9]\d{5,}$/i.test(inputId || '')
                         || checkoutId !== inputId) return null;
 
                 // Precio principal de la oferta; nunca tomar cuotas,
@@ -676,9 +676,9 @@ function extractMercadoLibre() {
                     selected.querySelector(
                         '.ui-pdp-seller-summary__header__image-container__image'
                     )?.getAttribute('alt');
-                const sellerName = seller?.replace(/\\s+/g, ' ').trim()
-                    .replace(/^vendido\\s+por\\s*:?[ ]*/i, '')
-                    .replace(/^tienda\\s+oficial\\s*/i, '').trim();
+                const sellerName = seller?.replace(/\s+/g, ' ').trim()
+                    .replace(/^vendido\s+por\s*:?[ ]*/i, '')
+                    .replace(/^tienda\s+oficial\s*/i, '').trim();
                 if (!fraction || !sellerName) return null;
 
                 return {
@@ -689,7 +689,7 @@ function extractMercadoLibre() {
                     url: window.location.href.split('#')[0],
                     seller: sellerName,
                     price: cents ? fraction + ',' + cents : fraction,
-                    currency: /\\bpesos\\b/i.test(
+                    currency: /\bpesos\b/i.test(
                         amount?.getAttribute('aria-label') || '') ? 'ARS' : null
                 };
             }
