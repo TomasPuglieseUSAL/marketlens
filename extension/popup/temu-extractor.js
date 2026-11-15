@@ -139,7 +139,7 @@ function extractTemu() {
   // Nunca usar aggregateRating de otro objeto ni buscar en recomendaciones.
   function readProductReviews() {
     const toRating = value => {
-      if (value == null || !/^(?:[0-5](?:[.,]\d{1,3})?)$/.test(String(value).trim())) return null;
+      if (value == null || !/^[0-5](?:[.,]\d{1,3})?$/.test(String(value).trim())) return null;
       const n = Number(String(value).trim().replace(',', '.'));
       return Number.isFinite(n) && n > 0 && n <= 5
         ? Math.round(n * 10) / 10 : null;
@@ -149,44 +149,63 @@ function extractTemu() {
       const str = String(value).trim();
       if (!/^(?:\d{1,8}|\d{1,3}(?:[.,]\d{3})+)$/.test(str)) return null;
       const n = Number(str.replace(/[.,]/g, ''));
-      return Number.isSafeInteger(n) && n >= 0 && n <= 10000000 ? n : null;
+      return Number.isSafeInteger(n) && n > 0 && n <= 10000000 ? n : null;
     };
     const aggregate = product?.aggregateRating;
     const structuredRating = toRating(aggregate?.ratingValue);
-    // ratingCount puede incluir estrellas sin reseña escrita: no equipararlo
-    // automáticamente con reviewCount.
+    // ratingCount puede incluir estrellas sin reseña escrita: no es reviewCount.
     const structuredCount = toExactCount(aggregate?.reviewCount);
+    if (structuredRating != null && structuredCount != null)
+      return {rating:structuredRating, count:structuredCount};
 
-    let visibleRating = null;
-    let visibleCount = null;
     let parent = document.querySelector('h1')?.parentElement ?? null;
     for (let depth = 0; parent && depth < 8; depth++, parent = parent.parentElement) {
       const text = (parent.innerText || parent.textContent || '').replace(/\u00a0/g, ' ').trim();
+      // Revisar sólo el panel próximo al título, no las recomendaciones.
       if (text.length > 4500) break;
       const labels = Array.from(parent.querySelectorAll?.('[aria-label], [title]') || [])
         .slice(0, 250)
-        .map(el => [el.getAttribute?.('aria-label'), el.getAttribute?.('title')].filter(Boolean).join(' '))
+        .map(el => [el.getAttribute?.('aria-label'), el.getAttribute?.('title')]
+          .filter(Boolean).join(' '))
         .filter(Boolean).join(' ');
       const combined = text + ' ' + labels;
-      const ratingMatches = [...combined.matchAll(/\b([0-5](?:[.,]\d{1,3})?)\s*(?:out of (?:five|5) stars|\/\s*5\s*stars?)\b/gi)]
-        .map(x => toRating(x[1])).filter(x => x != null);
-      const reviewMatches = [...combined.matchAll(/\b(\d{1,3}(?:[.,]\d{3})*|\d{1,8})\s+(?:product\s+)?reviews?\b/gi)]
-        .map(x => toExactCount(x[1])).filter(x => x != null);
+      const ratingMatches = [...combined.matchAll(
+        /\b([0-5](?:[.,]\d{1,3})?)\s*(?:out of (?:five|5)(?: stars?)?|\/\s*5(?: stars?)?)\b/gi
+      )].map(x => toRating(x[1])).filter(x => x != null);
+      const reviewMatches = [...combined.matchAll(
+        /\b(\d{1,3}(?:[.,]\d{3})*|\d{1,8})\s+(?:product\s+)?reviews?\b/gi
+      )].map(x => toExactCount(x[1])).filter(x => x != null);
       const ratings = [...new Set(ratingMatches)];
       const counts = [...new Set(reviewMatches)];
-      // Una única pareja en una región acotada cerca del título.
-      // No atribuir automáticamente las estrellas de la tienda al producto.
       if (ratings.length === 1 && counts.length === 1) {
-        visibleRating = ratings[0];
-        visibleCount = counts[0];
-        break;
+        return {rating:ratings[0], count:counts[0]};
       }
+
+      // En algunos diseños Temu muestra "4.7" junto a "286 reviews"
+      // sin las palabras "out of five stars". Sólo aceptar la pareja
+      // numérica inmediatamente anterior a un contador explícito.
+      const pairs = [];
+      for (const match of text.matchAll(
+        /\b(\d{1,3}(?:[.,]\d{3})*|\d{1,8})\s+(?:product\s+)?reviews?\b/gi
+      )) {
+        const count = toExactCount(match[1]);
+        if (count == null) continue;
+        const before = text.slice(Math.max(0, match.index - 85), match.index);
+        // Evitar "store reviews", referencias a tiendas y reseñas recomendadas.
+        if (/\b(?:seller|store|shop|tienda|vendedor)\b/i.test(before)) continue;
+        const localRatings = [...before.matchAll(/\b([0-5][.,]\d{1,2})\b/g)];
+        if (!localRatings.length) continue;
+        const nearest = localRatings[localRatings.length - 1];
+        const between = before.slice(nearest.index + nearest[0].length);
+        if (between.length > 65 || /\b(?:seller|store|shop|tienda|vendedor)\b/i.test(between)) continue;
+        const rating = toRating(nearest[1]);
+        if (rating != null) pairs.push({rating,count});
+      }
+      const uniquePairs = [...new Map(pairs.map(p => [p.rating + ':' + p.count, p])).values()];
+      if (uniquePairs.length === 1) return uniquePairs[0];
     }
-    const rating = visibleRating ?? structuredRating;
-    const count = visibleCount ?? structuredCount;
-    // Requerimos la pareja para no presentar una cifra parcial como respaldo.
-    return rating != null && count != null && count > 0
-      ? {rating, count} : {rating:null, count:null};
+    // No combinar un rating del JSON-LD con una cantidad vista en otro panel.
+    return {rating:null,count:null};
   }
   const productReviews = readProductReviews();
 
