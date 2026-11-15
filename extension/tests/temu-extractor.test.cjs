@@ -594,3 +594,91 @@ test('Temu: un resumen de reseñas ambiguo no genera métricas de producto', () 
   assert.equal(data.temuProductRating,null);
   assert.equal(data.temuProductReviewCount,null);
 });
+
+
+test('Temu: captura ventas del PRODUCTO 15K+ y antigüedad de tienda 1 year', () => {
+  const salesNode={textContent:'15K+ sold'};
+  const storeCard={
+    innerText:'Tokki Shop Star seller 4.8 300K+ Sold 1 year on Temu Shop all items',
+    textContent:'Tokki Shop Star seller 4.8 300K+ Sold 1 year on Temu Shop all items',
+    parentElement:null
+  };
+  const storeAnchor={
+    parentElement:storeCard,
+    getAttribute:name=>name==='aria-label'?'Tokki Shop':
+      name==='role'?'link':null
+  };
+  const rightContent={
+    querySelectorAll:selector=>selector==='._9HFPI1Qn ._3MX1FGET'
+      ? [salesNode] : selector==='[aria-label]' ? [storeAnchor] : []
+  };
+  const product={'@type':'Product',name:'Funda',offers:{
+    price:'9507',priceCurrency:'ARS',seller:{name:'Tokki Shop'}}};
+  const document={
+    querySelectorAll:selector=>selector==='script[type="application/ld+json"]'
+      ? [{textContent:JSON.stringify(product)}] : [],
+    querySelector:selector=>selector==='#rightContent' ? rightContent :
+      selector==='h1'?{textContent:'Funda',parentElement:null}:null
+  };
+  const context={
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL,document
+  };
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
+  const data=JSON.parse(JSON.stringify(context.result));
+  assert.equal(data.seller,'Tokki Shop');
+  assert.equal(data.temuStoreTenureText,'1 year on Temu');
+  assert.equal(data.temuProductSoldText,'15K+ sold');
+});
+
+test('Temu: no toma 300K+ Sold de tienda como ventas de producto', () => {
+  const storeCard={innerText:'Tokki Shop 300K+ Sold 1 week on Temu',
+    textContent:'Tokki Shop 300K+ Sold 1 week on Temu',parentElement:null};
+  const storeAnchor={parentElement:storeCard,
+    getAttribute:name=>name==='aria-label'?'Tokki Shop':
+      name==='role'?'link':null};
+  const rightContent={
+    querySelectorAll:selector=>selector==='[aria-label]'?[storeAnchor]:[]
+  };
+  const product={'@type':'Product',offers:{price:'9507',
+    priceCurrency:'ARS',seller:{name:'Tokki Shop'}}};
+  const document={
+    querySelectorAll:selector=>selector==='script[type="application/ld+json"]'
+      ? [{textContent:JSON.stringify(product)}]:[],
+    querySelector:selector=>selector==='#rightContent'?rightContent:
+      selector==='h1'?{textContent:'Funda',parentElement:null}:null
+  };
+  const context={
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL,document
+  };
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
+  const data=JSON.parse(JSON.stringify(context.result));
+  assert.equal(data.temuProductSoldText,null);
+  assert.equal(data.temuStoreTenureText,'1 week on Temu');
+});
+
+test('Temu: no atribuye edad de una tienda diferente al vendedor actual', () => {
+  const storeCard={innerText:'Other Shop 1 week on Temu',
+    textContent:'Other Shop 1 week on Temu',parentElement:null};
+  const storeAnchor={parentElement:storeCard,
+    getAttribute:name=>name==='aria-label'?'Other Shop':
+      name==='role'?'link':null};
+  const rightContent={querySelectorAll:selector=>selector==='[aria-label]'?[storeAnchor]:[]};
+  const product={'@type':'Product',offers:{price:'9507',
+    priceCurrency:'ARS',seller:{name:'Tokki Shop'}}};
+  const document={
+    querySelectorAll:selector=>selector==='script[type="application/ld+json"]'
+      ? [{textContent:JSON.stringify(product)}]:[],
+    querySelector:selector=>selector==='#rightContent'?rightContent:
+      selector==='h1'?{textContent:'Funda',parentElement:null}:null
+  };
+  const context={
+    window:{location:{href:'https://www.temu.com/ar-en/funda-g-606892013277333.html'}},
+    URL,document
+  };
+  vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
+  const data=JSON.parse(JSON.stringify(context.result));
+  assert.equal(data.temuStoreTenureText,null);
+  assert.equal(data.temuProductSoldText,null);
+});
