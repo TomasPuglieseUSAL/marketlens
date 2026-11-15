@@ -1069,7 +1069,7 @@ function extractMercadoLibre() {
         : document.querySelector('.ui-pdp-seller-summary');
 
     const sellerLink = catalogOffer
-        ? sellerPanel?.querySelector(
+        ? sellerPanel?.querySelector?.(
             '.ui-pdp-seller-summary__header__title .ui-pdp-seller-summary__link'
           ) ?? null
         : document.querySelector(
