@@ -100,7 +100,9 @@ body {
   max-height: 540px;
   margin: 0;
   overflow-x: hidden;
-  overflow-y: auto;
+  /* Scrollbar siempre presente para que el área útil y el header no
+     cambien de ancho al abrir o cerrar el reporte. */
+  overflow-y: scroll;
   scrollbar-gutter: stable;
   color: var(--text-primary);
   font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
@@ -558,6 +560,30 @@ footer {
   border-color: var(--error-border);
   scroll-margin-top: 90px;
 }
+/* Animación de salida del reporte: se mantiene visible durante el regreso
+   del scroll y luego se contrae mientras pierde opacidad. */
+@keyframes ml-report-leave {
+  from {
+    opacity: 1;
+    max-height: var(--report-open-height, 700px);
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: 0;
+    border-top-width: 0;
+    border-bottom-width: 0;
+    transform: translateY(-7px);
+  }
+}
+#report-details.is-closing {
+  overflow: hidden;
+  pointer-events: none;
+  animation: ml-report-leave .3s cubic-bezier(.4, 0, .2, 1) forwards !important;
+}
 .report-card h2 { font-size: 13px; }
 
 /* Confirmación de precios en un paso independiente, anterior al formulario. */
@@ -633,5 +659,6 @@ footer {
   #facebook-correction:not([hidden]),
   #report-details:not([hidden]) { animation: none; }
   .report-chevron { transition: none; }
+  #report-details.is-closing { animation: none !important; }
   .auth-exiting, #login-form:not([hidden]) { animation: none !important; }
 }
