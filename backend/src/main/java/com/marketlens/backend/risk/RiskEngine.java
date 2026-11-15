@@ -217,7 +217,8 @@ public class RiskEngine {
 
             // El nivel 3 refleja una reputación intermedia: menor señal
             // de riesgo que 1–2, pero no debería ser neutral.
-            if (reputationLevel == 3) {
+            if (reputationLevel == 3
+                    && publication.getMarketplace() == Marketplace.MERCADO_LIBRE) {
                 addFactor(evaluation, "MODERATE_SELLER_REPUTATION",
                         "El vendedor presenta una reputación intermedia (3/5).",
                         MercadoLibreSellerEvidence.INTERMEDIATE_REPUTATION_POINTS);
@@ -225,7 +226,7 @@ public class RiskEngine {
             }
 
             // Niveles buenos 4 y 5: sin penalización.
-            if (reputationLevel == 4 || reputationLevel == 5) {
+            if (reputationLevel >= 3 && reputationLevel <= 5) {
                 return 0;
             }
 
@@ -333,7 +334,9 @@ public class RiskEngine {
 
         // Si hay reputación verificable, no calificar el historial como
         // "no verificable" por el mero hecho de que falte una cifra de ventas.
-        if (hasReputationLevel || hasLegacyReputation) {
+        if (hasReputationLevel || hasLegacyReputation
+                || MercadoLibreSellerEvidence.hasObservedReputation(
+                    publication, LocalDateTime.now())) {
             return 0;
         }
 
