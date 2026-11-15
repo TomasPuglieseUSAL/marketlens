@@ -275,3 +275,32 @@ test('el encabezado es sticky y el resultado tiene desplazamiento compensado', (
     assert.match(css, /\.report-chevron\s*\{[^}]*transform-origin:\s*center;/s);
     assert.equal(html.includes('aria-hidden="true">⌄</span>'), false);
 });
+
+
+test('la cuenta se oculta durante selección de precio, corrección y procesamiento', () => {
+    const p = popup();
+    p.run("authenticated = true");
+    for (const state of ['price', 'correction', 'loading']) {
+        p.run("setPanelState('" + state + "')");
+        assert.equal(p.element('auth-card').hidden, true, 'La cuenta debería ocultarse en ' + state);
+        assert.equal(p.element('report-section').hidden, true, 'El reporte debería ocultarse en ' + state);
+    }
+    for (const state of ['success', 'error', 'initial']) {
+        p.run("setPanelState('" + state + "')");
+        assert.equal(p.element('auth-card').hidden, false, 'La cuenta debería volver en ' + state);
+        assert.equal(p.element('report-section').hidden, false, 'El reporte debería volver en ' + state);
+    }
+});
+
+test('si la sesión se cierra, la cuenta y el formulario de acceso permanecen visibles', () => {
+    const p = popup();
+    p.run("authenticated = true; setPanelState('loading')");
+    assert.equal(p.element('auth-card').hidden, true);
+    p.run("showLoggedOut('Sesión expirada')");
+    assert.equal(p.element('auth-card').hidden, false);
+    assert.equal(p.element('login-form').hidden, false);
+    assert.equal(p.element('authenticated-content').hidden, true);
+    // Incluso si hay un estado de análisis pendiente, no debe esconder el login.
+    p.run("setPanelState('loading')");
+    assert.equal(p.element('auth-card').hidden, false);
+});
