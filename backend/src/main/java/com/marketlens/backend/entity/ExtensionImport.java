@@ -34,6 +34,11 @@ public class ExtensionImport {
     @Column(name = "external_id", length = 120)
     private String externalId;
 
+    // ID de la OFERTA seleccionada dentro de una ficha de catálogo;
+    // distinto del MLA de producto presente en la URL original.
+    @Column(name = "selected_offer_id", length = 120)
+    private String selectedOfferId;
+
     @Column(columnDefinition = "text")
     private String description;
 
@@ -178,6 +183,14 @@ public class ExtensionImport {
 
     public String getExternalId() {
         return externalId;
+    }
+
+    public String getSelectedOfferId() {
+        return selectedOfferId;
+    }
+
+    public void setSelectedOfferId(String selectedOfferId) {
+        this.selectedOfferId = selectedOfferId;
     }
 
     public String getDescription() {
