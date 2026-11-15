@@ -628,6 +628,7 @@ test('Temu: captura ventas del PRODUCTO 15K+ y antigüedad de tienda 1 year', ()
   const data=JSON.parse(JSON.stringify(context.result));
   assert.equal(data.seller,'Tokki Shop');
   assert.equal(data.temuStoreTenureText,'1 year on Temu');
+  assert.equal(data.temuStoreSoldText,'300K+ Sold');
   assert.equal(data.temuProductSoldText,'15K+ sold');
 });
 
@@ -655,6 +656,7 @@ test('Temu: no toma 300K+ Sold de tienda como ventas de producto', () => {
   vm.runInNewContext(source+'\nthis.result = extractTemu();',context);
   const data=JSON.parse(JSON.stringify(context.result));
   assert.equal(data.temuProductSoldText,null);
+  assert.equal(data.temuStoreSoldText,'300K+ Sold');
   assert.equal(data.temuStoreTenureText,'1 week on Temu');
 });
 
@@ -681,4 +683,5 @@ test('Temu: no atribuye edad de una tienda diferente al vendedor actual', () => 
   const data=JSON.parse(JSON.stringify(context.result));
   assert.equal(data.temuStoreTenureText,null);
   assert.equal(data.temuProductSoldText,null);
+  assert.equal(data.temuStoreSoldText,null);
 });
