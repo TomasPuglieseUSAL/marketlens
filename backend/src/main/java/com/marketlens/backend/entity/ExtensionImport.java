@@ -76,6 +76,14 @@ public class ExtensionImport {
     @Column(name = "temu_product_review_count")
     private Integer temuProductReviewCount;
 
+    // Texto de la tienda ("1 year on Temu") y del PRODUCTO ("15K+ sold").
+    // No son edades ni ventas exactas.
+    @Column(name = "temu_store_tenure_text", length = 60)
+    private String temuStoreTenureText;
+
+    @Column(name = "temu_product_sold_text", length = 60)
+    private String temuProductSoldText;
+
     @Column(name = "temu_store_id", length = 30)
     private String temuStoreId;
 
@@ -216,6 +224,12 @@ public class ExtensionImport {
     public void setTemuProductReviews(BigDecimal rating, Integer count) {
         this.temuProductRating = rating;
         this.temuProductReviewCount = count;
+    }
+    public String getTemuStoreTenureText() { return temuStoreTenureText; }
+    public String getTemuProductSoldText() { return temuProductSoldText; }
+    public void setTemuCommercialObservation(String tenure, String sold) {
+        this.temuStoreTenureText = tenure;
+        this.temuProductSoldText = sold;
     }
     public String getTemuStoreId() { return temuStoreId; }
     public Boolean getTemuSellerSectionObserved() { return temuSellerSectionObserved; }
