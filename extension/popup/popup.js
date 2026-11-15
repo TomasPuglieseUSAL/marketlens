@@ -49,6 +49,7 @@ let extractedData = null;
 let lastPublicationId = null;
 let submittingReport = false;
 let preparing = false;
+let lastRenderedPanelStatus = null;
 
 const marketplaceLabels = {
     MERCADO_LIBRE: 'Mercado Libre',
@@ -211,12 +212,26 @@ function setPanelState(state) {
     $('error-section').hidden = state !== 'error';
     $('report-section').hidden = busy;
 }
+function scrollToAnalysisResult() {
+    // Ejecutar después de renderizar y actualizar el layout: el header sticky
+    // permanece visible y CSS scroll-margin-top deja espacio para el resultado.
+    if (typeof requestAnimationFrame !== 'function') return;
+    requestAnimationFrame(() => {
+        const result = $('result-section');
+        if (result.hidden) return; // El usuario pudo cambiar de pantalla.
+        const reducedMotion = typeof matchMedia === 'function'
+            && matchMedia('(prefers-reduced-motion: reduce)').matches;
+        result.scrollIntoView?.({behavior: reducedMotion ? 'auto' : 'smooth', block: 'start'});
+    });
+}
 function renderAnalysis(value) {
     if (!authenticated) return;
     // Evitar que un cambio de almacenamiento en segundo plano interrumpa
     // la edición del formulario antes de pulsar Continuar o Cancelar.
     if (pendingAction && (!$('facebook-correction').hidden || !$('temu-price-panel').hidden)) return;
     const status = value?.status || 'initial';
+    const previousStatus = lastRenderedPanelStatus;
+    lastRenderedPanelStatus = status;
     setPanelState(status);
     if (status === 'loading') {
         $('loading-message').textContent = value.message || 'Procesando…';
@@ -230,6 +245,9 @@ function renderAnalysis(value) {
             ? 'Publicación existente evaluada nuevamente.'
             : 'Análisis completado.') +
             (value.sellerRefreshWarning ? ` ${value.sellerRefreshWarning}` : '');
+        // Desplazar una sola vez al entrar en éxito; las actualizaciones
+        // repetidas de storage no deben robar el scroll manual del usuario.
+        if (previousStatus !== 'success') scrollToAnalysisResult();
     } else if (pageSupported) {
         $('status').textContent = 'Publicación compatible detectada.';
     }
