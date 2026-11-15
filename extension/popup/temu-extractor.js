@@ -177,9 +177,10 @@ function extractTemu() {
       )].map(x => toExactCount(x[1])).filter(x => x != null);
       const ratings = [...new Set(ratingMatches)];
       const counts = [...new Set(reviewMatches)];
-      if (ratings.length === 1 && counts.length === 1) {
-        return {rating:ratings[0], count:counts[0]};
-      }
+      // No relacionar ciegamente una calificación etiquetada de tienda
+      // con un contador de opiniones del producto del mismo contenedor.
+      const explicitProductPair = ratings.length === 1 && counts.length === 1
+        && !/\\b(?:seller|store|shop|tienda|vendedor)\\b/i.test(combined);
 
       // En algunos diseños Temu muestra "4.7" junto a "286 reviews"
       // sin las palabras "out of five stars". Sólo aceptar la pareja
@@ -203,6 +204,7 @@ function extractTemu() {
       }
       const uniquePairs = [...new Map(pairs.map(p => [p.rating + ':' + p.count, p])).values()];
       if (uniquePairs.length === 1) return uniquePairs[0];
+      if (explicitProductPair) return {rating:ratings[0],count:counts[0]};
     }
     // No combinar un rating del JSON-LD con una cantidad vista en otro panel.
     return {rating:null,count:null};
