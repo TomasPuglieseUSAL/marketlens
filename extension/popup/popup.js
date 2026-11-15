@@ -116,8 +116,11 @@ function isMercadoLibreCatalogUrl(url) {
 function isSupportedPage(url, marketplace) {
     try {
         const path = new URL(url).pathname;
+        // Una ficha de catálogo puede tener una oferta elegida y mostrada.
+        // La identidad MLA/MLAU se resuelve dentro del extractor; la ficha
+        // genérica por sí sola nunca es una referencia importable.
         if (marketplace === 'MERCADO_LIBRE' && isMercadoLibreCatalogUrl(url))
-            return false;
+            return true;
         if (marketplace === 'FACEBOOK_MARKETPLACE')
             return /^\/marketplace\/item\/\d{6,30}\/?$/.test(path);
         if (marketplace === 'TEMU') {
@@ -128,7 +131,8 @@ function isSupportedPage(url, marketplace) {
         }
         if (marketplace === 'MERCADO_LIBRE')
             return /\/up\/MLAU\d{6,}/i.test(path) ||
-                /(?:^|\/)MLA-?\d{6,}/i.test(path);
+                /(?:^|\/)MLA-?\d{6,}/i.test(path) ||
+                isMercadoLibreCatalogUrl(url);
         return false;
     } catch {return false;}
 }
@@ -589,7 +593,13 @@ async function loadCurrentPage() {
                 : currentMarketplace === 'OTHER'
                     ? 'Abrí una publicación de Mercado Libre, Facebook Marketplace o Temu.'
                     : 'Abrí una publicación individual antes de analizar.';
-        } else await restoreAnalysis(nextKey);
+        } else {
+            await restoreAnalysis(nextKey);
+            if (isMercadoLibreCatalogUrl(tab.url)) {
+                $('status').textContent =
+                    'Ficha de catálogo: elegí una oferta y su vendedor antes de analizar.';
+            }
+        }
         updateActions();
     } catch (error) {
         pageSupported = false;
