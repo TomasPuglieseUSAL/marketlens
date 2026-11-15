@@ -158,6 +158,34 @@ function extractTemu() {
     if (structuredRating != null && structuredCount != null)
       return {rating:structuredRating, count:structuredCount};
 
+    // En Temu el contador real de reseñas se carga en #reviewContent,
+    // lejos del título. Usar únicamente el resumen (padre del enlace
+    // con calificación agregada), no las estrellas de reseñas individuales.
+    const reviewsRoot = document.querySelector('#reviewContent');
+    if (reviewsRoot) {
+      const summaryRatings = Array.from(
+        reviewsRoot.querySelectorAll?.('[role="link"][aria-label]') || []
+      ).filter(node => /^\s*[0-5](?:[.,]\d{1,3})?\s+out of (?:five|5) stars?\s*$/i
+        .test(node.getAttribute?.('aria-label') || ''));
+      if (summaryRatings.length === 1) {
+        const ratingNode = summaryRatings[0];
+        const label = ratingNode.getAttribute('aria-label');
+        const rating = toRating(label.match(
+          /^\s*([0-5](?:[.,]\d{1,3})?)\s+out of (?:five|5) stars?\s*$/i
+        )?.[1]);
+        const summary = ratingNode.parentElement;
+        // El resumen presenta "286 reviews" y "4.7" en elementos hermanos.
+        // El texto del padre se limita al encabezado de reseñas del producto.
+        const summaryText = (summary?.innerText || summary?.textContent || '')
+          .replace(/\u00a0/g, ' ');
+        const counts = [...new Set([...summaryText.matchAll(
+          /\b(\d{1,3}(?:[.,]\d{3})*|\d{1,8})\s+reviews?\b/gi
+        )].map(match => toExactCount(match[1])).filter(count => count != null))];
+        if (rating != null && counts.length === 1)
+          return {rating, count:counts[0]};
+      }
+    }
+
     let parent = document.querySelector('h1')?.parentElement ?? null;
     for (let depth = 0; parent && depth < 8; depth++, parent = parent.parentElement) {
       const text = (parent.innerText || parent.textContent || '').replace(/\u00a0/g, ' ').trim();
