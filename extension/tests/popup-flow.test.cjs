@@ -533,7 +533,7 @@ test('la altura cambia sin animación si el sistema pide reducir movimiento', ()
 
 test('CSS recorta únicamente el contenedor animado, sin perder el scroll del body', () => {
     const css = fs.readFileSync(path.join(__dirname, '../popup/popup.css'), 'utf8');
-    assert.match(css, /\\.popup\\s*\\{[^}]*overflow:\\s*clip;/s);
-    assert.match(css, /body\\s*\\{[^}]*overflow-y:\\s*auto;/s);
-    assert.match(css, /\\.brand\\s*\\{[^}]*position:\\s*sticky;/s);
+    assert.match(css, /\.popup\s*\{[^}]*overflow:\s*clip;/s);
+    assert.match(css, /body\s*\{[^}]*overflow-y:\s*auto;/s);
+    assert.match(css, /\.brand\s*\{[^}]*position:\s*sticky;/s);
 });
