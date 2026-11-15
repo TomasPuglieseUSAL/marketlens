@@ -173,3 +173,15 @@ El requisito antiguo (ID y >=10 reseñas de tienda) se mantiene como ruta altern
 Pruebas:
 - node --test extension/tests/*.test.cjs
 - .\mvnw.cmd test desde backend/, incluyendo TemuLowRiskClassificationTest
+
+
+## Flujo progresivo del popup (ajuste de experiencia de usuario)
+
+- Los paneles de estado (inicio, confirmación de precio, corrección, carga y resultado) aparecen con una transición breve de opacidad y desplazamiento. Se respeta `prefers-reduced-motion`.
+- **Temu:** cuando el extractor no puede definir un precio válido, encuentra varios candidatos o un candidato diferente del valor estructurado, el popup muestra primero una pantalla propia para **seleccionar y confirmar el importe en ARS**. Incluye botones seleccionables, un campo editable, explicación de promociones/precios tachados y validación visible.
+- Después de confirmar, el selector se cierra. Si los demás datos están completos, continúa al análisis o reporte originalmente solicitado; si falta algún campo, aparece recién entonces el formulario de corrección con el precio ya elegido.
+- **Facebook Marketplace:** mantiene la corrección de datos directa cuando hace falta; no se muestra el selector de precios de Temu.
+- El reporte manual queda **plegado inicialmente** detrás de un botón discreto al pie. Se puede abrir/cerrar sin perder el formulario; durante pasos de análisis o de ajuste el panel de reporte no compite con el flujo principal.
+- Cancelar la confirmación de precio o la corrección restaura el resultado previo o el botón inicial sin realizar el análisis.
+
+Prueba recomendada desde la raíz del proyecto: `node --test extension/tests/*.test.cjs` (incluye los casos del nuevo flujo `popup-flow.test.cjs`).
