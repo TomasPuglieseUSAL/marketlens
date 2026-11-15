@@ -53,7 +53,9 @@ class MercadoLibreCatalogOfferImportTest {
         var normalized = new ExtensionNormalizationService(repository).normalize(7L, "demo");
         assertEquals("LISTING", normalized.referenceType());
         assertEquals("MLA3007753206", normalized.referenceId());
-        assertEquals(new BigDecimal("451989"), normalized.price());
+        // BigDecimal.equals compara también la escala (451989 vs 451989.00).
+        // Para importes monetarios, comprobar la igualdad numérica.
+        assertEquals(0, new BigDecimal("451989").compareTo(normalized.price()));
         assertFalse(normalized.warnings().stream().anyMatch(w ->
                 w.contains("no coincide con el de la URL")));
     }
