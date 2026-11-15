@@ -59,6 +59,8 @@ let loadingStartedAt = null;
 let scheduledReveal = null;
 let deferredSuccessfulResult = null;
 let logoutInProgress = false;
+const REPORT_CLOSE_SCROLL_MS = 420;
+let reportCloseTimer = null;
 
 // Los navegadores redimensionan externamente los popups de forma discreta.
 // Mantener una altura de ventana fija con CSS y animar solo el contenido.
@@ -261,7 +263,12 @@ function scrollToManualReport() {
         });
     });
 }
+function cancelReportClose() {
+    if (reportCloseTimer !== null) clearTimeout(reportCloseTimer);
+    reportCloseTimer = null;
+}
 function setReportExpanded(expanded) {
+    cancelReportClose();
     const wasHidden = $('report-details').hidden;
     updatePopupContent(() => {
         $('report-details').hidden = !expanded;
@@ -271,7 +278,31 @@ function setReportExpanded(expanded) {
 }
 function toggleReport() {
     if ($('report-toggle').disabled) return;
-    setReportExpanded($('report-details').hidden);
+    // Segundo clic durante el retorno: conservar el formulario abierto.
+    if (reportCloseTimer !== null) {
+        cancelReportClose();
+        return;
+    }
+    if ($('report-details').hidden) {
+        setReportExpanded(true);
+        return;
+    }
+
+    // Si el usuario está abajo, el colapso inmediato fuerza al navegador
+    // a ajustar scrollTop en un solo salto. Regresar arriba suavemente
+    // MIENTRAS el formulario sigue expandido, y ocultarlo después.
+    const body = document.body;
+    const root = document.scrollingElement || document.documentElement;
+    const scroller = body?.scrollTop > 0 ? body : root;
+    if (prefersReducedMotion() || !scroller?.scrollTo || scroller.scrollTop <= 4) {
+        setReportExpanded(false);
+        return;
+    }
+    scroller.scrollTo({top: 0, behavior: 'smooth'});
+    reportCloseTimer = setTimeout(() => {
+        reportCloseTimer = null;
+        setReportExpanded(false);
+    }, REPORT_CLOSE_SCROLL_MS);
 }
 function setPanelState(state) {
     updatePopupContent(() => applyPanelState(state));
@@ -388,14 +419,17 @@ function conciseFactorLabel(factor) {
     const rating = full.match(/\b([0-5](?:[.,]\d+)?)\s*\/\s*5\b/);
     const reviews = full.match(/\b(\d[\d.,]*)\s+opiniones\b/i);
     const quoted = full.match(/[“"]([^"”]{1,60})[”"]/);
+    // Temu muestra "16K+ sold" o "300K+ Sold"; "sold" es un texto de UI,
+    // no parte del valor que interesa al usuario.
+    const displayedSales = quoted?.[1].replace(/\s+sold\s*$/i, '').trim();
     const ratingLabel = rating ? rating[1].replace('.', ',') + '/5' : '';
 
     if (code === 'TEMU_PRODUCT_REVIEWS_OBSERVED' || code === 'TEMU_LOW_PRODUCT_RATING'
             || code === 'TEMU_MODERATE_PRODUCT_RATING') {
         if (ratingLabel && reviews) {
-            const prefix = code === 'TEMU_LOW_PRODUCT_RATING' ? 'Producto, valoración baja: '
-                : code === 'TEMU_MODERATE_PRODUCT_RATING' ? 'Producto, valoración moderada: '
-                : 'Producto: ';
+            const prefix = code === 'TEMU_LOW_PRODUCT_RATING' ? 'Calificación baja: '
+                : code === 'TEMU_MODERATE_PRODUCT_RATING' ? 'Calificación moderada: '
+                : 'Calificación: ';
             return prefix + ratingLabel + ' (' + reviews[1] + ' opiniones).';
         }
     }
@@ -405,10 +439,10 @@ function conciseFactorLabel(factor) {
         return 'Temu muestra el distintivo Star Seller.';
     if (code === 'TEMU_STORE_TENURE_OBSERVED' && quoted)
         return 'Antigüedad de tienda: ' + quoted[1] + ' (aproximada).';
-    if (code === 'TEMU_STORE_SALES_OBSERVED' && quoted)
-        return 'Ventas de tienda: ' + quoted[1] + ' (estimadas).';
-    if (code === 'TEMU_PRODUCT_SALES_OBSERVED' && quoted)
-        return 'Ventas del producto: ' + quoted[1] + ' (estimadas).';
+    if (code === 'TEMU_STORE_SALES_OBSERVED' && displayedSales)
+        return 'Ventas de tienda: ' + displayedSales + '.';
+    if (code === 'TEMU_PRODUCT_SALES_OBSERVED' && displayedSales)
+        return 'Ventas del producto: ' + displayedSales + '.';
 
     // Para otros factores, usar la primera frase solo cuando existe
     // una explicación secundaria. Nunca cortar números a mitad de texto.
