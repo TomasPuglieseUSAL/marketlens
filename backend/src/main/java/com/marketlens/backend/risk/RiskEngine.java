@@ -10,6 +10,8 @@ import com.marketlens.backend.service.SellerActivityEvidence;
 import com.marketlens.backend.service.PriceRiskScoring;
 import com.marketlens.backend.service.TemuSellerRiskScoring;
 import com.marketlens.backend.service.TemuProductReviewEvidence;
+import com.marketlens.backend.service.MercadoLibreProductReviewEvidence;
+import com.marketlens.backend.service.MercadoLibreSellerEvidence;
 import com.marketlens.backend.service.TemuCommercialEvidence;
 
 import org.springframework.stereotype.Component;
@@ -93,6 +95,21 @@ public class RiskEngine {
             addFactor(evaluation, productSignal.code(),
                     productSignal.description(), productSignal.points());
             score += productSignal.points();
+        }
+
+        // Opiniones del catálogo de Mercado Libre: fuente distinta de la
+        // reputación de cada vendedor. Sólo contexto informativo (0 puntos).
+        MercadoLibreProductReviewEvidence.Signal mlSignal =
+                MercadoLibreProductReviewEvidence.evaluate(publication, LocalDateTime.now());
+        if (mlSignal != null) {
+            addFactor(evaluation, mlSignal.code(), mlSignal.description(), mlSignal.points());
+        }
+        if (MercadoLibreSellerEvidence.hasObservedReputation(publication, LocalDateTime.now())
+                && publication.getSeller().getReputationLevel() == null) {
+            addFactor(evaluation, "ML_SELLER_REPUTATION_OBSERVED",
+                    "El termómetro público del vendedor muestra el nivel "
+                    + publication.getMlSellerReputationObserved()
+                    + "/5. Es una observación de Mercado Libre, no corroborada por OAuth.", 0);
         }
 
         // Antigüedad aproximada y ventas mostradas de la TIENDA,
@@ -526,6 +543,12 @@ public class RiskEngine {
         // como LOW cuando tanto la tienda como el producto tienen señales
         // positivas actuales (el producto requiere >=10 opiniones).
         Publication publication = evaluation.getPublication();
+        // Las opiniones compartidas del catálogo no permiten calificar LOW
+        // cuando falta por completo evidencia del vendedor en Mercado Libre.
+        if (publication != null && publication.getMarketplace() == Marketplace.MERCADO_LIBRE
+                && !RiskCoverageCalculator.hasSellerEvidence(publication, LocalDateTime.now())) {
+            return RiskLevel.INDETERMINATE;
+        }
         if (publication != null && publication.getMarketplace() == Marketplace.TEMU) {
             LocalDateTime now = LocalDateTime.now();
             if (!TemuSellerRiskScoring.hasSupportedReputation(publication, now)
