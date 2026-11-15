@@ -519,15 +519,42 @@ public class RiskEngine {
             return RiskLevel.INDETERMINATE;
         }
 
-        // Temu: contar 4,8/5 como reputación disponible no equivale a
-        // acreditar una muestra representativa. No declarar LOW solamente
-        // con la descripción y un promedio sin respaldo verificable.
+        // Temu: la cobertura 3/3 es disponibilidad, no necesariamente calidad.
+        // Una reputación de tienda respaldada por ID y >=10 reseñas sigue
+        // permitiendo LOW con cobertura suficiente, como anteriormente.
+        // En cobertura COMPLETA, un puntaje 0 también puede clasificarse
+        // como LOW cuando tanto la tienda como el producto tienen señales
+        // positivas actuales (el producto requiere >=10 opiniones).
         Publication publication = evaluation.getPublication();
-        if (publication != null && publication.getMarketplace() == Marketplace.TEMU
-                && !TemuSellerRiskScoring.hasSupportedReputation(publication, LocalDateTime.now())) {
-            return RiskLevel.INDETERMINATE;
+        if (publication != null && publication.getMarketplace() == Marketplace.TEMU) {
+            LocalDateTime now = LocalDateTime.now();
+            if (!TemuSellerRiskScoring.hasSupportedReputation(publication, now)
+                    && !hasCompletePositiveTemuEvidence(publication, evaluation, score, now)) {
+                return RiskLevel.INDETERMINATE;
+            }
         }
 
         return RiskLevel.LOW;
+    }
+
+    private boolean hasCompletePositiveTemuEvidence(
+            Publication publication,
+            RiskEvaluation evaluation,
+            int score,
+            LocalDateTime now) {
+        // Esta ruta NO habilita LOW para calificaciones sin muestra, poco
+        // favorables, observaciones vencidas o cobertura apenas parcial.
+        if (score != 0
+                || evaluation.getAvailableFactors() == null
+                || evaluation.getTotalFactors() == null
+                || !evaluation.getAvailableFactors().equals(evaluation.getTotalFactors())
+                || !TemuSellerRiskScoring.hasObservedReputation(publication, now)
+                || !TemuProductReviewEvidence.hasObservedEvidence(publication, now)) {
+            return false;
+        }
+
+        return publication.getTemuSellerRating().compareTo(new BigDecimal("4.0")) >= 0
+                && publication.getTemuProductRating().compareTo(new BigDecimal("4.0")) >= 0
+                && publication.getTemuProductReviewCount() >= 10;
     }
 }
