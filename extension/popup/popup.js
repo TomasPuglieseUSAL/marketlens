@@ -60,7 +60,9 @@ let scheduledReveal = null;
 let deferredSuccessfulResult = null;
 let logoutInProgress = false;
 const REPORT_CLOSE_SCROLL_MS = 420;
+const REPORT_COLLAPSE_MS = 300;
 let reportCloseTimer = null;
+let reportCollapseTimer = null;
 
 // Los navegadores redimensionan externamente los popups de forma discreta.
 // Mantener una altura de ventana fija con CSS y animar solo el contenido.
@@ -266,9 +268,17 @@ function scrollToManualReport() {
 }
 function cancelReportClose() {
     if (reportCloseTimer !== null) clearTimeout(reportCloseTimer);
+    if (reportCollapseTimer !== null) clearTimeout(reportCollapseTimer);
     reportCloseTimer = null;
+    reportCollapseTimer = null;
+    const details = $('report-details');
+    details.classList?.remove('is-closing');
+    details.style?.removeProperty('--report-open-height');
+    details.inert = false;
 }
 function setReportExpanded(expanded) {
+    // Para cambios de publicación, logout y navegación se aplica el estado
+    // directamente. El cierre animado se reserva al clic del usuario.
     cancelReportClose();
     const wasHidden = $('report-details').hidden;
     updatePopupContent(() => {
@@ -277,11 +287,34 @@ function setReportExpanded(expanded) {
     });
     if (expanded && wasHidden) scrollToManualReport();
 }
+function animateReportCollapse() {
+    const details = $('report-details');
+    if (details.hidden) return;
+    if (prefersReducedMotion()) {
+        setReportExpanded(false);
+        return;
+    }
+
+    // Mantener el formulario en el DOM mientras disminuyen su altura y
+    // opacidad; ocultarlo solamente al terminar la animación.
+    const openHeight = details.getBoundingClientRect?.().height;
+    if (Number.isFinite(openHeight) && openHeight > 0) {
+        details.style?.setProperty('--report-open-height', openHeight + 'px');
+    }
+    details.inert = true;
+    details.classList?.add('is-closing');
+    $('report-toggle').setAttribute('aria-expanded', 'false');
+    reportCollapseTimer = setTimeout(() => {
+        reportCollapseTimer = null;
+        setReportExpanded(false);
+    }, REPORT_COLLAPSE_MS);
+}
 function toggleReport() {
     if ($('report-toggle').disabled) return;
-    // Segundo clic durante el retorno: conservar el formulario abierto.
-    if (reportCloseTimer !== null) {
+    // Otro clic durante el retorno o la desaparición cancela el cierre.
+    if (reportCloseTimer !== null || reportCollapseTimer !== null) {
         cancelReportClose();
+        $('report-toggle').setAttribute('aria-expanded', 'true');
         return;
     }
     if ($('report-details').hidden) {
@@ -289,21 +322,25 @@ function toggleReport() {
         return;
     }
 
-    // Si el usuario está abajo, el colapso inmediato fuerza al navegador
-    // a ajustar scrollTop en un solo salto. Regresar arriba suavemente
-    // MIENTRAS el formulario sigue expandido, y ocultarlo después.
+    // Regresar arriba antes de contraer un formulario largo. Mientras tanto
+    // sigue visible; a continuación una segunda animación lo desvanece y
+    // reduce su altura para evitar que desaparezca bruscamente.
     const body = document.body;
     const root = document.scrollingElement || document.documentElement;
     const scroller = body?.scrollTop > 0 ? body : root;
-    if (prefersReducedMotion() || !scroller?.scrollTo || scroller.scrollTop <= 4) {
+    if (prefersReducedMotion()) {
         setReportExpanded(false);
         return;
     }
-    scroller.scrollTo({top: 0, behavior: 'smooth'});
-    reportCloseTimer = setTimeout(() => {
-        reportCloseTimer = null;
-        setReportExpanded(false);
-    }, REPORT_CLOSE_SCROLL_MS);
+    if (scroller?.scrollTo && scroller.scrollTop > 4) {
+        scroller.scrollTo({top: 0, behavior: 'smooth'});
+        reportCloseTimer = setTimeout(() => {
+            reportCloseTimer = null;
+            animateReportCollapse();
+        }, REPORT_CLOSE_SCROLL_MS);
+    } else {
+        animateReportCollapse();
+    }
 }
 function setPanelState(state) {
     updatePopupContent(() => applyPanelState(state));
