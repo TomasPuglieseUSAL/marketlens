@@ -694,7 +694,8 @@ function extractMercadoLibre() {
                     seller: sellerName,
                     price: cents ? fraction + ',' + cents : fraction,
                     currency: /\bpesos\b/i.test(
-                        amount?.getAttribute('aria-label') || '') ? 'ARS' : null
+                        amount?.getAttribute('aria-label') || '') ? 'ARS' : null,
+                    source: selected
                 };
             }
         }
@@ -1061,14 +1062,19 @@ function extractMercadoLibre() {
     // Información pública del vendedor
     // -------------------------------------
 
-    const sellerPanel = document.querySelector(
-        '.ui-pdp-seller-summary'
-    );
+    // En catálogos, leer el resumen comercial únicamente dentro de la
+    // fila de la oferta elegida, nunca desde otra tarjeta de vendedor.
+    const sellerPanel = catalogOffer
+        ? catalogOffer.source?.querySelector?.('.ui-pdp-seller-summary') ?? null
+        : document.querySelector('.ui-pdp-seller-summary');
 
-    const sellerLink = document.querySelector(
-        '.ui-pdp-seller-summary__header__title ' +
-        '.ui-pdp-seller-summary__link'
-    );
+    const sellerLink = catalogOffer
+        ? sellerPanel?.querySelector(
+            '.ui-pdp-seller-summary__header__title .ui-pdp-seller-summary__link'
+          ) ?? null
+        : document.querySelector(
+            '.ui-pdp-seller-summary__header__title .ui-pdp-seller-summary__link'
+          );
 
     // Enlace al perfil comercial del vendedor.
     let sellerProfileUrl = null;
@@ -1160,17 +1166,40 @@ function extractMercadoLibre() {
     // Mercado Libre también usa un panel de vendedor independiente
     // de .ui-pdp-seller-summary. Asociarlo al MISMO vendedor antes
     // de tomar indicadores comerciales (evita leer otro vendedor).
-    const sellerDetailsPanel = Array.from(
-        document.querySelectorAll('.ui-seller-data')
-    ).find(panel => {
+    // La reputación está debajo del formulario, como bloque hermano
+    // .ui-seller-data dentro del sidebar. En catálogos exigir además un
+    // enlace del propio panel con item_id de la oferta elegida: el nombre
+    // del vendedor por sí solo no basta para vincular una reputación.
+    const sellerScope = catalogOffer?.source?.closest?.(
+        '.ui-pdp--sticky-wrapper-right'
+    );
+    const sellerDetailsCandidates = Array.from(
+        sellerScope?.querySelectorAll?.('.ui-seller-data')
+        ?? document.querySelectorAll('.ui-seller-data')
+    );
+    const sellerDetailsPanel = sellerDetailsCandidates.find(panel => {
         const heading = panel.querySelector(
             '.ui-seller-data-header__title'
         )?.textContent?.trim();
-        return Boolean(
+        const sameSeller = Boolean(
             sellerName && heading &&
             normalizeMercadoLibreSellerName(heading)?.toLowerCase() ===
                 sellerName.toLowerCase()
         );
+        if (!sameSeller) return false;
+        if (!catalogOffer) return true;
+
+        const references = panel.querySelectorAll('a[href*="item_id="]');
+        return Array.from(references).some(link => {
+            try {
+                const href = link.getAttribute('href');
+                const address = new URL(href, window.location.href);
+                return address.searchParams.get('item_id')?.toUpperCase()
+                    === catalogOffer.externalId;
+            } catch {
+                return false;
+            }
+        });
     }) ?? null;
 
     // Solo se usan los paneles atribuidos a este vendedor;
@@ -1260,11 +1289,20 @@ function extractMercadoLibre() {
     // Reputación pública del vendedor
     // -------------------------------------
 
-    const reputationThermometers = [
-        ...document.querySelectorAll(
-            'ul.ui-seller-data-status__thermometer[value]'
-        )
-    ];
+    // Nunca combinar termómetros de vendedores diferentes. En una
+    // selección de catálogo solo leer el panel correlacionado por
+    // nombre e item_id. En ofertas normales se conserva el fallback.
+    const reputationThermometers = Array.from(
+        catalogOffer
+            ? sellerDetailsPanel?.querySelectorAll(
+                'ul.ui-seller-data-status__thermometer[value]'
+              ) ?? []
+            : sellerDetailsPanel?.querySelectorAll(
+                'ul.ui-seller-data-status__thermometer[value]'
+              ) ?? document.querySelectorAll(
+                'ul.ui-seller-data-status__thermometer[value]'
+              )
+    );
 
     let sellerReputationLevel = null;
 
@@ -1288,14 +1326,17 @@ function extractMercadoLibre() {
         externalId,
         description,
         url: pageUrl,
-        // No atribuir al vendedor seleccionado la reputación, insignia
-        // o ventas del vendedor destacado del catálogo.
-        sellerProfileUrl: catalogOffer ? null : sellerProfileUrl,
-        sellerBadge: catalogOffer ? null : sellerBadge,
-        sellerSalesText: catalogOffer ? null : sellerSalesText,
-        sellerListedProductsText: catalogOffer ? null : sellerListedProductsText,
-        sellerInsufficientSalesText: catalogOffer ? null : sellerInsufficientSalesText,
-        sellerReputationLevel: catalogOffer ? null : sellerReputationLevel,
+        // Usar señales comerciales en el catálogo únicamente si el panel
+        // del vendedor está corroborado para la oferta seleccionada.
+        sellerProfileUrl: catalogOffer && !sellerDetailsPanel ? null : sellerProfileUrl,
+        sellerBadge: catalogOffer && !sellerDetailsPanel ? null : sellerBadge,
+        sellerSalesText: catalogOffer && !sellerDetailsPanel ? null : sellerSalesText,
+        sellerListedProductsText: catalogOffer && !sellerDetailsPanel
+            ? null : sellerListedProductsText,
+        sellerInsufficientSalesText: catalogOffer && !sellerDetailsPanel
+            ? null : sellerInsufficientSalesText,
+        sellerReputationLevel: catalogOffer && !sellerDetailsPanel
+            ? null : sellerReputationLevel,
         sellerId: catalogOffer ? null : sellerId,
         selectedOfferId: catalogOffer?.selectedOfferId ?? null,
         mlProductRating,
