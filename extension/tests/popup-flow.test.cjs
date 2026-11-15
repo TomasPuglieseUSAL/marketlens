@@ -92,3 +92,18 @@ test('cancelar descarta la edición y recupera el botón de analizar', async () 
     assert.equal(p.element('analyze-button').hidden, false);
     assert.equal(p.run("pendingAction"), null);
 });
+
+
+test('Temu también sustituye el área de análisis cuando falta confirmar el precio', async () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; pageKey='tab:temu'; currentMarketplace='TEMU'");
+    p.run("extractedData={marketplace:'TEMU',externalId:'606892013277333',title:'Funda',price:null,currency:'ARS',seller:'Tokki Shop',priceCandidates:[]}");
+    p.run("extractCurrentListing = async () => extractedData");
+    const data = await p.run("prepareData('analyze')");
+    assert.equal(data, null);
+    assert.equal(p.element('analysis-overview').hidden, true);
+    assert.equal(p.element('facebook-correction').hidden, false);
+    assert.equal(p.element('temu-seller-hint').hidden, false);
+    assert.equal(p.element('temu-price-panel').hidden, false);
+    assert.equal(p.element('fb-join-row').hidden, true);
+});
