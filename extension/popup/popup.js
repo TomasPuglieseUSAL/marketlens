@@ -62,7 +62,7 @@ let logoutInProgress = false;
 
 // Los navegadores redimensionan externamente los popups de forma discreta.
 // Mantener una altura de ventana fija con CSS y animar solo el contenido.
-function withPopupHeightTransition(update) {
+function updatePopupContent(update) {
     return update();
 }
 
@@ -133,7 +133,7 @@ async function getSession() {
     return validSession(stored[AUTH_KEY]) ? stored[AUTH_KEY] : null;
 }
 function showLoggedOut(message = 'Iniciá sesión para usar MarketLens.') {
-    withPopupHeightTransition(() => {
+    updatePopupContent(() => {
         authenticated = false;
         resetLoadingTransition();
         // Nunca ocultar el formulario de acceso por el estado del análisis.
@@ -145,7 +145,7 @@ function showLoggedOut(message = 'Iniciá sesión para usar MarketLens.') {
     });
 }
 function showLoggedIn(username) {
-    withPopupHeightTransition(() => {
+    updatePopupContent(() => {
         authenticated = true;
         $('auth-status').textContent = username;
         $('login-form').hidden = true;
@@ -251,7 +251,7 @@ function updateActions() {
         || pendingAction !== null;
 }
 function setReportExpanded(expanded) {
-    withPopupHeightTransition(() => {
+    updatePopupContent(() => {
         $('report-details').hidden = !expanded;
         $('report-toggle').setAttribute('aria-expanded', String(expanded));
     });
@@ -261,7 +261,7 @@ function toggleReport() {
     setReportExpanded($('report-details').hidden);
 }
 function setPanelState(state) {
-    withPopupHeightTransition(() => applyPanelState(state));
+    updatePopupContent(() => applyPanelState(state));
 }
 function applyPanelState(state) {
     // Los pasos son excluyentes: elección de precio -> corrección -> resultado.
@@ -334,7 +334,7 @@ function renderAnalysis(value) {
     }
 
     const previousStatus = lastRenderedPanelStatus;
-    withPopupHeightTransition(() => applyRenderedAnalysis(value, status));
+    updatePopupContent(() => applyRenderedAnalysis(value, status));
     if (status === 'success' && previousStatus !== 'success') scrollToAnalysisResult();
 }
 function applyRenderedAnalysis(value, status) {
