@@ -200,7 +200,7 @@ export function getPublication(
   )
 }
 
-export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH'
+export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'INDETERMINATE'
 
 export interface RiskFactor {
   id: number
@@ -215,6 +215,10 @@ export interface RiskEvaluation {
   level: RiskLevel
   evaluatedAt: string
   factors: RiskFactor[]
+  coverageStatus?: 'COMPLETE' | 'PARTIAL' | 'INSUFFICIENT' | null
+  availableFactors?: number | null
+  totalFactors?: number | null
+  coverageFactors?: Array<{ code: string; name: string; available: boolean }> | null
 }
 
 export function evaluatePublication(
