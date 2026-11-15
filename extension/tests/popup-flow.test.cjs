@@ -15,9 +15,15 @@ function popup() {
     function makeElement(id = null, tagName = 'div') {
         const attributes = {};
         const listeners = {};
+        const classes = new Set();
         return {
             id, tagName, hidden: false, disabled: false, value: '',
             textContent: '', dataset: {}, children: [], scrollCalls: [],
+            classList: {
+                add(...names) { for (const name of names) classes.add(name); },
+                remove(...names) { for (const name of names) classes.delete(name); },
+                contains(name) { return classes.has(name); }
+            },
             scrollIntoView(options) { this.scrollCalls.push(options); },
             setAttribute(name, value) { attributes[name] = String(value); },
             getAttribute(name) { return attributes[name] ?? null; },
@@ -41,19 +47,51 @@ function popup() {
     };
     const browser = {
         storage: {
-            local: {get: async () => ({}), set: async () => undefined}
+            local: {
+                get: async () => ({}), set: async () => undefined,
+                remove: async () => undefined
+            },
+            session: {remove: async () => undefined}
         },
         runtime: {sendMessage: async () => ({ok: true})}
     };
     let reducedMotion = false;
+    let clock = 1000;
+    let nextTimerId = 0;
+    const timers = new Map();
+    class MockDate extends Date {
+        static now() { return clock; }
+    }
+    function setFakeTimeout(callback, delay) {
+        const id = ++nextTimerId;
+        timers.set(id, {callback, at: clock + delay});
+        return id;
+    }
+    function advance(ms) {
+        clock += ms;
+        // Ejecutar en orden temporal los timers vencidos sin dormir realmente.
+        for (;;) {
+            const due = [...timers].filter(([, timer]) => timer.at <= clock)
+                .sort((a, b) => a[1].at - b[1].at)[0];
+            if (!due) break;
+            timers.delete(due[0]);
+            due[1].callback();
+        }
+    }
     const context = vm.createContext({
-        document, browser, URL, console, Date,
+        document, browser, URL, console, Date: MockDate,
         requestAnimationFrame: callback => callback(),
-        matchMedia: () => ({matches: reducedMotion})
+        matchMedia: () => ({matches: reducedMotion}),
+        setTimeout: setFakeTimeout,
+        clearTimeout: id => timers.delete(id)
     });
     vm.runInContext(source, context, {filename: 'popup.js'});
     function run(js) { return vm.runInContext(js, context); }
-    return {element, run, setReducedMotion: value => { reducedMotion = value; }};
+    return {
+        element, run, advance,
+        pendingTimers: () => timers.size,
+        setReducedMotion: value => { reducedMotion = value; }
+    };
 }
 
 function enterFacebookForm(p) {
@@ -91,6 +129,7 @@ test('continuar pasa a procesamiento y después recupera el panel de resultado',
     p.element('fb-seller').value = 'Tienda de prueba';
     p.run("startAnalysis = async () => { if (!$('analysis-overview').hidden || $('loading-section').hidden) throw new Error('No se mostró el procesamiento'); renderAnalysis({status:'success',publicationId:13,evaluation:{level:'LOW',score:0,availableFactors:3,totalFactors:3,coverageStatus:'COMPLETE',factors:[]}}); }");
     await p.run("continueFacebook()");
+    p.advance(600);
     assert.equal(p.element('facebook-correction').hidden, true);
     assert.equal(p.element('analysis-overview').hidden, false);
     assert.equal(p.element('analyze-button').hidden, true);
@@ -136,6 +175,7 @@ test('precio confirmado pasa directamente al análisis si no faltan datos', asyn
     assert.equal(p.element('temu-price-options').children[0].getAttribute('aria-pressed'), 'true');
     p.run("startAnalysis = async d => { globalThis.finalChosenPrice = d.price; renderAnalysis({status:'success',publicationId:13,evaluation:{level:'LOW',score:0,availableFactors:3,totalFactors:3,coverageStatus:'COMPLETE',factors:[]}}); }");
     await p.run("confirmTemuPrice()");
+    p.advance(600);
     assert.equal(p.run("globalThis.finalChosenPrice"), '9059');
     assert.equal(p.element('temu-price-panel').hidden, true);
     assert.equal(p.element('facebook-correction').hidden, true);
@@ -247,6 +287,8 @@ test('al finalizar el análisis desplaza al resultado una sola vez', () => {
     p.run("renderAnalysis({status:'loading',message:'Analizando'})");
     assert.equal(result.scrollCalls.length, 0);
     p.run(success);
+    assert.equal(result.scrollCalls.length, 0, 'El spinner debe permanecer visible brevemente');
+    p.advance(600);
     assert.equal(result.scrollCalls.length, 1);
     assert.equal(result.scrollCalls[0].behavior, 'smooth');
     assert.equal(result.scrollCalls[0].block, 'start');
@@ -254,6 +296,7 @@ test('al finalizar el análisis desplaza al resultado una sola vez', () => {
     assert.equal(result.scrollCalls.length, 1, 'No repetir scroll por eventos de almacenamiento');
     p.run("renderAnalysis({status:'loading',message:'Nuevo análisis'})");
     p.run(success);
+    p.advance(600);
     assert.equal(result.scrollCalls.length, 2, 'El segundo análisis debe enfocar su resultado');
 });
 
@@ -303,4 +346,79 @@ test('si la sesión se cierra, la cuenta y el formulario de acceso permanecen vi
     // Incluso si hay un estado de análisis pendiente, no debe esconder el login.
     p.run("setPanelState('loading')");
     assert.equal(p.element('auth-card').hidden, false);
+});
+
+
+test('una respuesta inmediata mantiene la carga al menos medio segundo', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; pageKey='tab:fb'; setPanelState('initial')");
+    const success = "renderAnalysis({status:'success',publicationId:12,evaluation:{level:'LOW',score:0,availableFactors:2,totalFactors:2,coverageStatus:'COMPLETE',factors:[]}})";
+    p.run("renderAnalysis({status:'loading',message:'Procesando'})");
+    p.run(success);
+    assert.equal(p.element('loading-section').hidden, false);
+    assert.equal(p.element('result-section').hidden, true);
+    p.advance(549);
+    assert.equal(p.element('result-section').hidden, true);
+    p.advance(1);
+    assert.equal(p.element('result-section').hidden, false);
+    assert.equal(p.pendingTimers(), 0);
+});
+
+test('los errores no sufren demora artificial y anulan resultados diferidos', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; pageKey='tab:fb'");
+    p.run("renderAnalysis({status:'loading',message:'Procesando'})");
+    p.run("renderAnalysis({status:'success',publicationId:1,evaluation:{level:'LOW',score:0,availableFactors:2,totalFactors:2,factors:[]}})");
+    assert.equal(p.pendingTimers(), 1);
+    p.run("renderAnalysis({status:'error',message:'Error al consultar la publicación'})");
+    assert.equal(p.element('error-section').hidden, false);
+    assert.equal(p.pendingTimers(), 0);
+    p.advance(1000);
+    assert.equal(p.element('result-section').hidden, true);
+});
+
+test('una respuesta de otra publicación no revela el resultado de la pestaña anterior', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; pageKey='tab:a'");
+    p.run("renderAnalysis({status:'loading',message:'Procesando'})");
+    p.run("renderAnalysis({status:'success',publicationId:1,evaluation:{level:'LOW',score:0,availableFactors:2,totalFactors:2,factors:[]}})");
+    p.run("pageKey='tab:b'; resetLoadingTransition(); renderAnalysis({status:'initial'})");
+    p.advance(600);
+    assert.equal(p.element('result-section').hidden, true);
+});
+
+test('reducir movimiento elimina la espera y las animaciones opcionales', () => {
+    const p = popup();
+    p.setReducedMotion(true);
+    p.run("authenticated=true; pageSupported=true");
+    p.run("renderAnalysis({status:'loading',message:'Procesando'})");
+    p.run("renderAnalysis({status:'success',publicationId:1,evaluation:{level:'LOW',score:0,availableFactors:2,totalFactors:2,factors:[]}})");
+    assert.equal(p.element('result-section').hidden, false);
+    assert.equal(p.pendingTimers(), 0);
+});
+
+test('cerrar sesión elimina credenciales sin esperar la animación y luego muestra login', async () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; showLoggedIn('Usuario de prueba'); setPanelState('initial')");
+    const logoutPromise = p.run("handleLogout()");
+    assert.equal(p.run("authenticated"), false);
+    assert.equal(p.element('authenticated-content').classList.contains('auth-exiting'), true);
+    assert.equal(p.element('authenticated-content').hidden, false);
+    p.advance(180);
+    await logoutPromise;
+    assert.equal(p.element('authenticated-content').hidden, true);
+    assert.equal(p.element('auth-card').hidden, false);
+    assert.equal(p.element('login-form').hidden, false);
+    assert.equal(p.element('auth-status').textContent, 'Sesión cerrada.');
+    assert.equal(p.element('authenticated-content').classList.contains('auth-exiting'), false);
+});
+
+test('cerrar sesión con movimiento reducido es inmediato', async () => {
+    const p = popup();
+    p.setReducedMotion(true);
+    p.run("authenticated=true; pageSupported=true; showLoggedIn('Usuario de prueba'); setPanelState('initial')");
+    await p.run("handleLogout()");
+    assert.equal(p.pendingTimers(), 0);
+    assert.equal(p.element('login-form').hidden, false);
+    assert.equal(p.element('authenticated-content').hidden, true);
 });
