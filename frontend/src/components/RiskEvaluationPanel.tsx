@@ -16,6 +16,7 @@ const riskLabels: Record<RiskLevel, string> = {
   LOW: 'Bajo',
   MEDIUM: 'Medio',
   HIGH: 'Alto',
+  INDETERMINATE: 'Indeterminado',
 }
 
 export default function RiskEvaluationPanel({
@@ -33,14 +34,17 @@ export default function RiskEvaluationPanel({
     setMessage('')
 
     try {
-      await evaluatePublication(token, publicationId)
+      const created = await evaluatePublication(token, publicationId)
 
       const history = await getPublicationEvaluations(
         token,
         publicationId
       )
 
-      setEvaluations(history)
+      // El detalle de cobertura corresponde a la evaluación recién creada;
+      // el historial anterior no guarda snapshots de cada dimensión.
+      setEvaluations(history.map((item) => item.id === created.id
+        ? {...item, coverageFactors: created.coverageFactors} : item))
       setMessage('Evaluación realizada correctamente.')
     } catch (err) {
       setError(
@@ -128,6 +132,23 @@ export default function RiskEvaluationPanel({
                 <strong>{evaluation.score}</strong>
                 <span>/ 100</span>
               </div>
+
+              {evaluation.totalFactors != null && evaluation.availableFactors != null && (
+                <p>
+                  <strong>Cobertura: {evaluation.availableFactors}/{evaluation.totalFactors}</strong>
+                  {' '}— Datos disponibles, no garantía de seguridad.
+                </p>
+              )}
+              {evaluation.coverageFactors && (
+                <ul className="risk-factors">
+                  {evaluation.coverageFactors.map((factor) => (
+                    <li key={factor.code}>
+                      <span>{factor.available ? '✓' : '—'} {factor.name}</span>
+                      <small>{factor.available ? 'Disponible' : 'Sin información suficiente'}</small>
+                    </li>
+                  ))}
+                </ul>
+              )}
 
               <h4>Factores detectados</h4>
 
