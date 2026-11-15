@@ -24,6 +24,8 @@ public record PublicationResponse(
     java.time.LocalDateTime temuStoreTenureObservedAt,
     String temuProductSoldText,
     java.time.LocalDateTime temuProductSalesObservedAt,
+    String temuStoreSoldText,
+    java.time.LocalDateTime temuStoreSalesObservedAt,
     Marketplace marketplace,
     String externalId,
     String originalUrl,
