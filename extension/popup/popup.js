@@ -51,9 +51,10 @@ let submittingReport = false;
 let preparing = false;
 let lastRenderedPanelStatus = null;
 
-// El backend puede responder antes de que se perciba el cambio visual.
-// Duración mínima muy breve para un análisis exitoso, nunca para errores.
-const MIN_LOADING_VISIBLE_MS = 550;
+// La carga exitosa permanece perceptible incluso cuando el backend responde rápido.
+// Los errores y la preferencia de movimiento reducido no esperan artificialmente.
+const MIN_LOADING_VISIBLE_MS = 1500;
+const POPUP_HEIGHT_TRANSITION_MS = 580;
 const LOGOUT_FADE_MS = 180;
 let loadingStartedAt = null;
 let scheduledReveal = null;
@@ -62,13 +63,15 @@ let logoutInProgress = false;
 let popupHeightAnimation = null;
 let popupHeightTransitionDepth = 0;
 
-// Transición FLIP de la altura real del popup: se mide antes y después
-// de modificar el DOM para animar también las contracciones (height:auto
-// no interpola con CSS de forma consistente entre navegadores).
+// FLIP de altura: primero fijar el tamaño ACTUAL, cambiar los paneles,
+// medir su altura natural y recién entonces interpolar hasta ella.
+// Sin fijar el valor inicial, la ventana de la extensión puede achicarse
+// antes de que el navegador llegue a pintar el primer cuadro de la animación.
 function withPopupHeightTransition(update) {
     if (popupHeightTransitionDepth > 0) return update();
     const popup = document.querySelector?.('.popup');
-    const canAnimate = popup && typeof popup.getBoundingClientRect === 'function'
+    const canAnimate = popup && popup.style
+        && typeof popup.getBoundingClientRect === 'function'
         && typeof popup.animate === 'function' && !prefersReducedMotion();
     if (!canAnimate) return update();
 
@@ -77,27 +80,51 @@ function withPopupHeightTransition(update) {
         popupHeightAnimation.cancel();
         popupHeightAnimation = null;
     }
+    if (!Number.isFinite(previousHeight) || previousHeight <= 0) return update();
 
+    // Mantener el tamaño anterior durante la mutación de visibilidad.
+    popup.style.height = previousHeight + 'px';
     popupHeightTransitionDepth++;
     try {
         update();
     } finally {
         popupHeightTransitionDepth--;
     }
+
+    // Leer la altura REAL sin el valor fijado; scrollHeight no sirve para
+    // contraer, porque nunca es menor que el alto visible del elemento.
+    popup.style.height = '';
     const nextHeight = popup.getBoundingClientRect().height;
-    if (!Number.isFinite(previousHeight) || !Number.isFinite(nextHeight)
-            || Math.abs(nextHeight - previousHeight) < 2) return;
+    popup.style.height = previousHeight + 'px';
+    if (!Number.isFinite(nextHeight) || Math.abs(nextHeight - previousHeight) < 2) {
+        popup.style.height = '';
+        return;
+    }
 
     const animation = popup.animate(
         [{height: previousHeight + 'px'}, {height: nextHeight + 'px'}],
-        {duration: 260, easing: 'cubic-bezier(.2, .75, .25, 1)'}
+        {
+            duration: POPUP_HEIGHT_TRANSITION_MS,
+            easing: 'cubic-bezier(.45, 0, .55, 1)',
+            fill: 'forwards'
+        }
     );
     popupHeightAnimation = animation;
-    const clearAnimation = () => {
-        if (popupHeightAnimation === animation) popupHeightAnimation = null;
+    const cleanup = () => {
+        if (popupHeightAnimation !== animation) return;
+        popupHeightAnimation = null;
+        // Volver a altura automática para que los textos y el scroll puedan
+        // seguir creciendo normalmente después de la transición.
+        popup.style.height = '';
+        animation.cancel();
     };
-    animation.addEventListener('finish', clearAnimation, {once: true});
-    animation.addEventListener('cancel', clearAnimation, {once: true});
+    animation.addEventListener('finish', cleanup, {once: true});
+    animation.addEventListener('cancel', () => {
+        if (popupHeightAnimation === animation) {
+            popupHeightAnimation = null;
+            popup.style.height = '';
+        }
+    }, {once: true});
 }
 
 function prefersReducedMotion() {
