@@ -87,7 +87,10 @@ function popup() {
         createElement: tagName => makeElement(null, tagName),
         querySelector: selector => simulateLayout && selector === '.popup'
             ? popupSurface : null,
-        documentElement: {dataset: {}}
+        documentElement: {dataset: {}, scrollTop: 0, scrollCalls: [],
+            scrollTo(options) { this.scrollCalls.push(options); this.scrollTop = 0; }},
+        body: {scrollTop: 0, scrollCalls: [],
+            scrollTo(options) { this.scrollCalls.push(options); this.scrollTop = 0; }}
     };
     const browser = {
         storage: {
@@ -136,6 +139,7 @@ function popup() {
         pendingTimers: () => timers.size,
         enableHeightAnimations() { simulateLayout = true; },
         heightAnimations,
+        scrollBody: document.body,
         setReducedMotion: value => { reducedMotion = value; }
     };
 }
@@ -531,10 +535,10 @@ test('las notas de Temu se resumen sin perder calificación y cantidad de opinio
     const p = popup();
     const sourceText = 'El producto muestra 4.7/5 con 286 opiniones en Temu. Son valoraciones observadas, no ventas verificadas ni garantía de autenticidad.';
     const label = p.run("conciseFactorLabel({code:'TEMU_PRODUCT_REVIEWS_OBSERVED',description:" + JSON.stringify(sourceText) + "})");
-    assert.equal(label, 'Producto: 4,7/5 (286 opiniones).');
+    assert.equal(label, 'Calificación: 4,7/5 (286 opiniones).');
     assert.ok(label.length < sourceText.length / 2);
     assert.equal(p.run("conciseFactorLabel({code:'TEMU_LOW_PRODUCT_RATING',description:'El producto muestra 2.5/5 con 33 opiniones en Temu. Son valoraciones observadas.'})"),
-        'Producto, valoración baja: 2,5/5 (33 opiniones).');
+        'Calificación baja: 2,5/5 (33 opiniones).');
     assert.equal(p.run("conciseFactorLabel({code:'TEMU_STAR_SELLER_OBSERVED',description:'La página de Temu mostraba la etiqueta Star Seller para la tienda. MarketLens no ha verificado sus criterios.'})"),
         'Temu muestra el distintivo Star Seller.');
 });
@@ -545,7 +549,7 @@ test('el resumen presenta las notas cortas y conserva el detalle original en too
     p.run("renderRisk({publicationId:13,evaluation:{level:'LOW',score:0,availableFactors:3,totalFactors:3,factors:[{code:'TEMU_PRODUCT_REVIEWS_OBSERVED',description:" + JSON.stringify(description) + "}]}})");
     const list = p.element('result-factors');
     assert.equal(list.children.length, 1);
-    assert.equal(list.children[0].textContent, 'Producto: 4,7/5 (286 opiniones).');
+    assert.equal(list.children[0].textContent, 'Calificación: 4,7/5 (286 opiniones).');
     assert.equal(list.children[0].title, description);
 });
 
@@ -594,4 +598,81 @@ test('la carga centra solo su estado y restaura el diseño de resultados', () =>
     assert.equal(p.run("document.querySelector('.popup').classList.contains('is-analyzing')"), true);
     p.run("setPanelState('success')");
     assert.equal(p.run("document.querySelector('.popup').classList.contains('is-analyzing')"), false);
+});
+
+
+test('las ventas de Temu muestran solo el valor, sin sold ni estimadas', () => {
+    const p = popup();
+    const product = p.run("conciseFactorLabel({code:'TEMU_PRODUCT_SALES_OBSERVED',description:'Temu muestra \"16K+ sold\" para el producto. Es una cifra aproximada.'})");
+    const store = p.run("conciseFactorLabel({code:'TEMU_STORE_SALES_OBSERVED',description:'Temu muestra \"300K+ Sold\" para la tienda. No son ventas verificadas.'})");
+    const exact = p.run("conciseFactorLabel({code:'TEMU_PRODUCT_SALES_OBSERVED',description:'Temu muestra \"3 sold\" para el producto.'})");
+    assert.equal(product, 'Ventas del producto: 16K+.');
+    assert.equal(store, 'Ventas de tienda: 300K+.');
+    assert.equal(exact, 'Ventas del producto: 3.');
+});
+
+test('se conservan los matices de calificaciones bajas y moderadas', () => {
+    const p = popup();
+    const rated = p.run("conciseFactorLabel({code:'TEMU_PRODUCT_REVIEWS_OBSERVED',description:'El producto muestra 4.7/5 con 286 opiniones en Temu.'})");
+    const moderate = p.run("conciseFactorLabel({code:'TEMU_MODERATE_PRODUCT_RATING',description:'El producto muestra 3.6/5 con 45 opiniones en Temu.'})");
+    assert.equal(rated, 'Calificación: 4,7/5 (286 opiniones).');
+    assert.equal(moderate, 'Calificación moderada: 3,6/5 (45 opiniones).');
+});
+
+test('al cerrar el reporte se vuelve arriba suavemente antes de ocultar el formulario', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; setPanelState('initial'); setReportExpanded(false); updateActions()");
+    p.run("setReportExpanded(true)");
+    p.scrollBody.scrollTop = 310;
+    p.run("toggleReport()");
+    assert.equal(p.scrollBody.scrollCalls.length, 1);
+    assert.equal(p.scrollBody.scrollCalls[0].behavior, 'smooth');
+    assert.equal(p.scrollBody.scrollCalls[0].top, 0);
+    assert.equal(p.element('report-details').hidden, false, 'Mantener el reporte abierto durante el regreso');
+    assert.equal(p.pendingTimers(), 1);
+    p.advance(419);
+    assert.equal(p.element('report-details').hidden, false);
+    p.advance(1);
+    assert.equal(p.element('report-details').hidden, true);
+    assert.equal(p.element('report-toggle').getAttribute('aria-expanded'), 'false');
+});
+
+test('un segundo clic interrumpe el cierre diferido del reporte', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; setPanelState('initial'); setReportExpanded(true); updateActions()");
+    p.scrollBody.scrollTop = 230;
+    p.run("toggleReport()");
+    assert.equal(p.pendingTimers(), 1);
+    p.run("toggleReport()");
+    assert.equal(p.pendingTimers(), 0);
+    p.advance(500);
+    assert.equal(p.element('report-details').hidden, false);
+});
+
+test('cierre inmediato cuando no hay scroll o se prefiere movimiento reducido', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; setPanelState('initial'); setReportExpanded(true); updateActions()");
+    p.run("toggleReport()");
+    assert.equal(p.element('report-details').hidden, true);
+    assert.equal(p.pendingTimers(), 0);
+    p.setReducedMotion(true);
+    p.run("setReportExpanded(true)");
+    p.scrollBody.scrollTop = 180;
+    p.run("toggleReport()");
+    assert.equal(p.element('report-details').hidden, true);
+    assert.equal(p.scrollBody.scrollCalls.length, 0);
+    assert.equal(p.pendingTimers(), 0);
+});
+
+test('si cambia la pantalla se cancela el cierre pendiente', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; setPanelState('initial'); setReportExpanded(true); updateActions()");
+    p.scrollBody.scrollTop = 200;
+    p.run("toggleReport()");
+    assert.equal(p.pendingTimers(), 1);
+    p.run("setReportExpanded(false); setPanelState('loading')");
+    assert.equal(p.pendingTimers(), 0);
+    assert.equal(p.element('report-details').hidden, true);
+    p.advance(800);
+    assert.equal(p.element('report-details').hidden, true);
 });
