@@ -14,12 +14,17 @@ class TemuCommercialImportValidationTest {
 
     private ExtensionPreviewRequest request(String marketplace, String seller,
                                             String tenure, String productSold) {
+        return request(marketplace, seller, tenure, productSold, null);
+    }
+
+    private ExtensionPreviewRequest request(String marketplace, String seller,
+                                            String tenure, String productSold, String storeSold) {
         return new ExtensionPreviewRequest(
                 marketplace, "Funda", "9507", "ARS", seller,
                 "606892013277333", "Funda protectora",
                 "https://www.temu.com/goods.html?goods_id=606892013277333",
                 null, null, null, null, null, null, null, null,
-                null, null, null, null, tenure, productSold);
+                null, null, null, null, tenure, productSold, storeSold);
     }
 
     @Test void storesRawApproximateSignalsFromTemuWithoutChangingThem() {
@@ -30,7 +35,16 @@ class TemuCommercialImportValidationTest {
 
         verify(repo).save(argThat(row ->
                 "1 year on Temu".equals(row.getTemuStoreTenureText())
-                && "15K+ sold".equals(row.getTemuProductSoldText())));
+                && "15K+ sold".equals(row.getTemuProductSoldText())
+                && row.getTemuStoreSoldText() == null));
+    }
+
+    @Test void acceptsStoreSalesBoundToIdentifiedSeller() {
+        ExtensionImportRepository repo = mock(ExtensionImportRepository.class);
+        when(repo.save(any(ExtensionImport.class))).thenAnswer(call -> call.getArgument(0));
+        new ExtensionImportService(repo).importPublication(
+                request("TEMU", "Tokki Shop", null, null, "300K+ Sold"), "demo");
+        verify(repo).save(argThat(row -> "300K+ Sold".equals(row.getTemuStoreSoldText())));
     }
 
     @Test void rejectsUnsupportedOrAmbiguousNumbers() {
