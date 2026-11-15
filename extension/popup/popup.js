@@ -51,6 +51,29 @@ let submittingReport = false;
 let preparing = false;
 let lastRenderedPanelStatus = null;
 
+// El backend puede responder antes de que se perciba el cambio visual.
+// Duración mínima muy breve para un análisis exitoso, nunca para errores.
+const MIN_LOADING_VISIBLE_MS = 550;
+const LOGOUT_FADE_MS = 180;
+let loadingStartedAt = null;
+let scheduledReveal = null;
+let deferredSuccessfulResult = null;
+let logoutInProgress = false;
+
+function prefersReducedMotion() {
+    return typeof matchMedia === 'function'
+        && matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+function cancelScheduledReveal() {
+    if (scheduledReveal !== null) clearTimeout(scheduledReveal);
+    scheduledReveal = null;
+    deferredSuccessfulResult = null;
+}
+function resetLoadingTransition() {
+    cancelScheduledReveal();
+    loadingStartedAt = null;
+}
+
 const marketplaceLabels = {
     MERCADO_LIBRE: 'Mercado Libre',
     FACEBOOK_MARKETPLACE: 'Facebook Marketplace',
@@ -105,6 +128,7 @@ async function getSession() {
 }
 function showLoggedOut(message = 'Iniciá sesión para usar MarketLens.') {
     authenticated = false;
+    resetLoadingTransition();
     // Nunca ocultar el formulario de acceso por el estado del análisis.
     $('auth-card').hidden = false;
     $('auth-status').textContent = message;
@@ -174,10 +198,40 @@ async function handleLogin(event) {
     } finally { $('login-button').disabled = false; }
 }
 async function handleLogout() {
-    await ext.storage.local.remove(AUTH_KEY);
-    await ext.storage.session.remove(AUTH_KEY).catch(() => {});
-    $('login-password').value = '';
-    showLoggedOut('Sesión cerrada.');
+    if (logoutInProgress) return;
+    logoutInProgress = true;
+    $('logout-button').disabled = true;
+    // Inhabilitar interacciones del análisis inmediatamente. La credencial
+    // se elimina sin esperar a la transición visual.
+    authenticated = false;
+    updateActions();
+    resetLoadingTransition();
+    const animate = !prefersReducedMotion();
+    if (animate) {
+        $('auth-card').classList.add('auth-exiting');
+        $('authenticated-content').classList.add('auth-exiting');
+    }
+    const visualExit = animate
+        ? new Promise(resolve => setTimeout(resolve, LOGOUT_FADE_MS))
+        : Promise.resolve();
+    try {
+        await ext.storage.local.remove(AUTH_KEY);
+        await ext.storage.session.remove(AUTH_KEY).catch(() => {});
+        await visualExit;
+        $('login-password').value = '';
+        showLoggedOut('Sesión cerrada.');
+    } catch (error) {
+        // No afirmar que se cerró la sesión cuando falló la revocación.
+        await visualExit;
+        authenticated = true;
+        $('auth-status').textContent = 'No se pudo cerrar sesión. Reintentá.';
+        updateActions();
+    } finally {
+        $('auth-card').classList.remove('auth-exiting');
+        $('authenticated-content').classList.remove('auth-exiting');
+        $('logout-button').disabled = false;
+        logoutInProgress = false;
+    }
 }
 function updateActions() {
     $('analyze-button').disabled = !authenticated || !pageSupported || preparing;
@@ -235,6 +289,35 @@ function renderAnalysis(value) {
     // la edición del formulario antes de pulsar Continuar o Cancelar.
     if (pendingAction && (!$('facebook-correction').hidden || !$('temu-price-panel').hidden)) return;
     const status = value?.status || 'initial';
+
+    if (status === 'loading') {
+        if (lastRenderedPanelStatus !== 'loading') {
+            resetLoadingTransition();
+            loadingStartedAt = Date.now();
+        }
+    } else if (status === 'success' && loadingStartedAt !== null
+            && !prefersReducedMotion()) {
+        const remaining = MIN_LOADING_VISIBLE_MS - (Date.now() - loadingStartedAt);
+        if (remaining > 0) {
+            deferredSuccessfulResult = value;
+            if (scheduledReveal === null) {
+                const expectedPageKey = pageKey;
+                scheduledReveal = setTimeout(() => {
+                    scheduledReveal = null;
+                    const result = deferredSuccessfulResult;
+                    deferredSuccessfulResult = null;
+                    if (result && authenticated && pageKey === expectedPageKey) {
+                        renderAnalysis(result);
+                    }
+                }, remaining);
+            }
+            return;
+        }
+        resetLoadingTransition();
+    } else {
+        resetLoadingTransition();
+    }
+
     const previousStatus = lastRenderedPanelStatus;
     lastRenderedPanelStatus = status;
     setPanelState(status);
@@ -323,6 +406,7 @@ async function loadCurrentPage() {
         $('marketplace').textContent = marketplaceLabels[currentMarketplace] ?? 'Otro';
         $('page-title').textContent = tab.title || 'Publicación sin título';
         if (changed) {
+            resetLoadingTransition();
             extractedData = null;
             pendingAction = null;
             lastPublicationId = null;
@@ -1412,7 +1496,8 @@ ext.storage.onChanged.addListener((changes, area) => {
     if (changes[THEME_STORAGE_KEY]) applyTheme(changes[THEME_STORAGE_KEY].newValue);
     const taskKey = pageKey && pageStateKey();
     if (taskKey && changes[taskKey]) renderAnalysis(changes[taskKey].newValue);
-    if (changes[AUTH_KEY] && !changes[AUTH_KEY].newValue) showLoggedOut('La sesión expiró o se cerró.');
+    if (changes[AUTH_KEY] && !changes[AUTH_KEY].newValue && !logoutInProgress)
+        showLoggedOut('La sesión expiró o se cerró.');
 });
 ext.tabs.onActivated.addListener(() => void loadCurrentPage());
 ext.tabs.onUpdated.addListener((_id, changes, tab) => {
