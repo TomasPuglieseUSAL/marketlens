@@ -492,6 +492,10 @@ function conciseFactorLabel(factor) {
             return prefix + ratingLabel + ' (' + reviews[1] + ' opiniones).';
         }
     }
+    if (code === 'ML_SELLER_REPUTATION_OBSERVED' && ratingLabel)
+        return 'Reputación del vendedor: ' + ratingLabel + ' (observada).';
+    if (code === 'MODERATE_SELLER_REPUTATION')
+        return 'Reputación intermedia del vendedor: 3/5.';
     if (code === 'TEMU_SELLER_RATING_OBSERVED' && ratingLabel)
         return 'Tienda: ' + ratingLabel + ' (valoración observada).';
     if (code === 'TEMU_STAR_SELLER_OBSERVED')
