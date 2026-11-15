@@ -54,81 +54,16 @@ let lastRenderedPanelStatus = null;
 // La carga exitosa permanece perceptible incluso cuando el backend responde rápido.
 // Los errores y la preferencia de movimiento reducido no esperan artificialmente.
 const MIN_LOADING_VISIBLE_MS = 1500;
-const POPUP_HEIGHT_TRANSITION_MS = 580;
 const LOGOUT_FADE_MS = 180;
 let loadingStartedAt = null;
 let scheduledReveal = null;
 let deferredSuccessfulResult = null;
 let logoutInProgress = false;
-let popupHeightAnimation = null;
-let popupHeightTransitionDepth = 0;
 
-// FLIP de altura: primero fijar el tamaño ACTUAL, cambiar los paneles,
-// medir su altura natural y recién entonces interpolar hasta ella.
-// Sin fijar el valor inicial, la ventana de la extensión puede achicarse
-// antes de que el navegador llegue a pintar el primer cuadro de la animación.
+// Los navegadores redimensionan externamente los popups de forma discreta.
+// Mantener una altura de ventana fija con CSS y animar solo el contenido.
 function withPopupHeightTransition(update) {
-    if (popupHeightTransitionDepth > 0) return update();
-    const popup = document.querySelector?.('.popup');
-    const canAnimate = popup && popup.style
-        && typeof popup.getBoundingClientRect === 'function'
-        && typeof popup.animate === 'function' && !prefersReducedMotion();
-    if (!canAnimate) return update();
-
-    const previousHeight = popup.getBoundingClientRect().height;
-    if (popupHeightAnimation) {
-        popupHeightAnimation.cancel();
-        popupHeightAnimation = null;
-    }
-    if (!Number.isFinite(previousHeight) || previousHeight <= 0) return update();
-
-    // Mantener el tamaño anterior durante la mutación de visibilidad.
-    popup.style.height = previousHeight + 'px';
-    popupHeightTransitionDepth++;
-    try {
-        update();
-    } catch (error) {
-        // Un error de renderizado no debe dejar el popup a altura fija.
-        popup.style.height = '';
-        throw error;
-    } finally {
-        popupHeightTransitionDepth--;
-    }
-
-    // Leer la altura REAL sin el valor fijado; scrollHeight no sirve para
-    // contraer, porque nunca es menor que el alto visible del elemento.
-    popup.style.height = '';
-    const nextHeight = popup.getBoundingClientRect().height;
-    popup.style.height = previousHeight + 'px';
-    if (!Number.isFinite(nextHeight) || Math.abs(nextHeight - previousHeight) < 2) {
-        popup.style.height = '';
-        return;
-    }
-
-    const animation = popup.animate(
-        [{height: previousHeight + 'px'}, {height: nextHeight + 'px'}],
-        {
-            duration: POPUP_HEIGHT_TRANSITION_MS,
-            easing: 'cubic-bezier(.45, 0, .55, 1)',
-            fill: 'forwards'
-        }
-    );
-    popupHeightAnimation = animation;
-    const cleanup = () => {
-        if (popupHeightAnimation !== animation) return;
-        popupHeightAnimation = null;
-        // Volver a altura automática para que los textos y el scroll puedan
-        // seguir creciendo normalmente después de la transición.
-        popup.style.height = '';
-        animation.cancel();
-    };
-    animation.addEventListener('finish', cleanup, {once: true});
-    animation.addEventListener('cancel', () => {
-        if (popupHeightAnimation === animation) {
-            popupHeightAnimation = null;
-            popup.style.height = '';
-        }
-    }, {once: true});
+    return update();
 }
 
 function prefersReducedMotion() {
@@ -352,24 +287,16 @@ function applyPanelState(state) {
     $('auth-card').hidden = authenticated && busy;
 }
 function scrollToAnalysisResult() {
-    // Desplazar recién cuando el popup recuperó su altura final.
-    // Si otro estado interrumpe la transición, no robar el scroll al usuario.
-    const scroll = () => {
-        if (typeof requestAnimationFrame !== 'function') return;
-        requestAnimationFrame(() => {
-            const result = $('result-section');
-            if (result.hidden) return;
-            result.scrollIntoView?.({
-                behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-                block: 'start'
-            });
+    // El contenedor mantiene su altura; solo se desplaza su contenido.
+    if (typeof requestAnimationFrame !== 'function') return;
+    requestAnimationFrame(() => {
+        const result = $('result-section');
+        if (result.hidden) return;
+        result.scrollIntoView?.({
+            behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+            block: 'start'
         });
-    };
-    if (popupHeightAnimation) {
-        popupHeightAnimation.addEventListener('finish', scroll, {once: true});
-    } else {
-        scroll();
-    }
+    });
 }
 function renderAnalysis(value) {
     if (!authenticated) return;
