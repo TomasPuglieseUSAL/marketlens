@@ -59,6 +59,46 @@ let loadingStartedAt = null;
 let scheduledReveal = null;
 let deferredSuccessfulResult = null;
 let logoutInProgress = false;
+let popupHeightAnimation = null;
+let popupHeightTransitionDepth = 0;
+
+// Transición FLIP de la altura real del popup: se mide antes y después
+// de modificar el DOM para animar también las contracciones (height:auto
+// no interpola con CSS de forma consistente entre navegadores).
+function withPopupHeightTransition(update) {
+    if (popupHeightTransitionDepth > 0) return update();
+    const popup = document.querySelector?.('.popup');
+    const canAnimate = popup && typeof popup.getBoundingClientRect === 'function'
+        && typeof popup.animate === 'function' && !prefersReducedMotion();
+    if (!canAnimate) return update();
+
+    const previousHeight = popup.getBoundingClientRect().height;
+    if (popupHeightAnimation) {
+        popupHeightAnimation.cancel();
+        popupHeightAnimation = null;
+    }
+
+    popupHeightTransitionDepth++;
+    try {
+        update();
+    } finally {
+        popupHeightTransitionDepth--;
+    }
+    const nextHeight = popup.getBoundingClientRect().height;
+    if (!Number.isFinite(previousHeight) || !Number.isFinite(nextHeight)
+            || Math.abs(nextHeight - previousHeight) < 2) return;
+
+    const animation = popup.animate(
+        [{height: previousHeight + 'px'}, {height: nextHeight + 'px'}],
+        {duration: 260, easing: 'cubic-bezier(.2, .75, .25, 1)'}
+    );
+    popupHeightAnimation = animation;
+    const clearAnimation = () => {
+        if (popupHeightAnimation === animation) popupHeightAnimation = null;
+    };
+    animation.addEventListener('finish', clearAnimation, {once: true});
+    animation.addEventListener('cancel', clearAnimation, {once: true});
+}
 
 function prefersReducedMotion() {
     return typeof matchMedia === 'function'
@@ -127,22 +167,26 @@ async function getSession() {
     return validSession(stored[AUTH_KEY]) ? stored[AUTH_KEY] : null;
 }
 function showLoggedOut(message = 'Iniciá sesión para usar MarketLens.') {
-    authenticated = false;
-    resetLoadingTransition();
-    // Nunca ocultar el formulario de acceso por el estado del análisis.
-    $('auth-card').hidden = false;
-    $('auth-status').textContent = message;
-    $('login-form').hidden = false;
-    $('logout-button').hidden = true;
-    $('authenticated-content').hidden = true;
+    withPopupHeightTransition(() => {
+        authenticated = false;
+        resetLoadingTransition();
+        // Nunca ocultar el formulario de acceso por el estado del análisis.
+        $('auth-card').hidden = false;
+        $('auth-status').textContent = message;
+        $('login-form').hidden = false;
+        $('logout-button').hidden = true;
+        $('authenticated-content').hidden = true;
+    });
 }
 function showLoggedIn(username) {
-    authenticated = true;
-    $('auth-status').textContent = username;
-    $('login-form').hidden = true;
-    $('logout-button').hidden = false;
-    $('authenticated-content').hidden = false;
-    updateActions();
+    withPopupHeightTransition(() => {
+        authenticated = true;
+        $('auth-status').textContent = username;
+        $('login-form').hidden = true;
+        $('logout-button').hidden = false;
+        $('authenticated-content').hidden = false;
+        updateActions();
+    });
 }
 async function checkAuthentication() {
     const session = await getSession();
@@ -241,14 +285,19 @@ function updateActions() {
         || pendingAction !== null;
 }
 function setReportExpanded(expanded) {
-    $('report-details').hidden = !expanded;
-    $('report-toggle').setAttribute('aria-expanded', String(expanded));
+    withPopupHeightTransition(() => {
+        $('report-details').hidden = !expanded;
+        $('report-toggle').setAttribute('aria-expanded', String(expanded));
+    });
 }
 function toggleReport() {
     if ($('report-toggle').disabled) return;
     setReportExpanded($('report-details').hidden);
 }
 function setPanelState(state) {
+    withPopupHeightTransition(() => applyPanelState(state));
+}
+function applyPanelState(state) {
     // Los pasos son excluyentes: elección de precio -> corrección -> resultado.
     // Los paneles entran con una transición CSS respetando reduced-motion.
     const busy = state === 'price' || state === 'correction' || state === 'loading';
@@ -318,6 +367,9 @@ function renderAnalysis(value) {
         resetLoadingTransition();
     }
 
+    withPopupHeightTransition(() => applyRenderedAnalysis(value, status));
+}
+function applyRenderedAnalysis(value, status) {
     const previousStatus = lastRenderedPanelStatus;
     lastRenderedPanelStatus = status;
     setPanelState(status);
