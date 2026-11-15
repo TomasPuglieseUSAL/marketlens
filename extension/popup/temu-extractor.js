@@ -180,7 +180,7 @@ function extractTemu() {
       // No relacionar ciegamente una calificación etiquetada de tienda
       // con un contador de opiniones del producto del mismo contenedor.
       const explicitProductPair = ratings.length === 1 && counts.length === 1
-        && !/\\b(?:seller|store|shop|tienda|vendedor)\\b/i.test(combined);
+        && !/\b(?:seller|store|shop|tienda|vendedor)\b/i.test(combined);
 
       // En algunos diseños Temu muestra "4.7" junto a "286 reviews"
       // sin las palabras "out of five stars". Sólo aceptar la pareja
