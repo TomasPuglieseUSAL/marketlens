@@ -853,6 +853,33 @@ function extractMercadoLibre() {
         }
     }
 
+    // Opiniones del producto: JSON-LD Product.aggregateRating. La cifra
+    // reviewCount corresponde a opiniones, no a ventas ni al vendedor.
+    // No inferir cantidades exactas desde "1.2K+" ni sustituir ratingCount.
+    function parseMlReviewCount(raw) {
+        if (raw == null) return null;
+        const text = String(raw).trim();
+        if (!/^(?:\d+|\d{1,3}(?:[.,]\d{3})+)$/.test(text)) return null;
+        const count = Number(text.replace(/[.,]/g, ''));
+        return Number.isSafeInteger(count) && count > 0 && count <= 10000000
+            ? count : null;
+    }
+    function parseMlRating(raw) {
+        if (raw == null) return null;
+        const value = String(raw).trim().replace(',', '.');
+        if (!/^[0-5](?:\.\d)?$/.test(value)) return null;
+        const rating = Number(value);
+        return rating > 0 && rating <= 5 ? rating : null;
+    }
+    const productRating = Array.isArray(product?.aggregateRating)
+        ? product.aggregateRating[0] : product?.aggregateRating;
+    let mlProductRating = parseMlRating(productRating?.ratingValue);
+    let mlProductReviewCount = parseMlReviewCount(productRating?.reviewCount);
+    if (mlProductRating === null || mlProductReviewCount === null) {
+        mlProductRating = null;
+        mlProductReviewCount = null;
+    }
+
     const offers = Array.isArray(product?.offers)
         ? product.offers[0]
         : product?.offers;
