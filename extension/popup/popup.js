@@ -626,6 +626,77 @@ function extractMercadoLibre() {
     const isCatalog = /\/(?:[^/]+\/)?p\/MLA\d{6,}\/?$/i.test(window.location.pathname);
     function selectedCatalogOffer() {
         if (!isCatalog) return null;
+
+        // Buybox nuevo: el radiobutton con "checked" puede pertenecer
+        // a una alternativa NO seleccionada (atributo HTML inicial).
+        // La selección efectiva está indicada por --SELECTED y debe
+        // coincidir con el item_id que el formulario enviaría al checkout.
+        const form = document.querySelector('#buybox-form');
+        if (form) {
+            const rows = [...form.querySelectorAll(
+                'li.ui-pdp-buy-box-offers__offer-list-item'
+            )];
+            if (rows.length) {
+                const active = rows.filter(row =>
+                    row.classList?.contains(
+                        'ui-pdp-buy-box-offers__offer-list-item--SELECTED')
+                );
+                if (active.length !== 1) return null;
+
+                const selected = active[0];
+                const radio = selected.querySelector(
+                    'input.andes-radio__input[id]'
+                );
+                const inputId = radio?.id || radio?.getAttribute('value');
+                const checkoutId = form.querySelector(
+                    'input[type="hidden"][name="item_id"]'
+                )?.value;
+                if (!/^MLA[1-9]\\d{5,}$/i.test(inputId || '')
+                        || checkoutId !== inputId) return null;
+
+                // Precio principal de la oferta; nunca tomar cuotas,
+                // precio sin impuestos ni el monto de otra alternativa.
+                const amount = selected.querySelector(
+                    '.ui-pdp-buy-box-offers__offer-price ' +
+                    '.ui-pdp-price__second-line .andes-money-amount'
+                );
+                const fraction = amount?.querySelector(
+                    '.andes-money-amount__fraction'
+                )?.textContent?.trim();
+                const cents = amount?.querySelector(
+                    '.andes-money-amount__cents'
+                )?.textContent?.trim();
+
+                // El nombre de tienda debe provenir de LA MISMA oferta.
+                const seller = selected.querySelector(
+                    '.ui-pdp-seller-summary__header__title ' +
+                    '.ui-pdp-seller-summary__link'
+                )?.textContent ||
+                    selected.querySelector('#seller')?.textContent ||
+                    selected.querySelector(
+                        '.ui-pdp-seller-summary__header__image-container__image'
+                    )?.getAttribute('alt');
+                const sellerName = seller?.replace(/\\s+/g, ' ').trim()
+                    .replace(/^vendido\\s+por\\s*:?[ ]*/i, '')
+                    .replace(/^tienda\\s+oficial\\s*/i, '').trim();
+                if (!fraction || !sellerName) return null;
+
+                return {
+                    externalId: inputId.toUpperCase(),
+                    selectedOfferId: inputId.toUpperCase(),
+                    // Guardar la URL REAL del catálogo como procedencia,
+                    // no inventar una permalink de publicación individual.
+                    url: window.location.href.split('#')[0],
+                    seller: sellerName,
+                    price: cents ? fraction + ',' + cents : fraction,
+                    currency: /\\bpesos\\b/i.test(
+                        amount?.getAttribute('aria-label') || '') ? 'ARS' : null
+                };
+            }
+        }
+
+        // Estructuras alternativas anteriores: únicamente identificamos
+        // enlaces de oferta y jamás usamos el ID global /p/MLA... .
         const visible = node => Boolean(node)
             && !node.hidden && node.getAttribute?.('aria-hidden') !== 'true'
             && (!node.getClientRects || node.getClientRects().length > 0);
@@ -929,6 +1000,7 @@ function extractMercadoLibre() {
         (offers?.price != null ? String(offers.price) : null);
 
     const currency =
+        catalogOffer?.currency ||
         getMeta('meta[property="product:price:currency"]') ||
         offers?.priceCurrency ||
         null;
@@ -1221,6 +1293,7 @@ function extractMercadoLibre() {
         sellerInsufficientSalesText: catalogOffer ? null : sellerInsufficientSalesText,
         sellerReputationLevel: catalogOffer ? null : sellerReputationLevel,
         sellerId: catalogOffer ? null : sellerId,
+        selectedOfferId: catalogOffer?.selectedOfferId ?? null,
         mlProductRating,
         mlProductReviewCount
     };
