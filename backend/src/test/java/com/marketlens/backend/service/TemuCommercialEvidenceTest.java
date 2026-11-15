@@ -108,6 +108,29 @@ class TemuCommercialEvidenceTest {
     }
 
     @Test
+    void storeSalesAreSeparateAndDoNotDuplicateSmallProductSales() {
+        Publication listing = publication("1 year on Temu", "3 sold");
+        listing.setTemuStoreSoldText("3 sold");
+        listing.setTemuStoreSalesObservedAt(LocalDateTime.now().minusHours(1));
+        var evaluation = new RiskEngine(new RiskCoverageCalculator()).evaluate(listing);
+        assertEquals(10, evaluation.getScore());
+        assertTrue(evaluation.getFactors().stream().anyMatch(f ->
+                "TEMU_VERY_FEW_STORE_SALES".equals(f.getCode())
+                        && f.getScoreContribution() == 10));
+        assertTrue(evaluation.getFactors().stream().anyMatch(f ->
+                "TEMU_PRODUCT_SALES_OBSERVED".equals(f.getCode())
+                        && f.getScoreContribution() == 0));
+
+        listing.setTemuStoreSoldText("300K+ Sold");
+        assertEquals(0, TemuCommercialEvidence.evaluateStoreSales(
+                listing, LocalDateTime.now()).points());
+        listing.setTemuStoreSoldText("3 sold");
+        listing.setTemuSellerReviewCount(8);
+        assertEquals(0, TemuCommercialEvidence.evaluateStoreSales(
+                listing, LocalDateTime.now()).points());
+    }
+
+    @Test
     void commercialSignalsDoNotChangeThreeCoverageDimensions() {
         Publication listing = publication("3 days on Temu", "3 sold");
         var evaluation = new RiskEngine(new RiskCoverageCalculator()).evaluate(listing);
@@ -128,10 +151,11 @@ class TemuCommercialEvidenceTest {
         ExtensionImport incoming = new ExtensionImport("TEMU", "Funda", "9507",
                 "ARS", "Tokki Shop", "606892013277333", "Funda",
                 "https://www.temu.com/goods.html?goods_id=606892013277333", "demo");
-        incoming.setTemuCommercialObservation("1 year on Temu", "15K+ sold");
+        incoming.setTemuCommercialObservation("1 year on Temu", "15K+ sold", "300K+ Sold");
         ExtensionProcessingService.applyTemuCommercialEvidence(listing, incoming);
         assertEquals("1 year on Temu", listing.getTemuStoreTenureText());
         assertEquals("15K+ sold", listing.getTemuProductSoldText());
+        assertEquals("300K+ Sold", listing.getTemuStoreSoldText());
         assertNotNull(listing.getTemuStoreTenureObservedAt());
         assertNotNull(listing.getTemuProductSalesObservedAt());
 
@@ -147,9 +171,10 @@ class TemuCommercialEvidenceTest {
         ExtensionImport otherStore = new ExtensionImport("TEMU", "Funda", "9507",
                 "ARS", "Other Shop", "606892013277333", "Funda",
                 "https://www.temu.com/goods.html?goods_id=606892013277333", "demo");
-        otherStore.setTemuCommercialObservation("2 days on Temu", "4 sold");
+        otherStore.setTemuCommercialObservation("2 days on Temu", "4 sold", "2 sold");
         ExtensionProcessingService.applyTemuCommercialEvidence(listing, otherStore);
         assertEquals("1 year on Temu", listing.getTemuStoreTenureText());
         assertEquals("4 sold", listing.getTemuProductSoldText());
+        assertEquals("300K+ Sold", listing.getTemuStoreSoldText());
     }
 }
