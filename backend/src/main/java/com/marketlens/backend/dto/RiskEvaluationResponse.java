@@ -15,5 +15,15 @@ public record RiskEvaluationResponse(
         List<RiskFactorResponse> factors,
         RiskCoverageStatus coverageStatus,
         Integer availableFactors,
-        Integer totalFactors) {
+        Integer totalFactors,
+        List<RiskCoverageFactorResponse> coverageFactors) {
+
+    // Constructor anterior para los consumidores Java existentes.
+    public RiskEvaluationResponse(
+            Long id, Long publicationId, Integer score, RiskLevel level,
+            LocalDateTime evaluatedAt, List<RiskFactorResponse> factors,
+            RiskCoverageStatus coverageStatus, Integer availableFactors, Integer totalFactors) {
+        this(id, publicationId, score, level, evaluatedAt, factors,
+                coverageStatus, availableFactors, totalFactors, null);
+    }
 }
