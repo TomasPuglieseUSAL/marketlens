@@ -54,6 +54,19 @@ async function authenticatedRequest(path, options = {}) {
 }
 
 function requireExtractedData(data) {
+    // Segunda barrera: una ficha de catálogo /p/MLA... no identifica una
+    // oferta individual y jamás debe ingresar como publicación MLA.
+    if (data?.marketplace === 'MERCADO_LIBRE' && typeof data.url === 'string') {
+        try {
+            const address = new URL(data.url);
+            if (/^\/p\/MLA\d{6,}\/?$/i.test(address.pathname)) {
+                throw new Error('Esta es una ficha de catálogo de Mercado Libre. Abrí una oferta de un vendedor para analizarla.');
+            }
+        } catch (error) {
+            if (error instanceof Error && error.message.includes('ficha de catálogo')) throw error;
+            // Las URLs no válidas serán rechazadas por la API.
+        }
+    }
     if (!data || !['MERCADO_LIBRE', 'FACEBOOK_MARKETPLACE', 'TEMU'].includes(data.marketplace) ||
         !data.externalId || !data.title || !data.price ||
         (data.marketplace !== 'TEMU' && !data.seller)) {
