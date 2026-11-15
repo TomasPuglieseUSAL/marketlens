@@ -40,9 +40,44 @@ function popup() {
         if (!elements.has(id)) elements.set(id, makeElement(id));
         return elements.get(id);
     }
+    let simulateLayout = false;
+    let animatedHeight = null;
+    const heightAnimations = [];
+    const popupSurface = {
+        getBoundingClientRect() {
+            if (animatedHeight !== null) return {height: animatedHeight};
+            const visible = id => !element(id).hidden;
+            if (!visible('authenticated-content')) return {height: 225};
+            if (visible('loading-section')) return {height: 285};
+            if (visible('result-section')) return {height: 565};
+            if (visible('temu-price-panel')) return {height: 540};
+            if (visible('facebook-correction')) return {height: 590};
+            return {height: visible('report-details') ? 620 : 430};
+        },
+        animate(frames, options) {
+            const listeners = {finish: [], cancel: []};
+            animatedHeight = parseFloat(frames[0].height);
+            const anim = {
+                frames, options,
+                addEventListener(name, cb) { listeners[name].push(cb); },
+                cancel() {
+                    animatedHeight = null;
+                    for (const cb of listeners.cancel) cb();
+                },
+                finish() {
+                    animatedHeight = null;
+                    for (const cb of listeners.finish) cb();
+                }
+            };
+            heightAnimations.push(anim);
+            return anim;
+        }
+    };
     const document = {
         getElementById: element,
         createElement: tagName => makeElement(null, tagName),
+        querySelector: selector => simulateLayout && selector === '.popup'
+            ? popupSurface : null,
         documentElement: {dataset: {}}
     };
     const browser = {
@@ -90,6 +125,8 @@ function popup() {
     return {
         element, run, advance,
         pendingTimers: () => timers.size,
+        enableHeightAnimations() { simulateLayout = true; },
+        heightAnimations,
         setReducedMotion: value => { reducedMotion = value; }
     };
 }
@@ -421,4 +458,82 @@ test('cerrar sesión con movimiento reducido es inmediato', async () => {
     assert.equal(p.pendingTimers(), 0);
     assert.equal(p.element('login-form').hidden, false);
     assert.equal(p.element('authenticated-content').hidden, true);
+});
+
+
+test('el popup interpola la altura al contraerse para mostrar el spinner', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; setPanelState('initial')");
+    p.run("setReportExpanded(false)");
+    p.enableHeightAnimations();
+    p.run("setPanelState('loading')");
+    assert.equal(p.heightAnimations.length, 1);
+    const transition = p.heightAnimations[0];
+    assert.equal(transition.frames[0].height, '430px');
+    assert.equal(transition.frames[1].height, '285px');
+    assert.equal(transition.options.duration, 260);
+});
+
+test('al terminar se expande el popup y recién después enfoca los resultados', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; setPanelState('initial')");
+    p.run("setReportExpanded(false)");
+    p.enableHeightAnimations();
+    p.run("renderAnalysis({status:'loading',message:'Procesando'})");
+    p.heightAnimations[0].finish();
+    p.advance(600);
+    p.run("renderAnalysis({status:'success',publicationId:13,evaluation:{level:'LOW',score:0,availableFactors:3,totalFactors:3,coverageStatus:'COMPLETE',factors:[]}})");
+    assert.equal(p.heightAnimations.length, 2);
+    assert.equal(p.heightAnimations[1].frames[0].height, '285px');
+    assert.equal(p.heightAnimations[1].frames[1].height, '565px');
+    assert.equal(p.element('result-section').scrollCalls.length, 0);
+    p.heightAnimations[1].finish();
+    assert.equal(p.element('result-section').scrollCalls.length, 1);
+});
+
+test('las transiciones consecutivas parten de la altura animada actual', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; setPanelState('initial')");
+    p.run("setReportExpanded(false)");
+    p.enableHeightAnimations();
+    p.run("setPanelState('loading')");
+    p.run("setPanelState('success')");
+    assert.equal(p.heightAnimations.length, 2);
+    assert.equal(p.heightAnimations[1].frames[0].height, '430px');
+    assert.equal(p.heightAnimations[1].frames[1].height, '565px');
+    p.heightAnimations[0].finish();
+    assert.equal(p.run("popupHeightAnimation !== null"), true);
+    p.heightAnimations[1].finish();
+    assert.equal(p.run("popupHeightAnimation"), null);
+});
+
+test('el formulario de reporte y el logout también ajustan la altura progresivamente', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; showLoggedIn('Usuario'); setPanelState('initial')");
+    p.run("setReportExpanded(false)");
+    p.enableHeightAnimations();
+    p.run("setReportExpanded(true)");
+    assert.equal(p.heightAnimations[0].frames[0].height, '430px');
+    assert.equal(p.heightAnimations[0].frames[1].height, '620px');
+    p.heightAnimations[0].finish();
+    p.run("showLoggedOut('Sesión cerrada')");
+    assert.equal(p.heightAnimations[1].frames[0].height, '620px');
+    assert.equal(p.heightAnimations[1].frames[1].height, '225px');
+});
+
+test('la altura cambia sin animación si el sistema pide reducir movimiento', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; setPanelState('initial')");
+    p.enableHeightAnimations();
+    p.setReducedMotion(true);
+    p.run("setPanelState('loading')");
+    assert.equal(p.heightAnimations.length, 0);
+    assert.equal(p.element('loading-section').hidden, false);
+});
+
+test('CSS recorta únicamente el contenedor animado, sin perder el scroll del body', () => {
+    const css = fs.readFileSync(path.join(__dirname, '../popup/popup.css'), 'utf8');
+    assert.match(css, /\\.popup\\s*\\{[^}]*overflow:\\s*clip;/s);
+    assert.match(css, /body\\s*\\{[^}]*overflow-y:\\s*auto;/s);
+    assert.match(css, /\\.brand\\s*\\{[^}]*position:\\s*sticky;/s);
 });
