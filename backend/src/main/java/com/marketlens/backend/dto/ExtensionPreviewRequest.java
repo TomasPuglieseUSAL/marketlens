@@ -23,6 +23,7 @@ public record ExtensionPreviewRequest(
     String sellerId,
     Integer facebookJoinYear,
     String temuStoreTenureText,
-    String temuProductSoldText
+    String temuProductSoldText,
+    String temuStoreSoldText
 ) {
 }
