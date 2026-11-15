@@ -105,8 +105,25 @@ public class RiskEngine {
                     tenureSignal.description(), tenureSignal.points());
             score += tenureSignal.points();
         }
+        TemuCommercialEvidence.Signal storeSalesSignal =
+                TemuCommercialEvidence.evaluateStoreSales(publication, LocalDateTime.now());
+        if (storeSalesSignal != null) {
+            addFactor(evaluation, storeSalesSignal.code(),
+                    storeSalesSignal.description(), storeSalesSignal.points());
+            score += storeSalesSignal.points();
+        }
         TemuCommercialEvidence.Signal productSalesSignal =
                 TemuCommercialEvidence.evaluateProductSales(publication, LocalDateTime.now());
+        // Si la TIENDA ya recibió una penalización por pocas ventas,
+        // no sumar otra por pocas ventas del producto actual.
+        if (productSalesSignal != null && storeSalesSignal != null
+                && storeSalesSignal.points() > 0 && productSalesSignal.points() > 0) {
+            productSalesSignal = new TemuCommercialEvidence.Signal(
+                    "TEMU_PRODUCT_SALES_OBSERVED",
+                    productSalesSignal.description()
+                    + " No se suma otra penalización por la actividad del mismo vendedor.",
+                    0);
+        }
         if (productSalesSignal != null) {
             addFactor(evaluation, productSalesSignal.code(),
                     productSalesSignal.description(), productSalesSignal.points());
