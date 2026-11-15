@@ -519,3 +519,73 @@ test('el contenido todavía anima su aparición y respeta reducir movimiento', (
     assert.equal(p.heightAnimations.length, 0);
     assert.equal(p.element('loading-section').hidden, false);
 });
+
+
+test('las notas de Temu se resumen sin perder calificación y cantidad de opiniones', () => {
+    const p = popup();
+    const sourceText = 'El producto muestra 4.7/5 con 286 opiniones en Temu. Son valoraciones observadas, no ventas verificadas ni garantía de autenticidad.';
+    const label = p.run("conciseFactorLabel({code:'TEMU_PRODUCT_REVIEWS_OBSERVED',description:" + JSON.stringify(sourceText) + "})");
+    assert.equal(label, 'Producto: 4,7/5 (286 opiniones).');
+    assert.ok(label.length < sourceText.length / 2);
+    assert.equal(p.run("conciseFactorLabel({code:'TEMU_LOW_PRODUCT_RATING',description:'El producto muestra 2.5/5 con 33 opiniones en Temu. Son valoraciones observadas.'})"),
+        'Producto, valoración baja: 2,5/5 (33 opiniones).');
+    assert.equal(p.run("conciseFactorLabel({code:'TEMU_STAR_SELLER_OBSERVED',description:'La página de Temu mostraba la etiqueta Star Seller para la tienda. MarketLens no ha verificado sus criterios.'})"),
+        'Temu muestra el distintivo Star Seller.');
+});
+
+test('el resumen presenta las notas cortas y conserva el detalle original en tooltip', () => {
+    const p = popup();
+    const description = 'El producto muestra 4.7/5 con 286 opiniones en Temu. Son valoraciones observadas, no ventas verificadas ni garantía de autenticidad.';
+    p.run("renderRisk({publicationId:13,evaluation:{level:'LOW',score:0,availableFactors:3,totalFactors:3,factors:[{code:'TEMU_PRODUCT_REVIEWS_OBSERVED',description:" + JSON.stringify(description) + "}]}})");
+    const list = p.element('result-factors');
+    assert.equal(list.children.length, 1);
+    assert.equal(list.children[0].textContent, 'Producto: 4,7/5 (286 opiniones).');
+    assert.equal(list.children[0].title, description);
+});
+
+test('al desplegar el reporte se enfoca el formulario y no se repite al cerrarlo', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; setPanelState('initial'); setReportExpanded(false); updateActions()");
+    const panel = p.element('report-details');
+    p.run("toggleReport()");
+    assert.equal(panel.hidden, false);
+    assert.equal(panel.scrollCalls.length, 1);
+    assert.equal(panel.scrollCalls[0].behavior, 'smooth');
+    assert.equal(panel.scrollCalls[0].block, 'start');
+    p.run("toggleReport()");
+    assert.equal(panel.hidden, true);
+    assert.equal(panel.scrollCalls.length, 1);
+});
+
+test('el desplazamiento del reporte respeta movimiento reducido y no se activa oculto', () => {
+    const p = popup();
+    p.setReducedMotion(true);
+    p.run("authenticated=true; pageSupported=true; setPanelState('initial'); setReportExpanded(false); updateActions()");
+    p.run("setReportExpanded(true)");
+    assert.equal(p.element('report-details').scrollCalls[0].behavior, 'auto');
+    p.run("setPanelState('loading'); setReportExpanded(false)");
+    p.run("setReportExpanded(true)");
+    assert.equal(p.element('report-details').scrollCalls.length, 1);
+});
+
+test('durante la carga se activa el diseño centrado sin cambiar la altura exterior', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; setPanelState('initial')");
+    p.run("setPanelState('loading')");
+    // El mock carece de querySelector('.popup'), por lo que se comprueba
+    // la regla visual y los demás estados con CSS.
+    const css = fs.readFileSync(path.join(__dirname, '../popup/popup.css'), 'utf8');
+    assert.match(css, /\.popup\.is-analyzing #authenticated-content\s*\{[^}]*display:\s*flex;/s);
+    assert.match(css, /\.popup\.is-analyzing \.analysis-card\s*\{[^}]*flex:\s*1 1 auto;/s);
+    assert.match(css, /\.popup\.is-analyzing #loading-section:not\(\[hidden\]\)\s*\{[^}]*justify-content:\s*center;/s);
+    assert.match(css, /body\s*\{[^}]*height:\s*540px;/s);
+});
+
+test('la carga centra solo su estado y restaura el diseño de resultados', () => {
+    const p = popup();
+    p.enableHeightAnimations();
+    p.run("authenticated=true; pageSupported=true; setPanelState('loading')");
+    assert.equal(p.run("document.querySelector('.popup').classList.contains('is-analyzing')"), true);
+    p.run("setPanelState('success')");
+    assert.equal(p.run("document.querySelector('.popup').classList.contains('is-analyzing')"), false);
+});
