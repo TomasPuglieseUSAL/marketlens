@@ -186,6 +186,15 @@ export default function PublicationDetailsPage({
                   <> Observada: {new Date(publication.temuStoreTenureObservedAt).toLocaleString('es-AR')}.</>}
               </p>
             )}
+            {publication.marketplace === 'TEMU' && publication.temuStoreSoldText && (
+              <p className="session-message" role="note">
+                <strong>Actividad comercial de la tienda:</strong>{' '}
+                {publication.temuStoreSoldText}.
+                {' '}Cifra observada y posiblemente aproximada, no verificada por MarketLens.
+                {publication.temuStoreSalesObservedAt &&
+                  <> Observada: {new Date(publication.temuStoreSalesObservedAt).toLocaleString('es-AR')}.</>}
+              </p>
+            )}
             {publication.marketplace === 'TEMU' && publication.temuProductSoldText && (
               <p className="session-message" role="note">
                 <strong>Actividad observada del producto:</strong>{' '}
