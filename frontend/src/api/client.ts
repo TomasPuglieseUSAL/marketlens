@@ -161,6 +161,8 @@ export interface Publication {
   temuStoreTenureObservedAt: string | null
   temuProductSoldText: string | null
   temuProductSalesObservedAt: string | null
+  temuStoreSoldText: string | null
+  temuStoreSalesObservedAt: string | null
 }
 
 export interface CreatePublicationRequest {
