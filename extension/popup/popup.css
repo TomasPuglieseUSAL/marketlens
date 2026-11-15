@@ -116,7 +116,13 @@ body {
   background-attachment: fixed, local, local, fixed;
 }
 
-.popup { padding: 17px 15px 13px; }
+.popup {
+  padding: 17px 15px 13px;
+  /* Durante la interpolación de altura el contenido no debe agrandar la
+     ventana de golpe. clip no crea un contenedor de scroll, a diferencia
+     de hidden, y mantiene operativo el encabezado sticky. */
+  overflow: clip;
+}
 
 /* Encabezado persistente: queda dentro del mismo scroll de la extensión
    sin ocultar el inicio del contenido ni perderse al bajar. */
