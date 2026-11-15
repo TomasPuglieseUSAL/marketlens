@@ -214,6 +214,7 @@ test('Temu con precio único coincidente analiza sin pedir confirmación', async
     p.run("authenticated=true; pageSupported=true; pageKey='tab:temu'; currentMarketplace='TEMU'");
     p.run("extractedData={marketplace:'TEMU',externalId:'606892013277333',title:'Funda',price:'9507',currency:'ARS',seller:'Tokki Shop',priceCandidates:['9507']}");
     p.run("extractCurrentListing = async () => extractedData");
+    p.run("setPanelState('initial')");
     const data = await p.run("prepareData('analyze')");
     assert.equal(data.price, '9507');
     assert.equal(p.element('temu-price-panel').hidden, true);
