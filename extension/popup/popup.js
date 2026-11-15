@@ -889,6 +889,30 @@ function extractMercadoLibre() {
     let mlProductRating = parseMlRating(productRating?.ratingValue);
     let mlProductReviewCount = parseMlReviewCount(productRating?.reviewCount);
     if (mlProductRating === null || mlProductReviewCount === null) {
+        // Alternativa conservadora si falta JSON-LD: exigir estrellas y
+        // recuento de opiniones en un MISMO bloque de reseñas de producto,
+        // nunca en el panel de reputación del vendedor.
+        const reviewBlocks = document.querySelectorAll(
+            '.ui-pdp-review__rating, .ui-pdp-reviews__rating, ' +
+            '.ui-pdp-review__rating__summary, [data-testid="product-reviews"]'
+        );
+        for (const block of reviewBlocks) {
+            const text = block.innerText || block.textContent || '';
+            const countMatch = text.match(/(\d{1,3}(?:[.,]\d{3})+|\d+)\s+(?:opiniones|reseñas)\b/i);
+            const averageText = block.querySelector?.(
+                '.ui-pdp-review__rating__average, .ui-pdp-reviews__rating__average'
+            )?.textContent?.trim() || text;
+            const scoreMatch = averageText.match(/(?:^|[^\d])([1-5](?:[.,]\d)?)(?:\s*\/\s*5)?(?:\b|$)/);
+            const rating = parseMlRating(scoreMatch?.[1]);
+            const count = parseMlReviewCount(countMatch?.[1]);
+            if (rating !== null && count !== null) {
+                mlProductRating = rating;
+                mlProductReviewCount = count;
+                break;
+            }
+        }
+    }
+    if (mlProductRating === null || mlProductReviewCount === null) {
         mlProductRating = null;
         mlProductReviewCount = null;
     }
