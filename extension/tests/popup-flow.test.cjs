@@ -17,7 +17,8 @@ function popup() {
         const listeners = {};
         return {
             id, tagName, hidden: false, disabled: false, value: '',
-            textContent: '', dataset: {}, children: [],
+            textContent: '', dataset: {}, children: [], scrollCalls: [],
+            scrollIntoView(options) { this.scrollCalls.push(options); },
             setAttribute(name, value) { attributes[name] = String(value); },
             getAttribute(name) { return attributes[name] ?? null; },
             addEventListener(name, fn) { listeners[name] = fn; },
@@ -44,10 +45,15 @@ function popup() {
         },
         runtime: {sendMessage: async () => ({ok: true})}
     };
-    const context = vm.createContext({document, browser, URL, console, Date});
+    let reducedMotion = false;
+    const context = vm.createContext({
+        document, browser, URL, console, Date,
+        requestAnimationFrame: callback => callback(),
+        matchMedia: () => ({matches: reducedMotion})
+    });
     vm.runInContext(source, context, {filename: 'popup.js'});
     function run(js) { return vm.runInContext(js, context); }
-    return {element, run};
+    return {element, run, setReducedMotion: value => { reducedMotion = value; }};
 }
 
 function enterFacebookForm(p) {
@@ -230,4 +236,42 @@ test('Temu con precio extraído en conflicto con la opción visible pide confirm
     assert.equal(data, null);
     assert.equal(p.element('temu-price-panel').hidden, false);
     assert.equal(p.element('analysis-title').textContent, 'Confirmar precio');
+});
+
+
+test('al finalizar el análisis desplaza al resultado una sola vez', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; setPanelState('initial')");
+    const result = p.element('result-section');
+    const success = "renderAnalysis({status:'success',publicationId:13,evaluation:{level:'LOW',score:0,availableFactors:3,totalFactors:3,coverageStatus:'COMPLETE',factors:[]}})";
+    p.run("renderAnalysis({status:'loading',message:'Analizando'})");
+    assert.equal(result.scrollCalls.length, 0);
+    p.run(success);
+    assert.equal(result.scrollCalls.length, 1);
+    assert.equal(result.scrollCalls[0].behavior, 'smooth');
+    assert.equal(result.scrollCalls[0].block, 'start');
+    p.run(success);
+    assert.equal(result.scrollCalls.length, 1, 'No repetir scroll por eventos de almacenamiento');
+    p.run("renderAnalysis({status:'loading',message:'Nuevo análisis'})");
+    p.run(success);
+    assert.equal(result.scrollCalls.length, 2, 'El segundo análisis debe enfocar su resultado');
+});
+
+test('el scroll automático respeta la preferencia de movimiento reducido', () => {
+    const p = popup();
+    p.setReducedMotion(true);
+    p.run("authenticated=true; pageSupported=true; setPanelState('initial')");
+    p.run("renderAnalysis({status:'success',publicationId:13,evaluation:{level:'LOW',score:0,availableFactors:3,totalFactors:3,coverageStatus:'COMPLETE',factors:[]}})");
+    assert.equal(p.element('result-section').scrollCalls[0].behavior, 'auto');
+    assert.equal(p.element('result-section').scrollCalls.length, 1);
+});
+
+test('el encabezado es sticky y el resultado tiene desplazamiento compensado', () => {
+    const css = fs.readFileSync(path.join(__dirname, '../popup/popup.css'), 'utf8');
+    const html = fs.readFileSync(path.join(__dirname, '../popup/popup.html'), 'utf8');
+    assert.match(css, /\.brand\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;/s);
+    assert.match(css, /\.result-card\s*\{[^}]*scroll-margin-top:\s*86px;/s);
+    assert.match(html, /<svg\s+id="report-chevron"[^>]*>/);
+    assert.match(css, /\.report-chevron\s*\{[^}]*transform-origin:\s*center;/s);
+    assert.equal(html.includes('aria-hidden="true">⌄</span>'), false);
 });
