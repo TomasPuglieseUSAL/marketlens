@@ -331,6 +331,9 @@ form button { margin-top: 11px; }
 .error-card .outline { width: 100%; }
 .correction-card { background: var(--surface-muted); }
 .correction-card h3 { margin-bottom: 6px; }
+.correction-actions { display: flex; gap: 8px; margin-top: 11px; }
+.correction-actions > button { flex: 1; min-width: 0; }
+#correction-status:not(:empty) { color: var(--error); margin-top: 10px; }
 #fb-join-row { width: 100%; }
 
 footer {
