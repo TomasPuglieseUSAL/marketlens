@@ -80,6 +80,12 @@ public class Publication {
     @Column(name = "temu_product_sales_observed_at")
     private LocalDateTime temuProductSalesObservedAt;
 
+    @Column(name = "temu_store_sold_text", length = 60)
+    private String temuStoreSoldText;
+
+    @Column(name = "temu_store_sales_observed_at")
+    private LocalDateTime temuStoreSalesObservedAt;
+
     @Column(name = "temu_store_id", length = 30)
     private String temuStoreId;
 
@@ -214,6 +220,10 @@ public class Publication {
     public void setTemuProductSoldText(String value) { this.temuProductSoldText = value; }
     public LocalDateTime getTemuProductSalesObservedAt() { return temuProductSalesObservedAt; }
     public void setTemuProductSalesObservedAt(LocalDateTime date) { this.temuProductSalesObservedAt = date; }
+    public String getTemuStoreSoldText() { return temuStoreSoldText; }
+    public void setTemuStoreSoldText(String value) { this.temuStoreSoldText = value; }
+    public LocalDateTime getTemuStoreSalesObservedAt() { return temuStoreSalesObservedAt; }
+    public void setTemuStoreSalesObservedAt(LocalDateTime date) { this.temuStoreSalesObservedAt = date; }
     public String getTemuStoreId() { return temuStoreId; }
     public void setTemuStoreId(String id) { this.temuStoreId = id; }
     public Boolean getTemuSellerSectionObserved() { return temuSellerSectionObserved; }
