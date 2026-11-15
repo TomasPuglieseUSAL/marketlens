@@ -250,11 +250,24 @@ function updateActions() {
     $('report-submit').disabled = !authenticated || !pageSupported || submittingReport || preparing
         || pendingAction !== null;
 }
+function scrollToManualReport() {
+    if (typeof requestAnimationFrame !== 'function') return;
+    requestAnimationFrame(() => {
+        const details = $('report-details');
+        if (details.hidden || $('report-section').hidden) return;
+        details.scrollIntoView?.({
+            behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+            block: 'start'
+        });
+    });
+}
 function setReportExpanded(expanded) {
+    const wasHidden = $('report-details').hidden;
     updatePopupContent(() => {
         $('report-details').hidden = !expanded;
         $('report-toggle').setAttribute('aria-expanded', String(expanded));
     });
+    if (expanded && wasHidden) scrollToManualReport();
 }
 function toggleReport() {
     if ($('report-toggle').disabled) return;
@@ -282,6 +295,13 @@ function applyPanelState(state) {
     $('result-section').hidden = state !== 'success';
     $('error-section').hidden = state !== 'error';
     $('report-section').hidden = busy;
+    // Una clase del contenedor permite centrar verticalmente la carga
+    // dentro de la ventana fija, sin alterar el resto de las pantallas.
+    const popup = document.querySelector?.('.popup');
+    if (popup?.classList) {
+        if (state === 'loading') popup.classList.add('is-analyzing');
+        else popup.classList.remove('is-analyzing');
+    }
     // Durante un análisis se prioriza la información de la publicación.
     // La sección de usuario reaparece al mostrar el resultado o un error.
     $('auth-card').hidden = authenticated && busy;
@@ -359,6 +379,42 @@ function applyRenderedAnalysis(value, status) {
     }
     updateActions();
 }
+// Las explicaciones completas se conservan en la evaluación del backend.
+ // El popup muestra frases breves; los detalles permanecen en MarketLens.
+function conciseFactorLabel(factor) {
+    const full = String(factor?.description ?? factor?.reason ?? factor?.name ?? '').trim();
+    if (!full) return '';
+    const code = String(factor?.code ?? '').toUpperCase();
+    const rating = full.match(/\b([0-5](?:[.,]\d+)?)\s*\/\s*5\b/);
+    const reviews = full.match(/\b(\d[\d.,]*)\s+opiniones\b/i);
+    const quoted = full.match(/[“"]([^"”]{1,60})[”"]/);
+    const ratingLabel = rating ? rating[1].replace('.', ',') + '/5' : '';
+
+    if (code === 'TEMU_PRODUCT_REVIEWS_OBSERVED' || code === 'TEMU_LOW_PRODUCT_RATING'
+            || code === 'TEMU_MODERATE_PRODUCT_RATING') {
+        if (ratingLabel && reviews) {
+            const prefix = code === 'TEMU_LOW_PRODUCT_RATING' ? 'Producto, valoración baja: '
+                : code === 'TEMU_MODERATE_PRODUCT_RATING' ? 'Producto, valoración moderada: '
+                : 'Producto: ';
+            return prefix + ratingLabel + ' (' + reviews[1] + ' opiniones).';
+        }
+    }
+    if (code === 'TEMU_SELLER_RATING_OBSERVED' && ratingLabel)
+        return 'Tienda: ' + ratingLabel + ' (valoración observada).';
+    if (code === 'TEMU_STAR_SELLER_OBSERVED')
+        return 'Temu muestra el distintivo Star Seller.';
+    if (code === 'TEMU_STORE_TENURE_OBSERVED' && quoted)
+        return 'Antigüedad de tienda: ' + quoted[1] + ' (aproximada).';
+    if (code === 'TEMU_STORE_SALES_OBSERVED' && quoted)
+        return 'Ventas de tienda: ' + quoted[1] + ' (estimadas).';
+    if (code === 'TEMU_PRODUCT_SALES_OBSERVED' && quoted)
+        return 'Ventas del producto: ' + quoted[1] + ' (estimadas).';
+
+    // Para otros factores, usar la primera frase solo cuando existe
+    // una explicación secundaria. Nunca cortar números a mitad de texto.
+    const firstSentence = full.match(/^(.+?[.!?])(?:\s|$)/)?.[1];
+    return full.length > 115 && firstSentence ? firstSentence : full;
+}
 function renderRisk(value) {
     const evaluation = value.evaluation || {};
     lastPublicationId = value.publicationId || null;
@@ -392,7 +448,10 @@ function renderRisk(value) {
         const label = factor?.description ?? factor?.reason ?? factor?.name;
         if (typeof label !== 'string' || !label.trim()) continue;
         const li = document.createElement('li');
-        li.textContent = label;
+        li.textContent = conciseFactorLabel(factor);
+        // Tooltip con texto completo para quien necesite profundizar, sin
+        // inundar visualmente el resumen.
+        if (li.textContent !== label) li.title = label;
         $('result-factors').appendChild(li);
     }
     $('result-factors').hidden = $('result-factors').children.length === 0;
