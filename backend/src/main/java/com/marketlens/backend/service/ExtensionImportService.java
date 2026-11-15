@@ -155,6 +155,31 @@ public class ExtensionImportService {
         }
         // Admitimos observaciones parciales, pero no cuentan como cobertura completa.
         imported.setTemuProductReviews(productRating, productReviews);
+        // Datos comerciales observados en regiones separadas del DOM:
+        // antigüedad de la TIENDA y ventas del PRODUCTO.
+        String tenure = request.temuStoreTenureText();
+        String sold = request.temuProductSoldText();
+        if ((tenure != null || sold != null) && !"TEMU".equals(request.marketplace())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Los indicadores comerciales sólo corresponden a Temu.");
+        }
+        if (tenure != null && (request.seller() == null || request.seller().isBlank())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La antigüedad de la tienda requiere un vendedor identificado.");
+        }
+        if (tenure != null && (tenure.length() > 60
+                || TemuCommercialEvidence.parseStoreTenure(tenure) == null)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La antigüedad observada de la tienda no es válida.");
+        }
+        if (sold != null && (sold.length() > 60
+                || TemuCommercialEvidence.parseProductSales(sold) == null)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La cantidad de ventas observadas del producto no es válida.");
+        }
+        imported.setTemuCommercialObservation(
+                tenure == null ? null : tenure.trim(),
+                sold == null ? null : sold.trim());
         // Validar IDs antes de interpolarlos en comprobaciones de URL.
         validateSellerMetadata(request);
 
