@@ -181,13 +181,20 @@ function updateActions() {
     $('report-submit').disabled = !authenticated || !pageSupported || submittingReport || preparing;
 }
 function setPanelState(state) {
+    // El formulario ocupa el lugar del área principal de análisis.
+    // El título del marketplace permanece visible como contexto.
+    $('analysis-overview').hidden = state === 'correction' || state === 'loading';
     $('analyze-button').hidden = state !== 'initial';
     $('loading-section').hidden = state !== 'loading';
     $('result-section').hidden = state !== 'success';
     $('error-section').hidden = state !== 'error';
+    $('facebook-correction').hidden = state !== 'correction';
 }
 function renderAnalysis(value) {
     if (!authenticated) return;
+    // Evitar que un cambio de almacenamiento en segundo plano interrumpa
+    // la edición del formulario antes de pulsar Continuar o Cancelar.
+    if (pendingAction && !$('facebook-correction').hidden) return;
     const status = value?.status || 'initial';
     setPanelState(status);
     if (status === 'loading') {
@@ -275,7 +282,8 @@ async function loadCurrentPage() {
             extractedData = null;
             pendingAction = null;
             lastPublicationId = null;
-            $('facebook-correction').hidden = true;
+            setPanelState('initial');
+            $('correction-status').textContent = '';
             $('report-status').textContent = '';
             renderAnalysis({status:'initial'});
         }
@@ -1094,8 +1102,8 @@ async function prepareData(action) {
             }
             $('fb-join-row').hidden = currentMarketplace !== 'FACEBOOK_MARKETPLACE';
             $('fb-seller').disabled = false;
-            $('facebook-correction').hidden = false;
-            $('status').textContent = 'Faltan datos. Completalos para continuar.';
+            $('correction-status').textContent = '';
+            setPanelState('correction');
             return null;
         }
         throw new Error('No se pudo obtener el título, precio, vendedor o ID individual. Revisá el anuncio.');
@@ -1162,20 +1170,50 @@ async function reportSubmit(event) {
     } finally {preparing = false; updateActions();}
 }
 async function continueFacebook() {
-    if (!pendingAction || !extractedData) return;
+    if (!pendingAction || !extractedData || preparing) return;
+    let action = pendingAction;
+    preparing = true;
+    $('facebook-continue-button').disabled = true;
+    $('facebook-cancel-button').disabled = true;
+    updateActions();
     try {
         const data = readFacebookForm(extractedData);
         if (missingEssential(data)) throw new Error(data.marketplace === 'TEMU'
             ? 'Completá título y precio en ARS.' : 'Completá título, precio y nombre del vendedor.');
         extractedData = data;
-        $('facebook-correction').hidden = true;
-        const action = pendingAction;
         pendingAction = null;
-        if (action === 'report') await sendReport(data);
-        else await startAnalysis(data);
+        $('correction-status').textContent = '';
+        if (action === 'report') {
+            await restoreAnalysis();
+            await sendReport(data);
+        } else {
+            setPanelState('loading');
+            await startAnalysis(data);
+        }
     } catch (error) {
-        $('status').textContent = error.message;
+        const message = String(error.message || error);
+        if (pendingAction) {
+            // Error de validación: permanecer en el formulario.
+            $('correction-status').textContent = message;
+        } else if (action === 'report') {
+            await restoreAnalysis();
+            $('report-status').textContent = `No se pudo continuar: ${message}`;
+        } else {
+            renderAnalysis({status: 'error', message});
+        }
+    } finally {
+        preparing = false;
+        $('facebook-continue-button').disabled = false;
+        $('facebook-cancel-button').disabled = false;
+        updateActions();
     }
+}
+async function cancelFacebookCorrection() {
+    if (preparing) return;
+    pendingAction = null;
+    $('correction-status').textContent = '';
+    setPanelState('initial');
+    await restoreAnalysis();
 }
 
 $('login-form').addEventListener('submit', (event) => void handleLogin(event));
@@ -1186,6 +1224,7 @@ $('reanalyze-button').addEventListener('click', () => void analyzeClick());
 $('retry-button').addEventListener('click', () => void analyzeClick());
 $('report-form').addEventListener('submit', (event) => void reportSubmit(event));
 $('facebook-continue-button').addEventListener('click', () => void continueFacebook());
+$('facebook-cancel-button').addEventListener('click', () => void cancelFacebookCorrection());
 $('fb-price').addEventListener('input', () => {
     for (const button of $('temu-price-options').querySelectorAll('button')) {
         button.setAttribute('aria-pressed', String(button.dataset.price === $('fb-price').value.trim()));
