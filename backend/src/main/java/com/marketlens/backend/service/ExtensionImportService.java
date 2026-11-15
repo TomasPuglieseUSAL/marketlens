@@ -48,6 +48,37 @@ public class ExtensionImportService {
         validateLength(request.description(), 20000, "description");
         validateLength(request.url(), 2048, "url");
         validateLength(username, 255, "username");
+        validateLength(request.selectedOfferId(), 120, "selectedOfferId");
+
+        // No sustituir la identidad del producto del catálogo por un MLA
+        // individual sin una selección explícita y consistente.
+        String selectedOfferId = normalizeOptional(request.selectedOfferId());
+        if (selectedOfferId != null) {
+            String url = request.url();
+            String externalId = request.externalId();
+            boolean isCatalog = false;
+            try {
+                URI catalog = URI.create(url);
+                String host = catalog.getHost();
+                isCatalog = "https".equalsIgnoreCase(catalog.getScheme())
+                        && host != null
+                        && (host.equalsIgnoreCase("mercadolibre.com.ar")
+                            || host.toLowerCase(java.util.Locale.ROOT).endsWith(".mercadolibre.com.ar"))
+                        && catalog.getPath() != null
+                        && catalog.getPath().matches(
+                            "(?i)^/(?:[^/]+/)?p/MLA\\d{6,}/?$");
+            } catch (IllegalArgumentException ignored) {
+                // Se rechaza con el mismo mensaje que una referencia incoherente.
+            }
+            if (!"MERCADO_LIBRE".equals(request.marketplace())
+                    || !isCatalog
+                    || !selectedOfferId.matches("MLA[1-9]\\d{5,}")
+                    || !selectedOfferId.equalsIgnoreCase(externalId == null ? "" : externalId)
+                    || request.seller() == null || request.seller().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "La oferta seleccionada no coincide con un ID individual de Mercado Libre, vendedor y catálogo válidos.");
+            }
+        }
 
         if ("FACEBOOK_MARKETPLACE".equals(request.marketplace())) {
             validateFacebookUrl(request.url());
@@ -63,6 +94,7 @@ public class ExtensionImportService {
                 normalizeOptional(request.description()),
                 request.url().trim(),
                 username);
+        imported.setSelectedOfferId(selectedOfferId);
 
         Long externalSellerId = null;
 
