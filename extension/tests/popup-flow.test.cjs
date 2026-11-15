@@ -812,3 +812,48 @@ test('la protección del background rechaza el catálogo antes del POST', () => 
     assert.equal(vm.runInContext("requireExtractedData(" + JSON.stringify(data) + ").externalId", context),
         'MLA123456789');
 });
+
+
+test('catálogo: una oferta visible enlazada aporta su ID, vendedor y precio sin confundir el ID de producto', () => {
+    const p = popup();
+    p.run("globalThis.window={location:{pathname:'/ssd-kingston/p/MLA24356923',href:'https://www.mercadolibre.com.ar/ssd-kingston/p/MLA24356923'}}");
+    p.run("globalThis.chosenLink={getAttribute:()=> 'https://articulo.mercadolibre.com.ar/MLA-123456789-ssd-kingston'}");
+    p.run("globalThis.chosenPrice={querySelector:s=>s.includes('fraction')?{textContent:'175.500'}:null}");
+    p.run("globalThis.chosenOffer={innerText:'Vendido por KINGSTON_STORE',hidden:false,getClientRects:()=>[{}],getAttribute:()=>null,querySelectorAll:s=>s.includes('a[href]')?[chosenLink]:[],querySelector:s=>s.includes('andes-money-amount')?chosenPrice:null}");
+    p.run("document.body={innerText:''}");
+    p.run("document.querySelectorAll=s=>s.includes('[role=')?[chosenOffer]:s.includes('application/ld+json')?[{textContent:JSON.stringify({'@type':'Product',name:'SSD Kingston KC600 512 GB',description:'SSD SATA nuevo de 512 GB',aggregateRating:{ratingValue:'4.7',reviewCount:286},offers:{price:'200000',priceCurrency:'ARS'}})}]:[]");
+    p.run("document.querySelector=s=>s==='h1.ui-pdp-title'?{textContent:'SSD Kingston KC600 512 GB'}:null");
+    const result = p.run('extractMercadoLibre()');
+    assert.equal(result.found, true);
+    assert.equal(result.externalId, 'MLA123456789');
+    assert.equal(result.price, '175.500');
+    assert.equal(result.seller, 'KINGSTON_STORE');
+    assert.equal(result.url, 'https://articulo.mercadolibre.com.ar/MLA-123456789-ssd-kingston');
+    assert.equal(result.mlProductRating, 4.7);
+    assert.equal(result.mlProductReviewCount, 286);
+    assert.equal(result.sellerReputationLevel, null);
+});
+
+test('catálogo: ofertas ambiguas no se asignan a un vendedor arbitrario', () => {
+    const p = popup();
+    p.run("globalThis.window={location:{pathname:'/ssd/p/MLA24356923',href:'https://www.mercadolibre.com.ar/ssd/p/MLA24356923'}}");
+    p.run("globalThis.chosenOffer={innerText:'Vendido por VENDEDOR',hidden:false,getClientRects:()=>[{}],getAttribute:()=>null,querySelector:s=>({querySelector:q=>q.includes('fraction')?{textContent:'175000'}:null}),querySelectorAll:s=>s.includes('a[href]')?[{getAttribute:()=> 'https://articulo.mercadolibre.com.ar/MLA-123456789-uno'},{getAttribute:()=> 'https://articulo.mercadolibre.com.ar/MLA-987654321-dos'}]:[]}");
+    p.run("document.querySelectorAll=s=>s.includes('[role=')?[chosenOffer]:[]");
+    const result = p.run('extractMercadoLibre()');
+    assert.equal(result.found, false);
+    assert.match(result.message, /no pude identificar una oferta/);
+});
+
+test('Mercado Libre informa qué dimensiones faltan en una cobertura parcial', () => {
+    const p = popup();
+    p.run("renderRisk({evaluation:{level:'INDETERMINATE',score:0,availableFactors:1,totalFactors:3,coverageStatus:'PARTIAL',coverageFactors:[{code:'DESCRIPTION',name:'Información del producto',available:true},{code:'SELLER_REPUTATION',name:'Reputación o actividad del vendedor',available:false},{code:'PRODUCT_REVIEWS',name:'Calificación y opiniones del producto',available:false}],factors:[]}})");
+    assert.match(p.element('result-coverage-note').textContent, /Falta: Reputación o actividad del vendedor, Calificación y opiniones del producto/);
+    assert.equal(p.element('result-coverage').textContent, '1/3');
+});
+
+test('la calificación observada de Mercado Libre aparece resumida', () => {
+    const p = popup();
+    const note = 'El producto muestra 4.7/5 con 286 opiniones en Mercado Libre. No representan reputación del vendedor.';
+    const text = p.run("conciseFactorLabel({code:'ML_PRODUCT_REVIEWS_OBSERVED',description:"+JSON.stringify(note)+"})");
+    assert.equal(text, 'Calificación: 4,7/5 (286 opiniones).');
+});
