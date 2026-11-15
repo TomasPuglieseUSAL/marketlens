@@ -1,5 +1,6 @@
 package com.marketlens.backend.service;
 
+import com.marketlens.backend.dto.RiskCoverageFactorResponse;
 import com.marketlens.backend.entity.Marketplace;
 import com.marketlens.backend.entity.Publication;
 import com.marketlens.backend.entity.RiskCoverageStatus;
@@ -10,72 +11,60 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Component
 public class RiskCoverageCalculator {
 
-    // La tercera dimensión sólo aplica donde se extraen opiniones de producto.
-    private static int totalFactors(Publication publication) {
-        return publication.getMarketplace() == Marketplace.TEMU ? 3 : 2;
+    public static boolean hasSellerEvidence(Publication publication, LocalDateTime now) {
+        Seller seller = publication.getSeller();
+        if (seller == null) return false;
+        Integer level = seller.getReputationLevel();
+        BigDecimal legacy = seller.getReputation();
+        return (level != null && level >= 1 && level <= 5)
+                || (legacy != null && legacy.compareTo(BigDecimal.ZERO) >= 0
+                    && legacy.compareTo(BigDecimal.ONE) <= 0)
+                || SellerActivityEvidence.detect(seller, now)
+                    != SellerActivityEvidence.ActivitySignal.NONE
+                || TemuSellerRiskScoring.hasObservedReputation(publication, now)
+                || MercadoLibreSellerEvidence.hasObservedReputation(publication, now);
     }
 
-    public void applyCoverage(
-            Publication publication,
-            RiskEvaluation evaluation) {
+    /**
+     * Un solo criterio para el conteo y el detalle que recibe la extensión.
+     * Las reseñas del PRODUCTO no se confunden con señales del vendedor.
+     */
+    public static List<RiskCoverageFactorResponse> factors(Publication publication) {
+        LocalDateTime now = LocalDateTime.now();
+        List<RiskCoverageFactorResponse> result = new ArrayList<>();
+        String description = publication.getDescription();
+        result.add(new RiskCoverageFactorResponse("DESCRIPTION",
+                "Información del producto", description != null && !description.isBlank()));
+        result.add(new RiskCoverageFactorResponse("SELLER_REPUTATION",
+                "Reputación o actividad del vendedor", hasSellerEvidence(publication, now)));
 
-        int available = countAvailableFactors(publication);
-        int total = totalFactors(publication);
-
-        RiskCoverageStatus status;
-
-        if (available == total) {
-            status = RiskCoverageStatus.COMPLETE;
-
-        } else if (available == 0) {
-            status = RiskCoverageStatus.INSUFFICIENT;
-
-        } else {
-            status = RiskCoverageStatus.PARTIAL;
+        Marketplace marketplace = publication.getMarketplace();
+        if (marketplace == Marketplace.TEMU || marketplace == Marketplace.MERCADO_LIBRE) {
+            boolean hasReviews = marketplace == Marketplace.TEMU
+                    ? TemuProductReviewEvidence.hasObservedEvidence(publication, now)
+                    : MercadoLibreProductReviewEvidence.hasObservedEvidence(publication, now);
+            result.add(new RiskCoverageFactorResponse("PRODUCT_REVIEWS",
+                    "Calificación y opiniones del producto", hasReviews));
         }
+        return List.copyOf(result);
+    }
+
+    public void applyCoverage(Publication publication, RiskEvaluation evaluation) {
+        List<RiskCoverageFactorResponse> evidence = factors(publication);
+        int available = (int) evidence.stream().filter(RiskCoverageFactorResponse::available).count();
+        int total = evidence.size();
+        RiskCoverageStatus status = available == total ? RiskCoverageStatus.COMPLETE
+                : available == 0 ? RiskCoverageStatus.INSUFFICIENT
+                : RiskCoverageStatus.PARTIAL;
 
         evaluation.setCoverageStatus(status);
         evaluation.setAvailableFactors(available);
         evaluation.setTotalFactors(total);
     }
-
-    private int countAvailableFactors(Publication publication) {
-
-        int available = 0;
-
-        // 1. Información de producto.
-        String description = publication.getDescription();
-        if (description != null && !description.isBlank()) available++;
-
-        // 2. Reputación o historial comercial observado del vendedor.
-        Seller seller = publication.getSeller();
-        if (seller != null) {
-            Integer reputationLevel = seller.getReputationLevel();
-            BigDecimal reputation = seller.getReputation();
-            boolean hasReputationLevel = reputationLevel != null
-                    && reputationLevel >= 1 && reputationLevel <= 5;
-            boolean hasLegacyReputation = reputation != null
-                    && reputation.compareTo(BigDecimal.ZERO) >= 0
-                    && reputation.compareTo(BigDecimal.ONE) <= 0;
-            boolean hasCommercialEvidence = SellerActivityEvidence.detect(
-                    seller, LocalDateTime.now())
-                    != SellerActivityEvidence.ActivitySignal.NONE;
-            if (hasReputationLevel || hasLegacyReputation || hasCommercialEvidence ||
-                    TemuSellerRiskScoring.hasObservedReputation(publication, LocalDateTime.now())) {
-                available++;
-            }
-        }
-
-        // 3. Opiniones del producto: disponible para Temu.
-        // No usar la edad de la cuenta como requisito de cobertura.
-        if (TemuProductReviewEvidence.hasObservedEvidence(publication, LocalDateTime.now())) {
-            available++;
-        }
-        return available;
-    }
-
 }
