@@ -177,6 +177,25 @@ export default function PublicationDetailsPage({
               </p>
             )}
 
+            {publication.marketplace === 'TEMU' && publication.temuStoreTenureText && (
+              <p className="session-message" role="note">
+                <strong>Antigüedad aproximada de la tienda:</strong>{' '}
+                {publication.temuStoreTenureText}.
+                {' '}Es una estimación de Temu, no la fecha exacta de apertura.
+                {publication.temuStoreTenureObservedAt &&
+                  <> Observada: {new Date(publication.temuStoreTenureObservedAt).toLocaleString('es-AR')}.</>}
+              </p>
+            )}
+            {publication.marketplace === 'TEMU' && publication.temuProductSoldText && (
+              <p className="session-message" role="note">
+                <strong>Actividad observada del producto:</strong>{' '}
+                {publication.temuProductSoldText}.
+                {' '}No equivale a ventas totales verificadas del vendedor.
+                {publication.temuProductSalesObservedAt &&
+                  <> Observada: {new Date(publication.temuProductSalesObservedAt).toLocaleString('es-AR')}.</>}
+              </p>
+            )}
+
             {publication.marketplace === 'TEMU' && publication.sellerBadge === 'TEMU_STAR_SELLER' && (
               <p className="session-message" role="note">
                 <strong>Star Seller</strong> · Distintivo observado en Temu; no equivale
