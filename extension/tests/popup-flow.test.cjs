@@ -183,7 +183,6 @@ test('cancelar la elección de precio restaura el panel inicial', async () => {
 test('el reporte manual permanece plegado hasta tocar el botón', () => {
     const p = popup();
     p.run("authenticated=true; pageSupported=true; setPanelState('initial'); updateActions()");
-    assert.equal(p.element('report-details').hidden, false); // DOM simulado sin atributos
     p.run("setReportExpanded(false)");
     assert.equal(p.element('report-details').hidden, true);
     p.run("toggleReport()");
@@ -208,4 +207,26 @@ test('reporte de Temu continúa tras precio confirmado sin iniciar análisis aut
     assert.equal(p.element('report-section').hidden, false);
     assert.equal(p.element('report-details').hidden, false);
     assert.equal(p.element('report-status').textContent, 'Reporte enviado');
+});
+
+test('Temu con precio único coincidente analiza sin pedir confirmación', async () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; pageKey='tab:temu'; currentMarketplace='TEMU'");
+    p.run("extractedData={marketplace:'TEMU',externalId:'606892013277333',title:'Funda',price:'9507',currency:'ARS',seller:'Tokki Shop',priceCandidates:['9507']}");
+    p.run("extractCurrentListing = async () => extractedData");
+    const data = await p.run("prepareData('analyze')");
+    assert.equal(data.price, '9507');
+    assert.equal(p.element('temu-price-panel').hidden, true);
+    assert.equal(p.run('pendingAction'), null);
+});
+
+test('Temu con precio extraído en conflicto con la opción visible pide confirmación', async () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; pageKey='tab:temu'; currentMarketplace='TEMU'");
+    p.run("extractedData={marketplace:'TEMU',externalId:'606892013277333',title:'Funda',price:'9507',currency:'ARS',seller:'Tokki Shop',priceCandidates:['9059']}");
+    p.run("extractCurrentListing = async () => extractedData");
+    const data = await p.run("prepareData('analyze')");
+    assert.equal(data, null);
+    assert.equal(p.element('temu-price-panel').hidden, false);
+    assert.equal(p.element('analysis-title').textContent, 'Confirmar precio');
 });
