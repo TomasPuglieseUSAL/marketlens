@@ -292,8 +292,11 @@ test('el reporte manual permanece plegado hasta tocar el botón', () => {
     assert.equal(p.element('report-details').hidden, false);
     assert.equal(p.element('report-toggle').getAttribute('aria-expanded'), 'true');
     p.run("toggleReport()");
-    assert.equal(p.element('report-details').hidden, true);
+    assert.equal(p.element('report-details').hidden, false, 'El reporte sigue visible durante la salida');
+    assert.equal(p.element('report-details').classList.contains('is-closing'), true);
     assert.equal(p.element('report-toggle').getAttribute('aria-expanded'), 'false');
+    p.advance(300);
+    assert.equal(p.element('report-details').hidden, true);
 });
 
 test('reporte de Temu continúa tras precio confirmado sin iniciar análisis automático', async () => {
@@ -484,7 +487,7 @@ test('cerrar sesión con movimiento reducido es inmediato', async () => {
 test('el marco del popup mantiene 540px en todas las pantallas', () => {
     const css = fs.readFileSync(path.join(__dirname, '../popup/popup.css'), 'utf8');
     assert.match(css, /body\s*\{[^}]*height:\s*540px;[^}]*max-height:\s*540px;/s);
-    assert.match(css, /body\s*\{[^}]*overflow-y:\s*auto;/s);
+    assert.match(css, /body\s*\{[^}]*overflow-y:\s*scroll;/s);
     assert.match(css, /\.popup\s*\{[^}]*min-height:\s*540px;/s);
     assert.match(css, /\.brand\s*\{[^}]*position:\s*sticky;/s);
     assert.equal(/\.popup\s*\{[^}]*overflow:\s*clip;/s.test(css), false);
