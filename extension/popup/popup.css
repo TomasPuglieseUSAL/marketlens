@@ -43,6 +43,8 @@
   --error: #a22d37;
   --error-bg: #fff1f1;
   --error-border: #f1c7c8;
+  --report-accent: #a1363d;
+  --report-surface: #fff4f4;
 
   --shadow-card: 0 3px 14px rgba(29, 36, 43, .055);
   --shadow-action: 0 5px 15px rgba(185, 67, 0, .15);
@@ -79,6 +81,8 @@
   --error: #ff9ca4;
   --error-bg: #422329;
   --error-border: #74434b;
+  --report-accent: #ff9ca4;
+  --report-surface: #38262c;
   --shadow-card: 0 4px 16px rgba(0, 0, 0, .19);
   --shadow-action: 0 5px 15px rgba(0, 0, 0, .2);
   --focus-ring: rgba(255, 129, 46, .4);
@@ -379,35 +383,96 @@ footer {
   line-height: 1;
 }
 
-/* Temu: precios seleccionables, visibles y distinguibles del texto auxiliar.
-   Reutiliza los tokens de tema claro/oscuro del popup. */
+/* Transiciones breves al entrar en un estado. La salida es inmediata para
+   evitar paneles superpuestos o acciones sobre un formulario anterior. */
+@keyframes ml-panel-enter {
+  from { opacity: 0; transform: translateY(7px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+#analysis-overview:not([hidden]),
+#temu-price-panel:not([hidden]),
+#loading-section:not([hidden]),
+#result-section:not([hidden]),
+#error-section:not([hidden]),
+#facebook-correction:not([hidden]),
+#report-details:not([hidden]) {
+  animation: ml-panel-enter .22s ease-out both;
+}
+
+/* El reporte solo ocupa espacio después de abrirlo: acción discretamente roja. */
+.report-section { margin-top: 12px; }
+.report-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 13px;
+  border-radius: 9px;
+  border: 1px solid var(--error-border);
+  background: var(--report-surface);
+  color: var(--report-accent);
+  box-shadow: var(--shadow-card);
+  font-weight: 750;
+  text-align: left;
+}
+.report-toggle:hover:not(:disabled),
+.report-toggle[aria-expanded="true"] {
+  border-color: var(--report-accent);
+  background: var(--error-bg);
+}
+.report-toggle-icon { font-size: 19px; line-height: 1; }
+.report-toggle-label { flex: 1; font-size: 12.5px; }
+.report-chevron { font-size: 20px; line-height: 1; transition: transform .18s ease; }
+.report-toggle[aria-expanded="true"] .report-chevron { transform: rotate(180deg); }
+.report-card { margin: 7px 0 0; border-color: var(--error-border); }
+.report-card h2 { font-size: 13px; }
+
+/* Confirmación de precios en un paso independiente, anterior al formulario. */
 .temu-price-panel {
-  margin: 12px 0;
-  padding: 10px;
-  border: 1px solid var(--accent-line);
-  border-radius: 8px;
+  margin: 12px 0 0;
+  padding: 15px 13px;
+  border: 1.5px solid var(--accent-line);
+  border-radius: 10px;
   background: var(--accent-soft);
 }
-.temu-price-title {
-  margin: 0 0 8px;
-  color: var(--text-primary);
-  font-weight: 750;
-  font-size: 12px;
+.step-eyebrow {
+  margin: 0 0 5px;
+  color: var(--accent-strong);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .6px;
+  text-transform: uppercase;
 }
+.temu-price-panel h3 {
+  color: var(--text-primary);
+  font-size: 17px;
+  line-height: 1.25;
+  font-weight: 800;
+}
+.price-guidance {
+  margin: 10px 0;
+  color: var(--text-primary);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.price-guidance strong { font-weight: 800; }
+.price-guidance-secondary { font-size: 12px; color: var(--text-secondary); }
 .temu-price-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0 14px;
 }
 .temu-price-option {
   margin: 0;
-  min-height: 40px;
-  padding: 8px 11px;
+  min-height: 48px;
+  padding: 9px 7px;
   border: 1px solid var(--surface-border-strong);
-  border-radius: 7px;
+  border-radius: 8px;
   background: var(--surface-raised);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -421,4 +486,18 @@ footer {
   background: var(--surface-raised);
   box-shadow: inset 0 0 0 1px var(--accent-strong);
 }
-.temu-price-panel .muted { margin-bottom: 0; line-height: 1.45; }
+.temu-price-panel label { font-size: 12px; }
+#temu-confirm-price { font-size: 15px; font-weight: 700; }
+.form-error:not(:empty) { margin: 9px 0; color: var(--error); font-weight: 700; }
+.form-error:empty { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  #analysis-overview:not([hidden]),
+  #temu-price-panel:not([hidden]),
+  #loading-section:not([hidden]),
+  #result-section:not([hidden]),
+  #error-section:not([hidden]),
+  #facebook-correction:not([hidden]),
+  #report-details:not([hidden]) { animation: none; }
+  .report-chevron { transition: none; }
+}
