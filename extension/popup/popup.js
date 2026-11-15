@@ -651,8 +651,8 @@ function extractMercadoLibre() {
                 );
                 const sellerName = sellerMatch?.[1]?.replace(/\s+/g, ' ').trim();
                 const priceContainer = group.querySelector(
-                    '.ui-pdp-price__second-line .andes-money-amount, .andes-money-amount'
-                );
+                    '.ui-pdp-price__second-line .andes-money-amount'
+                ) || group.querySelector('.andes-money-amount');
                 const amount = priceContainer?.querySelector(
                     '.andes-money-amount__fraction'
                 )?.textContent?.trim();
