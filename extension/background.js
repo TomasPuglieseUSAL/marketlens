@@ -91,6 +91,8 @@ function importPayload(data) {
         temuSellerReviewCount: data.temuSellerReviewCount ?? null,
         temuProductRating: data.temuProductRating ?? null,
         temuProductReviewCount: data.temuProductReviewCount ?? null,
+        mlProductRating: data.mlProductRating ?? null,
+        mlProductReviewCount: data.mlProductReviewCount ?? null,
         temuStoreTenureText: data.temuStoreTenureText ?? null,
         temuProductSoldText: data.temuProductSoldText ?? null,
         temuStoreSoldText: data.temuStoreSoldText ?? null,
@@ -108,7 +110,9 @@ function identityKey(data) {
 }
 
 async function lookupSavedPublication(data) {
-    if (data.marketplace === 'TEMU') return null; // El precio podría haber cambiado.
+    // Reimportar observaciones recientes de ML y Temu aunque exista un
+    // mapeo local: la reputación y las opiniones pueden haber cambiado.
+    if (data.marketplace === 'TEMU' || data.marketplace === 'MERCADO_LIBRE') return null;
     const key = `marketlens:publication:${identityKey(data)}`;
     const cachedId = (await ext.storage.local.get(key))[key];
     if (!Number.isSafeInteger(cachedId) || cachedId <= 0) return null;
