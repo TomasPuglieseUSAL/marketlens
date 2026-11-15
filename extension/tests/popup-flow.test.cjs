@@ -766,3 +766,48 @@ test('scrollbar ocupa ancho permanente y el encabezado sigue fijo', () => {
     assert.match(css, /body\s*\{[^}]*height:\s*540px;/s);
     assert.match(css, /\.brand\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;/s);
 });
+
+
+test('Mercado Libre: una ficha /p/MLA con slug no es una oferta individual', () => {
+    const p = popup();
+    const catalog = 'https://www.mercadolibre.com.ar/disco-solido-ssd-kingston-kc600-512gb-color-gris-oscuro/p/MLA24356923';
+    const simple = 'https://www.mercadolibre.com.ar/p/MLA24356923';
+    const offer = 'https://articulo.mercadolibre.com.ar/MLA-123456789-ssd-kingston';
+    const userProduct = 'https://www.mercadolibre.com.ar/ssd-kingston/up/MLAU123456789';
+    assert.equal(p.run("isMercadoLibreCatalogUrl(" + JSON.stringify(catalog) + ")"), true);
+    assert.equal(p.run("isMercadoLibreCatalogUrl(" + JSON.stringify(simple) + ")"), true);
+    assert.equal(p.run("isSupportedPage(" + JSON.stringify(catalog) + ",'MERCADO_LIBRE')"), false);
+    assert.equal(p.run("isSupportedPage(" + JSON.stringify(simple) + ",'MERCADO_LIBRE')"), false);
+    assert.equal(p.run("isSupportedPage(" + JSON.stringify(offer) + ",'MERCADO_LIBRE')"), true);
+    assert.equal(p.run("isSupportedPage(" + JSON.stringify(userProduct) + ",'MERCADO_LIBRE')"), true);
+});
+
+test('la extracción nunca asigna el ID de catálogo a una publicación', () => {
+    const p = popup();
+    p.run("globalThis.window = {location:{pathname:'/disco-solido-ssd-kingston-kc600-512gb-color-gris-oscuro/p/MLA24356923'}}");
+    const response = p.run('extractMercadoLibre()');
+    assert.equal(response.found, false);
+    assert.match(response.message, /ficha de catálogo/);
+});
+
+test('la protección del background rechaza el catálogo antes del POST', () => {
+    const file = fs.readFileSync(path.join(__dirname, '../background.js'), 'utf8');
+    const context = vm.createContext({
+        browser: {runtime:{onMessage:{addListener(){}}}},
+        URL
+    });
+    vm.runInContext(file, context, {filename: 'background.js'});
+    const data = {
+        marketplace:'MERCADO_LIBRE', title:'Kingston KC600 512 GB',
+        price:'320000', seller:'Vendedor de prueba', externalId:'MLA24356923',
+        url:'https://www.mercadolibre.com.ar/disco-solido-ssd-kingston-kc600-512gb-color-gris-oscuro/p/MLA24356923'
+    };
+    assert.throws(
+        () => vm.runInContext("requireExtractedData(" + JSON.stringify(data) + ")", context),
+        /ficha de catálogo/
+    );
+    data.url = 'https://articulo.mercadolibre.com.ar/MLA-123456789-ssd-kingston';
+    data.externalId = 'MLA123456789';
+    assert.equal(vm.runInContext("requireExtractedData(" + JSON.stringify(data) + ").externalId", context),
+        'MLA123456789');
+});
