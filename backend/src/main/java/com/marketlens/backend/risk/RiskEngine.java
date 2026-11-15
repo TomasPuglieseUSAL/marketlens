@@ -10,6 +10,7 @@ import com.marketlens.backend.service.SellerActivityEvidence;
 import com.marketlens.backend.service.PriceRiskScoring;
 import com.marketlens.backend.service.TemuSellerRiskScoring;
 import com.marketlens.backend.service.TemuProductReviewEvidence;
+import com.marketlens.backend.service.TemuCommercialEvidence;
 
 import org.springframework.stereotype.Component;
 
@@ -92,6 +93,24 @@ public class RiskEngine {
             addFactor(evaluation, productSignal.code(),
                     productSignal.description(), productSignal.points());
             score += productSignal.points();
+        }
+
+        // Antigüedad aproximada de la tienda y ventas mostradas del PRODUCTO.
+        // Mantener ambas señales separadas de la reputación y de las
+        // ventas verificadas del vendedor; no cambian la cobertura.
+        TemuCommercialEvidence.Signal tenureSignal =
+                TemuCommercialEvidence.evaluateStoreAge(publication, LocalDateTime.now());
+        if (tenureSignal != null) {
+            addFactor(evaluation, tenureSignal.code(),
+                    tenureSignal.description(), tenureSignal.points());
+            score += tenureSignal.points();
+        }
+        TemuCommercialEvidence.Signal productSalesSignal =
+                TemuCommercialEvidence.evaluateProductSales(publication, LocalDateTime.now());
+        if (productSalesSignal != null) {
+            addFactor(evaluation, productSalesSignal.code(),
+                    productSalesSignal.description(), productSalesSignal.points());
+            score += productSalesSignal.points();
         }
 
         // Valor observado junto al nombre de la tienda; no usar aggregateRating
