@@ -788,7 +788,7 @@ test('la extracción nunca asigna el ID de catálogo a una publicación', () => 
     p.run("document.querySelectorAll = () => []");
     const response = p.run('extractMercadoLibre()');
     assert.equal(response.found, false);
-    assert.match(response.message, /ficha de catálogo/);
+    assert.match(response.message, /producto de catálogo/);
 });
 
 test('la protección del background rechaza el catálogo antes del POST', () => {
