@@ -1,0 +1,94 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+
+const entirePopup = fs.readFileSync(path.join(__dirname, '../popup/popup.js'), 'utf8');
+// Ejecutar las funciones sin arrancar los listeners de la extensión real.
+const bootstrap = entirePopup.indexOf("$('login-form').addEventListener('submit'");
+assert.ok(bootstrap > 0, 'No se encontró el límite del bootstrap');
+const source = entirePopup.slice(0, bootstrap);
+
+function popup() {
+    const elements = new Map();
+    function element(id) {
+        if (!elements.has(id)) {
+            elements.set(id, {
+                id, hidden: false, disabled: false, value: '',
+                textContent: '', dataset: {}, children: [],
+                querySelectorAll: () => [],
+                replaceChildren() { this.children = []; },
+                appendChild(child) { this.children.push(child); }
+            });
+        }
+        return elements.get(id);
+    }
+    const document = {
+        getElementById: element,
+        createElement: tagName => ({tagName, textContent: ''}),
+        documentElement: {dataset: {}}
+    };
+    const browser = {
+        storage: {
+            local: {get: async () => ({}), set: async () => undefined}
+        },
+        runtime: {sendMessage: async () => ({ok: true})}
+    };
+    const context = vm.createContext({document, browser, URL, console, Date});
+    vm.runInContext(source, context, {filename: 'popup.js'});
+    function run(js) { return vm.runInContext(js, context); }
+    return {element, run};
+}
+
+function enterFacebookForm(p) {
+    p.run("authenticated=true; pageSupported=true; pageKey='tab:facebook'; currentMarketplace='FACEBOOK_MARKETPLACE'");
+    p.run("extractedData={marketplace:'FACEBOOK_MARKETPLACE',externalId:'123456789',title:'Producto',price:'9507',seller:null,description:'Prueba'}");
+    return p.run("prepareData('analyze')");
+}
+
+test('el formulario sustituye la sección inicial y no deja el botón visible', async () => {
+    const p = popup();
+    p.run("setPanelState('initial')");
+    assert.equal(p.element('analyze-button').hidden, false);
+    const data = await enterFacebookForm(p);
+    assert.equal(data, null);
+    assert.equal(p.element('analysis-overview').hidden, true);
+    assert.equal(p.element('analyze-button').hidden, true);
+    assert.equal(p.element('loading-section').hidden, true);
+    assert.equal(p.element('result-section').hidden, true);
+    assert.equal(p.element('facebook-correction').hidden, false);
+});
+
+test('validación incompleta conserva el formulario y muestra allí el error', async () => {
+    const p = popup();
+    await enterFacebookForm(p);
+    await p.run("continueFacebook()");
+    assert.equal(p.element('facebook-correction').hidden, false);
+    assert.equal(p.element('analysis-overview').hidden, true);
+    assert.match(p.element('correction-status').textContent, /nombre del vendedor/);
+    assert.equal(p.element('facebook-continue-button').disabled, false);
+});
+
+test('continuar pasa a procesamiento y después recupera el panel de resultado', async () => {
+    const p = popup();
+    await enterFacebookForm(p);
+    p.element('fb-seller').value = 'Tienda de prueba';
+    p.run("startAnalysis = async () => { if (!$('analysis-overview').hidden || $('loading-section').hidden) throw new Error('No se mostró el procesamiento'); renderAnalysis({status:'success',publicationId:13,evaluation:{level:'LOW',score:0,availableFactors:3,totalFactors:3,coverageStatus:'COMPLETE',factors:[]}}); }");
+    await p.run("continueFacebook()");
+    assert.equal(p.element('facebook-correction').hidden, true);
+    assert.equal(p.element('analysis-overview').hidden, false);
+    assert.equal(p.element('analyze-button').hidden, true);
+    assert.equal(p.element('result-section').hidden, false);
+    assert.equal(p.element('result-level').textContent, 'Riesgo bajo');
+});
+
+test('cancelar descarta la edición y recupera el botón de analizar', async () => {
+    const p = popup();
+    await enterFacebookForm(p);
+    await p.run("cancelFacebookCorrection()");
+    assert.equal(p.element('facebook-correction').hidden, true);
+    assert.equal(p.element('analysis-overview').hidden, false);
+    assert.equal(p.element('analyze-button').hidden, false);
+    assert.equal(p.run("pendingAction"), null);
+});
