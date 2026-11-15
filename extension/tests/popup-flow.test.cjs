@@ -464,97 +464,58 @@ test('cerrar sesión con movimiento reducido es inmediato', async () => {
 });
 
 
-test('el popup interpola la altura al contraerse para mostrar el spinner', () => {
-    const p = popup();
-    p.run("authenticated=true; pageSupported=true; setPanelState('initial')");
-    p.run("setReportExpanded(false)");
-    p.enableHeightAnimations();
-    p.run("setPanelState('loading')");
-    assert.equal(p.heightAnimations.length, 1);
-    const transition = p.heightAnimations[0];
-    assert.equal(transition.frames[0].height, '430px');
-    assert.equal(transition.frames[1].height, '285px');
-    assert.equal(transition.options.duration, 580);
-    assert.equal(transition.options.fill, 'forwards');
-    assert.equal(transition.options.easing, 'cubic-bezier(.45, 0, .55, 1)');
+test('el marco del popup mantiene 540px en todas las pantallas', () => {
+    const css = fs.readFileSync(path.join(__dirname, '../popup/popup.css'), 'utf8');
+    assert.match(css, /body\s*\{[^}]*height:\s*540px;[^}]*max-height:\s*540px;/s);
+    assert.match(css, /body\s*\{[^}]*overflow-y:\s*auto;/s);
+    assert.match(css, /\.popup\s*\{[^}]*min-height:\s*540px;/s);
+    assert.match(css, /\.brand\s*\{[^}]*position:\s*sticky;/s);
+    assert.equal(/\.popup\s*\{[^}]*overflow:\s*clip;/s.test(css), false);
 });
 
-test('al terminar se expande el popup y recién después enfoca los resultados', () => {
+test('pasar de inicio a carga y resultado no anima el marco exterior', () => {
     const p = popup();
-    p.run("authenticated=true; pageSupported=true; setPanelState('initial')");
-    p.run("setReportExpanded(false)");
+    p.run("authenticated=true; pageSupported=true; pageKey='tab:a'; setPanelState('initial'); setReportExpanded(false)");
     p.enableHeightAnimations();
     p.run("renderAnalysis({status:'loading',message:'Procesando'})");
-    p.heightAnimations[0].finish();
+    assert.equal(p.heightAnimations.length, 0);
+    assert.equal(p.element('loading-section').hidden, false);
     p.advance(1500);
-    p.run("renderAnalysis({status:'success',publicationId:13,evaluation:{level:'LOW',score:0,availableFactors:3,totalFactors:3,coverageStatus:'COMPLETE',factors:[]}})");
-    assert.equal(p.heightAnimations.length, 2);
-    assert.equal(p.heightAnimations[1].frames[0].height, '285px');
-    assert.equal(p.heightAnimations[1].frames[1].height, '565px');
-    assert.equal(p.element('result-section').scrollCalls.length, 0);
-    p.heightAnimations[1].finish();
+    p.run("renderAnalysis({status:'success',publicationId:1,evaluation:{level:'LOW',score:0,availableFactors:2,totalFactors:2,factors:[]}})");
+    assert.equal(p.heightAnimations.length, 0);
+    assert.equal(p.element('result-section').hidden, false);
     assert.equal(p.element('result-section').scrollCalls.length, 1);
 });
 
-test('las transiciones consecutivas parten de la altura animada actual', () => {
-    const p = popup();
-    p.run("authenticated=true; pageSupported=true; setPanelState('initial')");
-    p.run("setReportExpanded(false)");
-    p.enableHeightAnimations();
-    p.run("setPanelState('loading')");
-    p.run("setPanelState('success')");
-    assert.equal(p.heightAnimations.length, 2);
-    assert.equal(p.heightAnimations[1].frames[0].height, '430px');
-    assert.equal(p.heightAnimations[1].frames[1].height, '565px');
-    p.heightAnimations[0].finish();
-    assert.equal(p.run("popupHeightAnimation !== null"), true);
-    p.heightAnimations[1].finish();
-    assert.equal(p.run("popupHeightAnimation"), null);
-});
-
-test('el formulario de reporte y el logout también ajustan la altura progresivamente', () => {
-    const p = popup();
-    p.run("authenticated=true; pageSupported=true; showLoggedIn('Usuario'); setPanelState('initial')");
-    p.run("setReportExpanded(false)");
-    p.enableHeightAnimations();
-    p.run("setReportExpanded(true)");
-    assert.equal(p.heightAnimations[0].frames[0].height, '430px');
-    assert.equal(p.heightAnimations[0].frames[1].height, '620px');
-    p.heightAnimations[0].finish();
-    p.run("showLoggedOut('Sesión cerrada')");
-    assert.equal(p.heightAnimations[1].frames[0].height, '620px');
-    assert.equal(p.heightAnimations[1].frames[1].height, '225px');
-});
-
-test('la altura cambia sin animación si el sistema pide reducir movimiento', () => {
-    const p = popup();
-    p.run("authenticated=true; pageSupported=true; setPanelState('initial')");
-    p.enableHeightAnimations();
-    p.setReducedMotion(true);
-    p.run("setPanelState('loading')");
-    assert.equal(p.heightAnimations.length, 0);
-    assert.equal(p.element('loading-section').hidden, false);
-});
-
-test('CSS recorta únicamente el contenedor animado, sin perder el scroll del body', () => {
-    const css = fs.readFileSync(path.join(__dirname, '../popup/popup.css'), 'utf8');
-    assert.match(css, /\.popup\s*\{[^}]*overflow:\s*clip;/s);
-    assert.match(css, /body\s*\{[^}]*overflow-y:\s*auto;/s);
-    assert.match(css, /\.brand\s*\{[^}]*position:\s*sticky;/s);
-});
-
-
-test('se fija la altura antes de ocultar paneles y se libera al finalizar', () => {
+test('abrir el reporte no redimensiona el marco nativo', () => {
     const p = popup();
     p.run("authenticated=true; pageSupported=true; setPanelState('initial'); setReportExpanded(false)");
     p.enableHeightAnimations();
-    const observed = p.run("(() => { let fixed; withPopupHeightTransition(() => { fixed = document.querySelector('.popup').style.height; applyPanelState('loading'); }); return fixed; })()");
-    assert.equal(observed, '430px', 'La ventana permanece con su alto previo durante la sustitución');
-    assert.equal(p.heightAnimations.length, 1);
-    assert.equal(p.heightAnimations[0].frames[0].height, '430px');
-    assert.equal(p.heightAnimations[0].frames[1].height, '285px');
-    assert.equal(p.run("document.querySelector('.popup').style.height"), '430px');
-    p.heightAnimations[0].finish();
-    assert.equal(p.run("document.querySelector('.popup').style.height"), '');
-    assert.equal(p.run("popupHeightAnimation"), null);
+    p.run("setReportExpanded(true)");
+    assert.equal(p.element('report-details').hidden, false);
+    p.run("setReportExpanded(false)");
+    assert.equal(p.element('report-details').hidden, true);
+    assert.equal(p.heightAnimations.length, 0);
+});
+
+test('el login y logout conservan transiciones del contenido sin cambiar el marco', () => {
+    const p = popup();
+    p.enableHeightAnimations();
+    p.run("showLoggedIn('Usuario')");
+    p.run("showLoggedOut('Sesión cerrada')");
+    assert.equal(p.heightAnimations.length, 0);
+    assert.equal(p.element('authenticated-content').hidden, true);
+    assert.equal(p.element('login-form').hidden, false);
+});
+
+test('el contenido todavía anima su aparición y respeta reducir movimiento', () => {
+    const css = fs.readFileSync(path.join(__dirname, '../popup/popup.css'), 'utf8');
+    assert.match(css, /#loading-section:not\(\[hidden\]\)[\s\S]*animation:\s*ml-panel-enter/);
+    assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+    const p = popup();
+    p.setReducedMotion(true);
+    p.enableHeightAnimations();
+    p.run("authenticated=true; pageSupported=true; setPanelState('loading')");
+    assert.equal(p.heightAnimations.length, 0);
+    assert.equal(p.element('loading-section').hidden, false);
 });
