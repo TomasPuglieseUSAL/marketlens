@@ -553,7 +553,7 @@ test('Temu: no confunde el promedio con las estrellas de las reseñas individual
   };
   const document={
     querySelectorAll:()=>[],
-    querySelector:selector==='#reviewContent'?reviewRoot:
+    querySelector:selector=>selector==='#reviewContent'?reviewRoot:
       selector==='h1'?{textContent:'Funda',parentElement:null}:null
   };
   const context={
@@ -582,7 +582,7 @@ test('Temu: un resumen de reseñas ambiguo no genera métricas de producto', () 
   };
   const document={
     querySelectorAll:()=>[],
-    querySelector:selector==='#reviewContent'?reviewRoot:
+    querySelector:selector=>selector==='#reviewContent'?reviewRoot:
       selector==='h1'?{textContent:'Funda',parentElement:null}:null
   };
   const context={
