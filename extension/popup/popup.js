@@ -178,7 +178,8 @@ async function handleLogout() {
 }
 function updateActions() {
     $('analyze-button').disabled = !authenticated || !pageSupported || preparing;
-    $('report-submit').disabled = !authenticated || !pageSupported || submittingReport || preparing;
+    $('report-submit').disabled = !authenticated || !pageSupported || submittingReport || preparing
+        || pendingAction !== null;
 }
 function setPanelState(state) {
     // El formulario ocupa el lugar del área principal de análisis.
@@ -220,10 +221,10 @@ function renderRisk(value) {
     const level = String(evaluation.level || 'INDETERMINATE').toUpperCase();
     $('result-section').dataset.level = level;
     const labels = {
-        LOW: ['Riesgo bajo', 'No se detectaron señales importantes dentro de la información disponible.', '✓'],
+        LOW: ['Riesgo bajo', 'No se detectaron señales relevantes en los datos analizados. No garantiza autenticidad ni una compra segura.', '✓'],
         MEDIUM: ['Riesgo medio', 'Se detectaron factores que conviene revisar.', '!'],
         HIGH: ['Riesgo alto', 'Se detectaron múltiples señales de riesgo.', '!'],
-        INDETERMINATE: ['Riesgo indeterminado', 'Información insuficiente para clasificar el riesgo.', '?']
+        INDETERMINATE: ['Riesgo indeterminado', 'Los datos disponibles no tienen respaldo suficiente para clasificar el riesgo.', '?']
     };
     const descriptor = labels[level] ?? ['Riesgo: ' + level, 'Resultado del análisis.', '?'];
     $('result-level').textContent = descriptor[0];
@@ -237,7 +238,7 @@ function renderRisk(value) {
     const coverage = String(evaluation.coverageStatus ?? '').toUpperCase();
     $('result-coverage-note').textContent =
         level === 'INDETERMINATE'
-            ? 'Un puntaje bajo con datos insuficientes no significa que la oferta sea segura.'
+            ? 'La cobertura mide datos disponibles, no su fiabilidad. Un puntaje bajo no demuestra que la oferta sea segura.'
             : coverage === 'PARTIAL'
                 ? 'La cobertura de información es parcial; interpretá el puntaje con precaución.'
                 : 'Una clasificación de riesgo no garantiza que una operación sea segura o fraudulenta.';
