@@ -676,3 +676,25 @@ test('si cambia la pantalla se cancela el cierre pendiente', () => {
     p.advance(800);
     assert.equal(p.element('report-details').hidden, true);
 });
+
+
+test('un nuevo análisis o cierre de sesión cancela el colapso diferido', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; setPanelState('initial'); setReportExpanded(true); updateActions()");
+    p.scrollBody.scrollTop = 160;
+    p.run("toggleReport()");
+    assert.equal(p.pendingTimers(), 1);
+    p.run("setPanelState('loading')");
+    assert.equal(p.pendingTimers(), 0);
+    assert.equal(p.element('report-details').hidden, true);
+
+    p.run("setPanelState('initial'); setReportExpanded(true)");
+    p.scrollBody.scrollTop = 190;
+    p.run("toggleReport()");
+    assert.equal(p.pendingTimers(), 1);
+    p.run("showLoggedOut('Sesión cerrada')");
+    assert.equal(p.pendingTimers(), 0);
+    assert.equal(p.element('login-form').hidden, false);
+    p.advance(500);
+    assert.equal(p.element('authenticated-content').hidden, true);
+});
