@@ -100,7 +100,8 @@ public final class TemuCommercialEvidence {
                 + "no una fecha de creación verificada.";
 
         // Una fecha oficial en Seller, si se conoce, ya se evaluó en RiskEngine.
-        if (publication.getSeller().getAccountAgeDays() != null)
+        Integer verifiedAgeDays = publication.getSeller().getAccountAgeDays();
+        if (verifiedAgeDays != null && verifiedAgeDays >= 0)
             return new Signal("TEMU_STORE_TENURE_OBSERVED", description, 0);
         if (maxAgeNow < 7)
             return new Signal("TEMU_VERY_RECENT_STORE", description
