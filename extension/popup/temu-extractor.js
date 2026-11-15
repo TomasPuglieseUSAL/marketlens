@@ -474,10 +474,54 @@ function extractTemu() {
     }
   }
 
+  // Señales comerciales independientes: la cifra "sold" del encabezado
+  // corresponde a ESTE PRODUCTO, no al total de ventas del vendedor.
+  function readProductSoldText() {
+    const root = document.querySelector('#rightContent');
+    const candidates = Array.from(
+      root?.querySelectorAll?.('._9HFPI1Qn ._3MX1FGET') || []
+    ).map(node => (node.textContent || '').replace(/\s+/g, ' ').trim())
+      .filter(t => /^\d{1,8}(?:[.,]\d)?\s*[kKmM]?\+?\s+sold$/i.test(t));
+    const distinct = [...new Set(candidates)];
+    return distinct.length === 1 ? distinct[0] : null;
+  }
+
+  // La antigüedad "1 year on Temu" está dentro de la tarjeta de la
+  // tienda. Anclar la búsqueda al NOMBRE observado, no al texto de
+  // toda la página ni al historial de reseñas de otros vendedores.
+  function readStoreTenureText() {
+    if (!observedStore) return null;
+    const scope = document.querySelector('#rightContent') ||
+      document.querySelector('main');
+    if (!scope) return null;
+    const anchors = Array.from(scope.querySelectorAll?.('[aria-label]') || [])
+      .filter(el => (el.getAttribute?.('aria-label') || '').trim()
+        .toLowerCase() === observedStore.trim().toLowerCase()
+        && (el.getAttribute?.('role') === 'link' || el.tagName === 'A'));
+    const results = new Set();
+    for (const anchor of anchors.slice(0, 12)) {
+      let ancestor = anchor.parentElement;
+      for (let depth = 0; ancestor && depth < 7; depth++, ancestor = ancestor.parentElement) {
+        const content = (ancestor.innerText || ancestor.textContent || '')
+          .replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+        if (content.length > 700) break;
+        if (!content.includes(observedStore)) continue;
+        const matches = [...content.matchAll(
+          /\b(?:(?:under|less than)\s+(?:1|one)\s+(?:day|week|month)|[1-9]\d{0,2}\s+(?:days?|weeks?|months?|years?))\s+on\s+Temu\b/gi
+        )].map(match => match[0].replace(/\s+/g, ' ').trim());
+        if (matches.length === 1) { results.add(matches[0]); break; }
+      }
+    }
+    return results.size === 1 ? [...results][0] : null;
+  }
+  const temuStoreTenureText = readStoreTenureText();
+  const temuProductSoldText = readProductSoldText();
+
   return {found:true,title:title || null,price,currency:detectedCurrency,
     priceCandidates:prices,seller:observedStore,
     temuSellerRating,temuSellerReviewCount,temuSellerSectionObserved:storeSectionObserved,
     temuProductRating:productReviews.rating,temuProductReviewCount:productReviews.count,
+    temuStoreTenureText,temuProductSoldText,
     temuStoreId,externalId:id,
     description,url:canonical.toString(),sellerProfileUrl:temuStoreProfile,
     sellerBadge:starSellerForStore ? 'TEMU_STAR_SELLER' : null,
