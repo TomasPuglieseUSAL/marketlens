@@ -44,13 +44,15 @@
           <h2 id="analysis-title">Analizar publicación</h2>
           <span id="marketplace" class="small-tag">Detectando…</span>
         </div>
-        <p id="page-title" class="listing-title">Consultando pestaña…</p>
-        <p id="status" class="muted" role="status" aria-live="polite">Identificando publicación…</p>
+        <div id="analysis-overview">
+          <p id="page-title" class="listing-title">Consultando pestaña…</p>
+          <p id="status" class="muted" role="status" aria-live="polite">Identificando publicación…</p>
 
-        <button id="analyze-button" type="button" class="primary main-action" disabled>
-          <span aria-hidden="true" class="action-icon">◎</span>
-          <span>Analizar publicación</span>
-        </button>
+          <button id="analyze-button" type="button" class="primary main-action" disabled>
+            <span aria-hidden="true" class="action-icon">◎</span>
+            <span>Analizar publicación</span>
+          </button>
+        </div>
 
         <div id="loading-section" class="loading-state" role="status" aria-live="polite" hidden>
           <span class="spinner" aria-hidden="true"></span>
@@ -103,7 +105,11 @@
           </div>
           <label for="fb-description">Descripción (opcional)</label>
           <textarea id="fb-description" rows="3" maxlength="5000"></textarea>
-          <button id="facebook-continue-button" type="button" class="primary">Continuar</button>
+          <p id="correction-status" class="muted small" role="status" aria-live="polite"></p>
+          <div class="correction-actions">
+            <button id="facebook-continue-button" type="button" class="primary">Continuar</button>
+            <button id="facebook-cancel-button" type="button" class="outline">Cancelar</button>
+          </div>
         </section>
       </section>
 
