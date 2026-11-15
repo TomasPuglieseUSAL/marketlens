@@ -905,3 +905,49 @@ test('reputación 3/5 observada se muestra como dato del vendedor, no del produc
     assert.equal(p.run("conciseFactorLabel({code:'MODERATE_SELLER_REPUTATION',description:'El vendedor presenta una reputación intermedia (3/5).'})"),
         'Reputación intermedia del vendedor: 3/5.');
 });
+
+
+test('catálogo: reputación del segundo vendedor se lee del ui-seller-data hermano y se une por item_id', () => {
+    const p = popup();
+    p.run("globalThis.window={location:{pathname:'/ssd-kingston/p/MLA24356923',href:'https://www.mercadolibre.com.ar/ssd-kingston/p/MLA24356923'}}");
+    p.run("globalThis.price={querySelector:s=>s.includes('fraction')?{textContent:'404.739'}:null,getAttribute:()=> '404739 pesos'}");
+    p.run("globalThis.sellerSummary={innerText:'PCREGISTRADA +100 mil ventas',querySelector:s=>s.includes('seller-summary__link')?{getAttribute:()=> 'https://www.mercadolibre.com.ar/tienda/pcregistrada?item_id=MLA1995498078'}:null}");
+    p.run("globalThis.reputation={getAttribute:s=>s==='value'?'5':null}");
+    p.run("globalThis.sellerDetails={innerText:'PCREGISTRADA MercadoLíder Platinum +100 mil Ventas Buena atención Entrega a tiempo',querySelector:s=>s.includes('seller-data-header__title')?{textContent:'PCREGISTRADA'}:null,querySelectorAll:s=>s.includes('item_id=')?[{getAttribute:()=> 'https://www.mercadolibre.com.ar/tienda/pcregistrada?item_id=MLA1995498078&category_id=MLA1672'}]:s.includes('thermometer')?[reputation]:[]}");
+    p.run("globalThis.decoyDetails={innerText:'MEXX GAMERS POR NATURALEZA',querySelector:s=>s.includes('seller-data-header__title')?{textContent:'MEXX GAMERS POR NATURALEZA'}:null,querySelectorAll:s=>s.includes('item_id=')?[{getAttribute:()=> 'https://www.mercadolibre.com.ar/tienda/mexx?item_id=MLA3007753206'}]:s.includes('thermometer')?[{getAttribute:()=> '1'}]:[]}");
+    p.run("globalThis.sidebar={querySelectorAll:s=>s==='.ui-seller-data'?[decoyDetails,sellerDetails]:[]}");
+    p.run("globalThis.selectedRow={classList:{contains:s=>s.endsWith('--SELECTED')},closest:s=>s==='.ui-pdp--sticky-wrapper-right'?sidebar:null,querySelector:s=>s.includes('input.andes-radio__input')?{id:'MLA1995498078'}:s.includes('offer-price')?price:s.includes('seller-summary__header__title')?{textContent:'PCREGISTRADA'}:s==='.ui-pdp-seller-summary'?sellerSummary:null}");
+    p.run("globalThis.otherRow={classList:{contains:()=>false},querySelector:s=>s.includes('input.andes-radio__input')?{id:'MLA1659974940',checked:true}:null}");
+    p.run("globalThis.form={querySelectorAll:s=>s.includes('offer-list-item')?[otherRow,selectedRow]:[],querySelector:s=>s.includes('item_id')?{value:'MLA1995498078'}:null}");
+    p.run("document.querySelector=s=>s==='#buybox-form'?form:s==='h1.ui-pdp-title'?{textContent:'SSD Kingston KC600 512 GB'}:null");
+    p.run("document.querySelectorAll=s=>s.includes('thermometer')?[{getAttribute:()=> '1'}]:[]");
+    p.run("document.body={innerText:''}");
+    const data=p.run('extractMercadoLibre()');
+    assert.equal(data.found,true);
+    assert.equal(data.selectedOfferId,'MLA1995498078');
+    assert.equal(data.externalId,'MLA1995498078');
+    assert.equal(data.price,'404.739');
+    assert.equal(data.seller,'PCREGISTRADA');
+    assert.equal(data.sellerReputationLevel,5);
+    assert.equal(data.sellerBadge,'MERCADOLIDER');
+    assert.equal(data.sellerId,null);
+});
+
+test('catálogo: reputación ajena o panel con item_id diferente nunca se atribuye al vendedor elegido', () => {
+    const p=popup();
+    p.run("globalThis.window={location:{pathname:'/ssd/p/MLA24356923',href:'https://www.mercadolibre.com.ar/ssd/p/MLA24356923'}}");
+    p.run("globalThis.price={querySelector:s=>s.includes('fraction')?{textContent:'404.739'}:null,getAttribute:()=> '404739 pesos'}");
+    p.run("globalThis.wrongPanel={innerText:'PCREGISTRADA MercadoLíder Platinum',querySelector:s=>s.includes('seller-data-header__title')?{textContent:'PCREGISTRADA'}:null,querySelectorAll:s=>s.includes('item_id=')?[{getAttribute:()=> 'https://www.mercadolibre.com.ar/tienda/pcregistrada?item_id=MLA3007753206'}]:s.includes('thermometer')?[{getAttribute:()=> '5'}]:[]}");
+    p.run("globalThis.sidebar={querySelectorAll:()=>[wrongPanel]}");
+    p.run("globalThis.selectedRow={classList:{contains:s=>s.endsWith('--SELECTED')},closest:()=>sidebar,querySelector:s=>s.includes('input.andes-radio__input')?{id:'MLA1995498078'}:s.includes('offer-price')?price:s.includes('seller-summary__header__title')?{textContent:'PCREGISTRADA'}:null}");
+    p.run("globalThis.form={querySelectorAll:()=>[selectedRow],querySelector:s=>s.includes('item_id')?{value:'MLA1995498078'}:null}");
+    p.run("document.querySelector=s=>s==='#buybox-form'?form:s==='h1.ui-pdp-title'?{textContent:'SSD Kingston KC600 512 GB'}:null");
+    p.run("document.querySelectorAll=s=>s.includes('thermometer')?[{getAttribute:()=> '1'}]:[]");
+    p.run("document.body={innerText:''}");
+    const data=p.run('extractMercadoLibre()');
+    assert.equal(data.found,true);
+    assert.equal(data.seller,'PCREGISTRADA');
+    assert.equal(data.sellerReputationLevel,null);
+    assert.equal(data.sellerBadge,null);
+    assert.equal(data.sellerSalesText,null);
+});
