@@ -398,6 +398,7 @@ footer {
   from { opacity: 0; transform: translateY(7px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+#auth-card:not([hidden]),
 #analysis-overview:not([hidden]),
 #temu-price-panel:not([hidden]),
 #loading-section:not([hidden]),
@@ -513,6 +514,7 @@ footer {
 .form-error:empty { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
+  #auth-card:not([hidden]),
   #analysis-overview:not([hidden]),
   #temu-price-panel:not([hidden]),
   #loading-section:not([hidden]),
