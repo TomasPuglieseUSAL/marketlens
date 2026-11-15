@@ -75,9 +75,16 @@
         </section>
 
         <div id="loading-section" class="loading-state" role="status" aria-live="polite" hidden>
-          <span class="spinner" aria-hidden="true"></span>
+          <div class="analysis-loading-mark" aria-hidden="true">
+            <span class="spinner"></span>
+            <span class="analysis-loading-center">◈</span>
+          </div>
           <strong>Analizando publicación…</strong>
           <span id="loading-message" class="muted">Preparando análisis…</span>
+          <div class="analysis-loading-track" aria-hidden="true">
+            <span></span>
+          </div>
+          <span class="loading-note muted small">El resultado aparecerá aquí al finalizar.</span>
         </div>
 
         <section id="result-section" class="result-card" aria-label="Resultado del análisis" hidden>
