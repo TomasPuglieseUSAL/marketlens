@@ -895,3 +895,13 @@ test('el buybox rechaza item_id inconsistente en lugar de importar otra oferta',
     assert.equal(result.found,false);
     assert.match(result.message,/no pude identificar una oferta/);
 });
+
+
+test('reputación 3/5 observada se muestra como dato del vendedor, no del producto', () => {
+    const p = popup();
+    const description = 'El termómetro público del vendedor muestra 3/5. Es una observación de Mercado Libre, no corroborada por OAuth.';
+    const summary = p.run("conciseFactorLabel({code:'ML_SELLER_REPUTATION_OBSERVED',description:"+JSON.stringify(description)+"})");
+    assert.equal(summary, 'Reputación del vendedor: 3/5 (observada).');
+    assert.equal(p.run("conciseFactorLabel({code:'MODERATE_SELLER_REPUTATION',description:'El vendedor presenta una reputación intermedia (3/5).'})"),
+        'Reputación intermedia del vendedor: 3/5.');
+});
