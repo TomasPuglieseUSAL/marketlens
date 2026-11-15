@@ -159,11 +159,14 @@ public class ExtensionImportService {
         // antigüedad de la TIENDA y ventas del PRODUCTO.
         String tenure = request.temuStoreTenureText();
         String sold = request.temuProductSoldText();
-        if ((tenure != null || sold != null) && !"TEMU".equals(request.marketplace())) {
+        String storeSold = request.temuStoreSoldText();
+        if ((tenure != null || sold != null || storeSold != null)
+                && !"TEMU".equals(request.marketplace())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Los indicadores comerciales sólo corresponden a Temu.");
         }
-        if (tenure != null && (request.seller() == null || request.seller().isBlank())) {
+        if ((tenure != null || storeSold != null)
+                && (request.seller() == null || request.seller().isBlank())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "La antigüedad de la tienda requiere un vendedor identificado.");
         }
@@ -177,9 +180,15 @@ public class ExtensionImportService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "La cantidad de ventas observadas del producto no es válida.");
         }
+        if (storeSold != null && (storeSold.length() > 60
+                || TemuCommercialEvidence.parseProductSales(storeSold) == null)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La cantidad de ventas observadas de la tienda no es válida.");
+        }
         imported.setTemuCommercialObservation(
                 tenure == null ? null : tenure.trim(),
-                sold == null ? null : sold.trim());
+                sold == null ? null : sold.trim(),
+                storeSold == null ? null : storeSold.trim());
         // Validar IDs antes de interpolarlos en comprobaciones de URL.
         validateSellerMetadata(request);
 
