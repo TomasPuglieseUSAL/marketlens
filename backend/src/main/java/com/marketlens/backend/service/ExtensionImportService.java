@@ -168,7 +168,7 @@ public class ExtensionImportService {
         if ((tenure != null || storeSold != null)
                 && (request.seller() == null || request.seller().isBlank())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "La antigüedad de la tienda requiere un vendedor identificado.");
+                    "Los indicadores de la tienda requieren un vendedor identificado.");
         }
         if (tenure != null && (tenure.length() > 60
                 || TemuCommercialEvidence.parseStoreTenure(tenure) == null)) {
