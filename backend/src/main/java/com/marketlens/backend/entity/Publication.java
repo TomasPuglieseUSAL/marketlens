@@ -59,6 +59,24 @@ public class Publication {
     @Column(name = "temu_seller_review_count")
     private Integer temuSellerReviewCount;
 
+    // Opiniones agregadas del PRODUCTO Mercado Libre (pueden ser compartidas
+    // por ofertas de varios vendedores; no verifican su reputación).
+    @Column(name = "ml_product_rating", precision = 2, scale = 1)
+    private BigDecimal mlProductRating;
+
+    @Column(name = "ml_product_review_count")
+    private Integer mlProductReviewCount;
+
+    @Column(name = "ml_product_observed_at")
+    private LocalDateTime mlProductObservedAt;
+
+    // Termómetro público de vendedor, SIN corroboración OAuth.
+    @Column(name = "ml_seller_reputation_observed")
+    private Integer mlSellerReputationObserved;
+
+    @Column(name = "ml_seller_reputation_observed_at")
+    private LocalDateTime mlSellerReputationObservedAt;
+
     @Column(name = "temu_product_rating", precision = 2, scale = 1)
     private BigDecimal temuProductRating;
 
@@ -206,6 +224,16 @@ public class Publication {
 
     public Integer getTemuSellerReviewCount() { return temuSellerReviewCount; }
     public void setTemuSellerReviewCount(Integer count) { this.temuSellerReviewCount = count; }
+    public BigDecimal getMlProductRating() { return mlProductRating; }
+    public void setMlProductRating(BigDecimal value) { this.mlProductRating = value; }
+    public Integer getMlProductReviewCount() { return mlProductReviewCount; }
+    public void setMlProductReviewCount(Integer value) { this.mlProductReviewCount = value; }
+    public LocalDateTime getMlProductObservedAt() { return mlProductObservedAt; }
+    public void setMlProductObservedAt(LocalDateTime value) { this.mlProductObservedAt = value; }
+    public Integer getMlSellerReputationObserved() { return mlSellerReputationObserved; }
+    public void setMlSellerReputationObserved(Integer value) { this.mlSellerReputationObserved = value; }
+    public LocalDateTime getMlSellerReputationObservedAt() { return mlSellerReputationObservedAt; }
+    public void setMlSellerReputationObservedAt(LocalDateTime value) { this.mlSellerReputationObservedAt = value; }
     public BigDecimal getTemuProductRating() { return temuProductRating; }
     public void setTemuProductRating(BigDecimal rating) { this.temuProductRating = rating; }
     public Integer getTemuProductReviewCount() { return temuProductReviewCount; }
