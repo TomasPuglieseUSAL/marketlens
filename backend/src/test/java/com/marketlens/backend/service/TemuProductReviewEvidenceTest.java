@@ -35,13 +35,15 @@ class TemuProductReviewEvidenceTest {
         return p;
     }
 
-    @Test void rating47With286ReviewsAddsCoverageButNotSafetyPoints() {
+    @Test void rating47With286ReviewsAndPositiveSellerAllowsLowRiskWithFullCoverage() {
         Publication p = listing("4.7", 286);
         var result = new RiskEngine(new RiskCoverageCalculator()).evaluate(p);
         assertEquals(3, result.getAvailableFactors());
         assertEquals(3, result.getTotalFactors());
         assertEquals(0, result.getScore());
-        assertEquals(RiskLevel.INDETERMINATE, result.getLevel());
+        // LOW clasifica la ausencia de señales relevantes; no confirma
+        // autenticidad ni convierte reseñas en ventas verificadas.
+        assertEquals(RiskLevel.LOW, result.getLevel());
         assertTrue(result.getFactors().stream().anyMatch(f ->
                 "TEMU_PRODUCT_REVIEWS_OBSERVED".equals(f.getCode())
                         && f.getScoreContribution() == 0));
