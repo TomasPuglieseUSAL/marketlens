@@ -134,8 +134,8 @@ Puntuación **experimental y conservadora**:
 | Tienda inequívocamente menor a una semana (por rango temporal mostrado) | +15 |
 | Tienda inequívocamente menor a 30 días, pero no necesariamente menor a una semana | +8 |
 | Tienda con un mes o más / dato insuficiente o vencido | +0 |
-| Producto con entre 0 y 4 unidades mostradas como cifra no abreviada, sin reseñas de producto suficientes para respaldarlo | +5 |
-| Producto con entre 5 y 9 unidades mostradas como cifra no abreviada, sin reseñas de producto suficientes | +3 |
+| Producto con entre 0 y 4 unidades mostradas como cifra no abreviada, sin observaciones válidas de reseñas del producto | +5 |
+| Producto con entre 5 y 9 unidades mostradas como cifra no abreviada, sin observaciones válidas de reseñas del producto | +3 |
 | Producto con `15K+ sold`, `1.2K+` o cualquier cifra abreviada / aproximada | +0 |
 | Tienda con cifra no abreviada de 0–4 ventas y sin recuento de reseñas de tienda disponible | +10 |
 | Tienda con cifra no abreviada de 5–9 ventas y sin recuento de reseñas de tienda disponible | +5 |
