@@ -104,6 +104,8 @@ public class PublicationService {
         publication.getTemuStoreTenureObservedAt(),
         publication.getTemuProductSoldText(),
         publication.getTemuProductSalesObservedAt(),
+        publication.getTemuStoreSoldText(),
+        publication.getTemuStoreSalesObservedAt(),
         publication.getMarketplace(),
         publication.getExternalId(),
         publication.getOriginalUrl(),
