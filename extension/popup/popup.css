@@ -293,7 +293,59 @@ form button { margin-top: 11px; }
   animation: ml-spin .75s linear infinite;
 }
 @keyframes ml-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+.analysis-loading-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  margin-bottom: 4px;
+}
+.analysis-loading-mark .spinner {
+  position: absolute;
+  width: 52px;
+  height: 52px;
+  border-width: 3px;
+  animation-duration: 1s;
+}
+.analysis-loading-center {
+  color: var(--accent-strong);
+  font-size: 25px;
+  line-height: 1;
+  animation: ml-loading-breathe 1.2s ease-in-out infinite;
+}
+.analysis-loading-track {
+  width: min(200px, 80%);
+  height: 4px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: var(--surface-border);
+  margin-top: 5px;
+}
+.analysis-loading-track > span {
+  display: block;
+  width: 32%;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+  animation: ml-loading-slide 1.2s ease-in-out infinite alternate;
+}
+.loading-note { font-size: 11px; }
+@keyframes ml-loading-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(325%); }
+}
+@keyframes ml-loading-breathe {
+  0%, 100% { opacity: .55; transform: scale(.9); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner, .analysis-loading-center, .analysis-loading-track > span {
+    animation: none;
+  }
+  .analysis-loading-center { opacity: 1; transform: none; }
+  .analysis-loading-track > span { width: 100%; transform: none; }
+}
 
 /* Resultado: la severidad se comunica por color propio, no por el naranja de marca */
 .result-card, .correction-card, .error-card {
@@ -390,6 +442,20 @@ footer {
   font-size: 20px;
   font-weight: 500;
   line-height: 1;
+}
+
+/* Despedida visual antes de sustituir la sesión por el formulario de login.
+   Las credenciales se eliminan inmediatamente; solamente espera la interfaz. */
+@keyframes ml-auth-leave {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-8px); }
+}
+.auth-exiting {
+  pointer-events: none;
+  animation: ml-auth-leave .18s ease-in both !important;
+}
+#login-form:not([hidden]) {
+  animation: ml-panel-enter .22s ease-out both;
 }
 
 /* Transiciones breves al entrar en un estado. La salida es inmediata para
@@ -523,4 +589,5 @@ footer {
   #facebook-correction:not([hidden]),
   #report-details:not([hidden]) { animation: none; }
   .report-chevron { transition: none; }
+  .auth-exiting, #login-form:not([hidden]) { animation: none !important; }
 }
