@@ -94,7 +94,10 @@ html { width: 374px; min-width: 374px; min-height: 100%; }
 body {
   width: 374px;
   min-width: 374px;
-  max-height: 620px;
+  /* El navegador controla el marco del popup y no garantiza que su
+     redimensionamiento sea animable. Altura estable entre todas las pantallas. */
+  height: 540px;
+  max-height: 540px;
   margin: 0;
   overflow-x: hidden;
   overflow-y: auto;
@@ -117,11 +120,12 @@ body {
 }
 
 .popup {
+  min-height: 540px;
   padding: 17px 15px 13px;
-  /* Durante la interpolación de altura el contenido no debe agrandar la
-     ventana de golpe. clip no crea un contenedor de scroll, a diferencia
-     de hidden, y mantiene operativo el encabezado sticky. */
-  overflow: clip;
+  display: flex;
+  flex-direction: column;
+  /* El contenido puede superar la altura estable y desplazarse en el body.
+     No recortar el área sticky ni introducir un segundo scroll. */
 }
 
 /* Encabezado persistente: queda dentro del mismo scroll de la extensión
@@ -408,7 +412,7 @@ form button { margin-top: 11px; }
 #fb-join-row { width: 100%; }
 
 footer {
-  margin-top: 5px;
+  margin-top: auto;
   padding: 7px 0 0;
   color: var(--text-tertiary);
   font-size: 10px;
