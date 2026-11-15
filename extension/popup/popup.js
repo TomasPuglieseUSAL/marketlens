@@ -609,13 +609,73 @@ async function loadCurrentPage() {
 }
 
 function extractMercadoLibre() {
-    // En /p/MLA... el identificador pertenece al catálogo de productos.
-    // No se debe usar como MLA de una oferta concreta, aun si el DOM
-    // muestra un precio o el bloque de un vendedor destacado.
-    if (/\/(?:[^/]+\/)?p\/MLA\d{6,}\/?$/i.test(window.location.pathname)) {
+    // Una página de catálogo no representa una publicación identificable,
+    // pero el panel de compra puede mostrar una oferta individual seleccionada.
+    // Exigir que en un mismo panel VISIBLE haya enlace MLA/MLAU, vendedor y
+    // precio: no elegir una oferta al azar entre recomendaciones o variantes.
+    const isCatalog = /\/(?:[^/]+\/)?p\/MLA\d{6,}\/?$/i.test(window.location.pathname);
+    function selectedCatalogOffer() {
+        if (!isCatalog) return null;
+        const visible = node => Boolean(node)
+            && !node.hidden && node.getAttribute?.('aria-hidden') !== 'true'
+            && (!node.getClientRects || node.getClientRects().length > 0);
+        const scopes = Array.from(document.querySelectorAll(
+            '[role="dialog"], [aria-modal="true"], .andes-modal, .ui-pdp-buybox'
+        )).filter(visible);
+        const candidates = new Map();
+
+        for (const scope of scopes) {
+            const selected = Array.from(scope.querySelectorAll(
+                '[aria-selected="true"], [aria-checked="true"], [data-selected="true"]'
+            )).filter(visible);
+            // Ante una selección explícita, no mezclarla con las otras
+            // tarjetas que siguen presentes en el mismo diálogo.
+            const groups = selected.length ? selected : [scope];
+            for (const group of groups) {
+                const sellerText = group.innerText || group.textContent || '';
+                const sellerMatch = sellerText.match(
+                    /(?:vendido\s+por|tienda)\s*:?\s*([^\r\n]+)/i
+                );
+                const sellerName = sellerMatch?.[1]?.replace(/\s+/g, ' ').trim();
+                const priceContainer = group.querySelector(
+                    '.ui-pdp-price__second-line .andes-money-amount, .andes-money-amount'
+                );
+                const amount = priceContainer?.querySelector(
+                    '.andes-money-amount__fraction'
+                )?.textContent?.trim();
+                const cents = priceContainer?.querySelector(
+                    '.andes-money-amount__cents'
+                )?.textContent?.trim();
+                if (!sellerName || !amount) continue;
+
+                for (const link of group.querySelectorAll('a[href]')) {
+                    const href = link.getAttribute('href');
+                    let address;
+                    try { address = new URL(href, window.location.href); }
+                    catch { continue; }
+                    if (address.protocol !== 'https:' ||
+                            !/(^|\.)mercadolibre\.com(\.ar)?$/.test(address.hostname)) continue;
+                    const user = address.pathname.match(/\/up\/(MLAU\d{6,})(?:\/|$)/i);
+                    const item = address.pathname.match(/(?:^|\/)MLA-?(\d{6,})(?=[\/-]|$)/i);
+                    if (!user && !item) continue;
+                    const id = user ? user[1].toUpperCase() : 'MLA' + item[1];
+                    candidates.set(id, {
+                        externalId: id,
+                        url: address.href.split('#')[0],
+                        seller: sellerName,
+                        price: cents ? amount + ',' + cents : amount,
+                        source: group
+                    });
+                }
+            }
+        }
+        return candidates.size === 1 ? [...candidates.values()][0] : null;
+    }
+    const catalogOffer = selectedCatalogOffer();
+    if (isCatalog && !catalogOffer) {
         return {
             found: false,
-            message: 'Esta es una ficha de catálogo de Mercado Libre. Abrí una oferta individual de un vendedor para analizarla.'
+            message: 'La ficha muestra un producto de catálogo, pero no pude identificar una oferta con vendedor, precio e ID individual. Abrí el enlace de la oferta elegida y analizala allí.'
         };
     }
     function getText(selector) {
@@ -728,7 +788,7 @@ function extractMercadoLibre() {
     }
 
     // URL sin fragmento de navegación.
-    const pageUrl = window.location.href.split('#')[0];
+    const pageUrl = catalogOffer?.url || window.location.href.split('#')[0];
 
     // Analizar solamente la ruta, sin parámetros.
     const pathname = window.location.pathname;
@@ -744,11 +804,11 @@ function extractMercadoLibre() {
     );
 
     // Determinar el identificador principal.
-    const externalId = userProductMatch
+    const externalId = catalogOffer?.externalId || (userProductMatch
         ? userProductMatch[1].toUpperCase()
         : itemMatch
             ? `MLA${itemMatch[1]}`
-            : null;
+            : null);
 
     // Evitar interpretar páginas de búsqueda como productos.
     const isProductPage =
@@ -798,6 +858,7 @@ function extractMercadoLibre() {
         : product?.offers;
 
     price =
+        catalogOffer?.price ||
         price ||
         getMeta('meta[property="product:price:amount"]') ||
         getMeta('meta[itemprop="price"]') ||
@@ -845,9 +906,9 @@ function extractMercadoLibre() {
         }
     }
 
-    const sellerName =
-        normalizeMercadoLibreSellerName(seller)
-        || extractSellerNameFromText();
+    const sellerName = catalogOffer
+        ? normalizeMercadoLibreSellerName(catalogOffer.seller)
+        : normalizeMercadoLibreSellerName(seller) || extractSellerNameFromText();
 
     const description =
         getText('.ui-pdp-description__content') ||
@@ -1087,13 +1148,17 @@ function extractMercadoLibre() {
         externalId,
         description,
         url: pageUrl,
-        sellerProfileUrl,
-        sellerBadge,
-        sellerSalesText,
-        sellerListedProductsText,
-        sellerInsufficientSalesText,
-        sellerReputationLevel,
-        sellerId
+        // No atribuir al vendedor seleccionado la reputación, insignia
+        // o ventas del vendedor destacado del catálogo.
+        sellerProfileUrl: catalogOffer ? null : sellerProfileUrl,
+        sellerBadge: catalogOffer ? null : sellerBadge,
+        sellerSalesText: catalogOffer ? null : sellerSalesText,
+        sellerListedProductsText: catalogOffer ? null : sellerListedProductsText,
+        sellerInsufficientSalesText: catalogOffer ? null : sellerInsufficientSalesText,
+        sellerReputationLevel: catalogOffer ? null : sellerReputationLevel,
+        sellerId: catalogOffer ? null : sellerId,
+        mlProductRating,
+        mlProductReviewCount
     };
 }
 
