@@ -43,9 +43,12 @@ function popup() {
     let simulateLayout = false;
     let animatedHeight = null;
     const heightAnimations = [];
+    const popupStyle = {height: ''};
     const popupSurface = {
+        style: popupStyle,
         getBoundingClientRect() {
             if (animatedHeight !== null) return {height: animatedHeight};
+            if (popupStyle.height) return {height: parseFloat(popupStyle.height)};
             const visible = id => !element(id).hidden;
             if (!visible('authenticated-content')) return {height: 225};
             if (visible('loading-section')) return {height: 285};
@@ -212,7 +215,7 @@ test('precio confirmado pasa directamente al análisis si no faltan datos', asyn
     assert.equal(p.element('temu-price-options').children[0].getAttribute('aria-pressed'), 'true');
     p.run("startAnalysis = async d => { globalThis.finalChosenPrice = d.price; renderAnalysis({status:'success',publicationId:13,evaluation:{level:'LOW',score:0,availableFactors:3,totalFactors:3,coverageStatus:'COMPLETE',factors:[]}}); }");
     await p.run("confirmTemuPrice()");
-    p.advance(600);
+    p.advance(1500);
     assert.equal(p.run("globalThis.finalChosenPrice"), '9059');
     assert.equal(p.element('temu-price-panel').hidden, true);
     assert.equal(p.element('facebook-correction').hidden, true);
@@ -325,7 +328,7 @@ test('al finalizar el análisis desplaza al resultado una sola vez', () => {
     assert.equal(result.scrollCalls.length, 0);
     p.run(success);
     assert.equal(result.scrollCalls.length, 0, 'El spinner debe permanecer visible brevemente');
-    p.advance(600);
+    p.advance(1500);
     assert.equal(result.scrollCalls.length, 1);
     assert.equal(result.scrollCalls[0].behavior, 'smooth');
     assert.equal(result.scrollCalls[0].block, 'start');
@@ -333,7 +336,7 @@ test('al finalizar el análisis desplaza al resultado una sola vez', () => {
     assert.equal(result.scrollCalls.length, 1, 'No repetir scroll por eventos de almacenamiento');
     p.run("renderAnalysis({status:'loading',message:'Nuevo análisis'})");
     p.run(success);
-    p.advance(600);
+    p.advance(1500);
     assert.equal(result.scrollCalls.length, 2, 'El segundo análisis debe enfocar su resultado');
 });
 
@@ -386,7 +389,7 @@ test('si la sesión se cierra, la cuenta y el formulario de acceso permanecen vi
 });
 
 
-test('una respuesta inmediata mantiene la carga al menos medio segundo', () => {
+test('una respuesta inmediata mantiene la carga al menos 1,5 segundos', () => {
     const p = popup();
     p.run("authenticated=true; pageSupported=true; pageKey='tab:fb'; setPanelState('initial')");
     const success = "renderAnalysis({status:'success',publicationId:12,evaluation:{level:'LOW',score:0,availableFactors:2,totalFactors:2,coverageStatus:'COMPLETE',factors:[]}})";
@@ -394,7 +397,7 @@ test('una respuesta inmediata mantiene la carga al menos medio segundo', () => {
     p.run(success);
     assert.equal(p.element('loading-section').hidden, false);
     assert.equal(p.element('result-section').hidden, true);
-    p.advance(549);
+    p.advance(1499);
     assert.equal(p.element('result-section').hidden, true);
     p.advance(1);
     assert.equal(p.element('result-section').hidden, false);
@@ -420,7 +423,7 @@ test('una respuesta de otra publicación no revela el resultado de la pestaña a
     p.run("renderAnalysis({status:'loading',message:'Procesando'})");
     p.run("renderAnalysis({status:'success',publicationId:1,evaluation:{level:'LOW',score:0,availableFactors:2,totalFactors:2,factors:[]}})");
     p.run("pageKey='tab:b'; resetLoadingTransition(); renderAnalysis({status:'initial'})");
-    p.advance(600);
+    p.advance(1600);
     assert.equal(p.element('result-section').hidden, true);
 });
 
@@ -471,7 +474,9 @@ test('el popup interpola la altura al contraerse para mostrar el spinner', () =>
     const transition = p.heightAnimations[0];
     assert.equal(transition.frames[0].height, '430px');
     assert.equal(transition.frames[1].height, '285px');
-    assert.equal(transition.options.duration, 260);
+    assert.equal(transition.options.duration, 580);
+    assert.equal(transition.options.fill, 'forwards');
+    assert.equal(transition.options.easing, 'cubic-bezier(.45, 0, .55, 1)');
 });
 
 test('al terminar se expande el popup y recién después enfoca los resultados', () => {
@@ -481,7 +486,7 @@ test('al terminar se expande el popup y recién después enfoca los resultados',
     p.enableHeightAnimations();
     p.run("renderAnalysis({status:'loading',message:'Procesando'})");
     p.heightAnimations[0].finish();
-    p.advance(600);
+    p.advance(1500);
     p.run("renderAnalysis({status:'success',publicationId:13,evaluation:{level:'LOW',score:0,availableFactors:3,totalFactors:3,coverageStatus:'COMPLETE',factors:[]}})");
     assert.equal(p.heightAnimations.length, 2);
     assert.equal(p.heightAnimations[1].frames[0].height, '285px');
@@ -536,4 +541,20 @@ test('CSS recorta únicamente el contenedor animado, sin perder el scroll del bo
     assert.match(css, /\.popup\s*\{[^}]*overflow:\s*clip;/s);
     assert.match(css, /body\s*\{[^}]*overflow-y:\s*auto;/s);
     assert.match(css, /\.brand\s*\{[^}]*position:\s*sticky;/s);
+});
+
+
+test('se fija la altura antes de ocultar paneles y se libera al finalizar', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; setPanelState('initial'); setReportExpanded(false)");
+    p.enableHeightAnimations();
+    const observed = p.run("(() => { let fixed; withPopupHeightTransition(() => { fixed = document.querySelector('.popup').style.height; applyPanelState('loading'); }); return fixed; })()");
+    assert.equal(observed, '430px', 'La ventana permanece con su alto previo durante la sustitución');
+    assert.equal(p.heightAnimations.length, 1);
+    assert.equal(p.heightAnimations[0].frames[0].height, '430px');
+    assert.equal(p.heightAnimations[0].frames[1].height, '285px');
+    assert.equal(p.run("document.querySelector('.popup').style.height"), '430px');
+    p.heightAnimations[0].finish();
+    assert.equal(p.run("document.querySelector('.popup').style.height"), '');
+    assert.equal(p.run("popupHeightAnimation"), null);
 });
