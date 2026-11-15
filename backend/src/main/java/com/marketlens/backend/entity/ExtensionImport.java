@@ -69,6 +69,12 @@ public class ExtensionImport {
     @Column(name = "temu_seller_review_count")
     private Integer temuSellerReviewCount;
 
+    @Column(name = "ml_product_rating", precision = 2, scale = 1)
+    private BigDecimal mlProductRating;
+
+    @Column(name = "ml_product_review_count")
+    private Integer mlProductReviewCount;
+
     // Opiniones del PRODUCTO, independientes de las valoraciones de la tienda.
     @Column(name = "temu_product_rating", precision = 2, scale = 1)
     private BigDecimal temuProductRating;
@@ -222,6 +228,12 @@ public class ExtensionImport {
     }
 
     public Integer getTemuSellerReviewCount() { return temuSellerReviewCount; }
+    public BigDecimal getMlProductRating() { return mlProductRating; }
+    public Integer getMlProductReviewCount() { return mlProductReviewCount; }
+    public void setMlProductReviews(BigDecimal rating, Integer count) {
+        this.mlProductRating = rating;
+        this.mlProductReviewCount = count;
+    }
     public BigDecimal getTemuProductRating() { return temuProductRating; }
     public Integer getTemuProductReviewCount() { return temuProductReviewCount; }
     public void setTemuProductReviews(BigDecimal rating, Integer count) {
