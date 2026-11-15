@@ -3,6 +3,7 @@ package com.marketlens.backend.service;
 import com.marketlens.backend.dto.RiskEvaluationResponse;
 import com.marketlens.backend.dto.AutomaticPriceAnalysisResponse;
 import com.marketlens.backend.dto.RiskFactorResponse;
+import com.marketlens.backend.dto.RiskCoverageFactorResponse;
 import com.marketlens.backend.entity.Publication;
 import com.marketlens.backend.entity.RiskEvaluation;
 import com.marketlens.backend.repository.PublicationRepository;
@@ -66,11 +67,13 @@ public class RiskEvaluationService {
 
         RiskEvaluation savedEvaluation = riskEvaluationRepository.save(evaluation);
 
-        return toResponse(savedEvaluation);
+        // La explicación corresponde a la evidencia observada en ESTA evaluación.
+        return toResponse(savedEvaluation, RiskCoverageCalculator.factors(publication));
     }
 
     private RiskEvaluationResponse toResponse(
-            RiskEvaluation evaluation) {
+            RiskEvaluation evaluation,
+            List<RiskCoverageFactorResponse> coverageFactors) {
 
         List<RiskFactorResponse> factors = evaluation.getFactors()
                 .stream()
@@ -90,7 +93,8 @@ public class RiskEvaluationService {
 
                 evaluation.getCoverageStatus(),
                 evaluation.getAvailableFactors(),
-                evaluation.getTotalFactors());
+                evaluation.getTotalFactors(),
+                coverageFactors);
     }
 
     @Transactional(readOnly = true)
@@ -105,7 +109,9 @@ public class RiskEvaluationService {
         return riskEvaluationRepository
                 .findByPublicationIdOrderByEvaluatedAtDesc(publicationId)
                 .stream()
-                .map(this::toResponse)
+                // El esquema histórico no almacena el detalle de cada factor:
+                // no inferir retroactivamente su disponibilidad actual.
+                .map(evaluation -> toResponse(evaluation, null))
                 .toList();
     }
 }
