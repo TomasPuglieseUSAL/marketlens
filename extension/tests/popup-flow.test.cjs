@@ -16,8 +16,15 @@ function popup() {
         const attributes = {};
         const listeners = {};
         const classes = new Set();
+        const styles = new Map();
         return {
             id, tagName, hidden: false, disabled: false, value: '',
+            style: {
+                setProperty(name, value) { styles.set(name, value); },
+                removeProperty(name) { styles.delete(name); },
+                getPropertyValue(name) { return styles.get(name) || ''; }
+            },
+            getBoundingClientRect() { return {height: this.hidden ? 0 : 320}; },
             textContent: '', dataset: {}, children: [], scrollCalls: [],
             classList: {
                 add(...names) { for (const name of names) classes.add(name); },
@@ -563,6 +570,9 @@ test('al desplegar el reporte se enfoca el formulario y no se repite al cerrarlo
     assert.equal(panel.scrollCalls[0].behavior, 'smooth');
     assert.equal(panel.scrollCalls[0].block, 'start');
     p.run("toggleReport()");
+    assert.equal(panel.hidden, false);
+    assert.equal(panel.classList.contains('is-closing'), true);
+    p.advance(300);
     assert.equal(panel.hidden, true);
     assert.equal(panel.scrollCalls.length, 1);
 });
@@ -633,8 +643,14 @@ test('al cerrar el reporte se vuelve arriba suavemente antes de ocultar el formu
     p.advance(419);
     assert.equal(p.element('report-details').hidden, false);
     p.advance(1);
-    assert.equal(p.element('report-details').hidden, true);
+    assert.equal(p.element('report-details').hidden, false, 'Tras el scroll comienza la animación de salida');
+    assert.equal(p.element('report-details').classList.contains('is-closing'), true);
     assert.equal(p.element('report-toggle').getAttribute('aria-expanded'), 'false');
+    p.advance(299);
+    assert.equal(p.element('report-details').hidden, false);
+    p.advance(1);
+    assert.equal(p.element('report-details').hidden, true);
+    assert.equal(p.element('report-details').classList.contains('is-closing'), false);
 });
 
 test('un segundo clic interrumpe el cierre diferido del reporte', () => {
@@ -649,10 +665,14 @@ test('un segundo clic interrumpe el cierre diferido del reporte', () => {
     assert.equal(p.element('report-details').hidden, false);
 });
 
-test('cierre inmediato cuando no hay scroll o se prefiere movimiento reducido', () => {
+test('el cierre también se anima sin scroll, salvo con movimiento reducido', () => {
     const p = popup();
     p.run("authenticated=true; pageSupported=true; setPanelState('initial'); setReportExpanded(true); updateActions()");
     p.run("toggleReport()");
+    assert.equal(p.element('report-details').hidden, false);
+    assert.equal(p.element('report-details').classList.contains('is-closing'), true);
+    assert.equal(p.pendingTimers(), 1);
+    p.advance(300);
     assert.equal(p.element('report-details').hidden, true);
     assert.equal(p.pendingTimers(), 0);
     p.setReducedMotion(true);
@@ -660,6 +680,7 @@ test('cierre inmediato cuando no hay scroll o se prefiere movimiento reducido', 
     p.scrollBody.scrollTop = 180;
     p.run("toggleReport()");
     assert.equal(p.element('report-details').hidden, true);
+    assert.equal(p.element('report-details').classList.contains('is-closing'), false);
     assert.equal(p.scrollBody.scrollCalls.length, 0);
     assert.equal(p.pendingTimers(), 0);
 });
@@ -697,4 +718,48 @@ test('un nuevo análisis o cierre de sesión cancela el colapso diferido', () =>
     assert.equal(p.element('login-form').hidden, false);
     p.advance(500);
     assert.equal(p.element('authenticated-content').hidden, true);
+});
+
+
+test('otro clic durante la animación de salida devuelve el formulario a abierto', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; setPanelState('initial'); setReportExpanded(true); updateActions()");
+    p.run("toggleReport()");
+    const details = p.element('report-details');
+    assert.equal(details.classList.contains('is-closing'), true);
+    assert.equal(details.style.getPropertyValue('--report-open-height'), '320px');
+    assert.equal(p.pendingTimers(), 1);
+    p.run("toggleReport()");
+    assert.equal(details.hidden, false);
+    assert.equal(details.classList.contains('is-closing'), false);
+    assert.equal(details.style.getPropertyValue('--report-open-height'), '');
+    assert.equal(p.element('report-toggle').getAttribute('aria-expanded'), 'true');
+    assert.equal(p.pendingTimers(), 0);
+    p.advance(400);
+    assert.equal(details.hidden, false);
+});
+
+test('el cambio de estado durante la salida cancela el temporizador y oculta reporte', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; setPanelState('initial'); setReportExpanded(true); updateActions()");
+    p.run("toggleReport()");
+    assert.equal(p.pendingTimers(), 1);
+    p.run("setPanelState('loading')");
+    assert.equal(p.pendingTimers(), 0);
+    assert.equal(p.element('report-details').hidden, true);
+    assert.equal(p.element('report-details').classList.contains('is-closing'), false);
+});
+
+test('CSS anima opacidad y altura al cerrar y respeta movimiento reducido', () => {
+    const css = fs.readFileSync(path.join(__dirname, '../popup/popup.css'), 'utf8');
+    assert.match(css, /@keyframes ml-report-leave\s*\{[\s\S]*?opacity:\s*0;[\s\S]*?max-height:\s*0;/);
+    assert.match(css, /#report-details\.is-closing\s*\{[^}]*animation:\s*ml-report-leave\s*\.3s/s);
+    assert.match(css, /#report-details\.is-closing\s*\{\s*animation:\s*none\s*!important;/);
+});
+
+test('scrollbar ocupa ancho permanente y el encabezado sigue fijo', () => {
+    const css = fs.readFileSync(path.join(__dirname, '../popup/popup.css'), 'utf8');
+    assert.match(css, /body\s*\{[^}]*overflow-y:\s*scroll;[^}]*scrollbar-gutter:\s*stable;/s);
+    assert.match(css, /body\s*\{[^}]*height:\s*540px;/s);
+    assert.match(css, /\.brand\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;/s);
 });
