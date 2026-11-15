@@ -59,7 +59,7 @@ function requireExtractedData(data) {
     if (data?.marketplace === 'MERCADO_LIBRE' && typeof data.url === 'string') {
         try {
             const address = new URL(data.url);
-            if (/^\/p\/MLA\d{6,}\/?$/i.test(address.pathname)) {
+            if (/\/(?:[^/]+\/)?p\/MLA\d{6,}\/?$/i.test(address.pathname)) {
                 throw new Error('Esta es una ficha de catálogo de Mercado Libre. Abrí una oferta de un vendedor para analizarla.');
             }
         } catch (error) {
