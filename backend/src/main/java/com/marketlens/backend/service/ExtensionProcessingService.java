@@ -453,6 +453,11 @@ public class ExtensionProcessingService {
                         publication.setTemuStoreTenureText(tenure);
                         publication.setTemuStoreTenureObservedAt(java.time.LocalDateTime.now());
                 }
+                String storeSold = imported.getTemuStoreSoldText();
+                if (TemuCommercialEvidence.parseProductSales(storeSold) != null) {
+                        publication.setTemuStoreSoldText(storeSold);
+                        publication.setTemuStoreSalesObservedAt(java.time.LocalDateTime.now());
+                }
         }
 
         private void applyTemuSellerEvidence(Publication publication, ExtensionImport imported) {
