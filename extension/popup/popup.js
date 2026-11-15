@@ -108,7 +108,7 @@ function detectMarketplace(url) {
 function isMercadoLibreCatalogUrl(url) {
     try {
         return detectMarketplace(url) === 'MERCADO_LIBRE'
-            && /^\/p\/MLA\d{6,}\/?$/i.test(new URL(url).pathname);
+            && /\/(?:[^/]+\/)?p\/MLA\d{6,}\/?$/i.test(new URL(url).pathname);
     } catch {
         return false;
     }
@@ -602,7 +602,7 @@ function extractMercadoLibre() {
     // En /p/MLA... el identificador pertenece al catálogo de productos.
     // No se debe usar como MLA de una oferta concreta, aun si el DOM
     // muestra un precio o el bloque de un vendedor destacado.
-    if (/^\/p\/MLA\d{6,}\/?$/i.test(window.location.pathname)) {
+    if (/\/(?:[^/]+\/)?p\/MLA\d{6,}\/?$/i.test(window.location.pathname)) {
         return {
             found: false,
             message: 'Esta es una ficha de catálogo de Mercado Libre. Abrí una oferta individual de un vendedor para analizarla.'
