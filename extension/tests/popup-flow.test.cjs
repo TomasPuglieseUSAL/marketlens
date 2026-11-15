@@ -805,8 +805,12 @@ test('la protección del background rechaza el catálogo antes del POST', () => 
     };
     assert.throws(
         () => vm.runInContext("requireExtractedData(" + JSON.stringify(data) + ")", context),
-        /ficha de catálogo/
+        /No se pudo confirmar la oferta elegida/
     );
+    data.selectedOfferId = 'MLA3007753206';
+    data.externalId = 'MLA3007753206';
+    assert.equal(vm.runInContext("requireExtractedData(" + JSON.stringify(data) + ").selectedOfferId", context),
+        'MLA3007753206');
     data.url = 'https://articulo.mercadolibre.com.ar/MLA-123456789-ssd-kingston';
     data.externalId = 'MLA123456789';
     assert.equal(vm.runInContext("requireExtractedData(" + JSON.stringify(data) + ").externalId", context),
@@ -856,4 +860,38 @@ test('la calificación observada de Mercado Libre aparece resumida', () => {
     const note = 'El producto muestra 4.7/5 con 286 opiniones en Mercado Libre. No representan reputación del vendedor.';
     const text = p.run("conciseFactorLabel({code:'ML_PRODUCT_REVIEWS_OBSERVED',description:"+JSON.stringify(note)+"})");
     assert.equal(text, 'Calificación: 4,7/5 (286 opiniones).');
+});
+
+
+test('el buybox real prioriza --SELECTED e item_id frente al checked histórico de otra oferta', () => {
+    const p = popup();
+    p.run("globalThis.window={location:{pathname:'/ssd-kingston/p/MLA24356923',href:'https://www.mercadolibre.com.ar/ssd-kingston/p/MLA24356923'}}");
+    p.run("globalThis.mainPrice={querySelector:s=>s.includes('fraction')?{textContent:'451.989'}:null,getAttribute:s=>s==='aria-label'?'451989 pesos':null}");
+    p.run("globalThis.activeRow={classList:{contains:n=>n.endsWith('--SELECTED')},querySelector:s=>s.includes('input.andes-radio__input')?{id:'MLA3007753206'}:s.includes('offer-price')?mainPrice:s.includes('seller-summary')?{textContent:'MEXX GAMERS POR NATURALEZA'}:null}");
+    p.run("globalThis.inactiveRow={classList:{contains:()=>false},querySelector:s=>s.includes('input.andes-radio__input')?{id:'MLA1659974940',checked:true}:null}");
+    p.run("globalThis.offerForm={querySelectorAll:s=>s.includes('offer-list-item')?[activeRow,inactiveRow]:[],querySelector:s=>s.includes('item_id')?{value:'MLA3007753206'}:null}");
+    p.run("document.querySelector=s=>s==='#buybox-form'?offerForm:s==='h1.ui-pdp-title'?{textContent:'Disco sólido Kingston KC600 512GB'}:null");
+    p.run("document.querySelectorAll=s=>s.includes('application/ld+json')?[{textContent:JSON.stringify({'@type':'Product',name:'Disco sólido Kingston KC600',description:'SSD SATA 512GB',aggregateRating:{ratingValue:'4.7',reviewCount:286},offers:{price:'490000',priceCurrency:'ARS'}})}]:[]");
+    p.run("document.body={innerText:''}");
+    const result=p.run('extractMercadoLibre()');
+    assert.equal(result.found,true);
+    assert.equal(result.externalId,'MLA3007753206');
+    assert.equal(result.selectedOfferId,'MLA3007753206');
+    assert.equal(result.seller,'MEXX GAMERS POR NATURALEZA');
+    assert.equal(result.price,'451.989');
+    assert.equal(result.currency,'ARS');
+    assert.equal(result.url,'https://www.mercadolibre.com.ar/ssd-kingston/p/MLA24356923');
+    assert.equal(result.sellerReputationLevel,null);
+});
+
+test('el buybox rechaza item_id inconsistente en lugar de importar otra oferta', () => {
+    const p=popup();
+    p.run("globalThis.window={location:{pathname:'/ssd/p/MLA24356923',href:'https://www.mercadolibre.com.ar/ssd/p/MLA24356923'}}");
+    p.run("globalThis.activeRow={classList:{contains:n=>n.endsWith('--SELECTED')},querySelector:s=>s.includes('input.andes-radio__input')?{id:'MLA3007753206'}:null}");
+    p.run("globalThis.offerForm={querySelectorAll:()=>[activeRow],querySelector:s=>s.includes('item_id')?{value:'MLA1659974940'}:null}");
+    p.run("document.querySelector=s=>s==='#buybox-form'?offerForm:null");
+    p.run("document.querySelectorAll=()=>[]");
+    const result=p.run('extractMercadoLibre()');
+    assert.equal(result.found,false);
+    assert.match(result.message,/no pude identificar una oferta/);
 });
