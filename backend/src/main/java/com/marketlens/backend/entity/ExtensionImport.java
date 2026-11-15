@@ -84,6 +84,9 @@ public class ExtensionImport {
     @Column(name = "temu_product_sold_text", length = 60)
     private String temuProductSoldText;
 
+    @Column(name = "temu_store_sold_text", length = 60)
+    private String temuStoreSoldText;
+
     @Column(name = "temu_store_id", length = 30)
     private String temuStoreId;
 
@@ -227,9 +230,11 @@ public class ExtensionImport {
     }
     public String getTemuStoreTenureText() { return temuStoreTenureText; }
     public String getTemuProductSoldText() { return temuProductSoldText; }
-    public void setTemuCommercialObservation(String tenure, String sold) {
+    public String getTemuStoreSoldText() { return temuStoreSoldText; }
+    public void setTemuCommercialObservation(String tenure, String sold, String storeSold) {
         this.temuStoreTenureText = tenure;
         this.temuProductSoldText = sold;
+        this.temuStoreSoldText = storeSold;
     }
     public String getTemuStoreId() { return temuStoreId; }
     public Boolean getTemuSellerSectionObserved() { return temuSellerSectionObserved; }
