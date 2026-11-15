@@ -155,6 +155,27 @@ public class ExtensionImportService {
         }
         // Admitimos observaciones parciales, pero no cuentan como cobertura completa.
         imported.setTemuProductReviews(productRating, productReviews);
+
+        // Calificación y reseñas del PRODUCTO de Mercado Libre, distintas
+        // de la reputación del vendedor y sólo informativas por ahora.
+        java.math.BigDecimal mlRating = request.mlProductRating();
+        Integer mlReviews = request.mlProductReviewCount();
+        if ((mlRating != null || mlReviews != null)
+                && !"MERCADO_LIBRE".equals(request.marketplace())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Las opiniones de Mercado Libre no corresponden a este marketplace.");
+        }
+        if (mlRating != null && (mlRating.compareTo(java.math.BigDecimal.ZERO) <= 0
+                || mlRating.compareTo(new java.math.BigDecimal("5.0")) > 0
+                || mlRating.scale() > 1)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La calificación del producto Mercado Libre no es válida.");
+        }
+        if (mlReviews != null && (mlReviews <= 0 || mlReviews > 10000000)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Las opiniones del producto Mercado Libre no son válidas.");
+        }
+        imported.setMlProductReviews(mlRating, mlReviews);
         // Datos comerciales observados en regiones separadas del DOM:
         // antigüedad de la TIENDA y ventas del PRODUCTO.
         String tenure = request.temuStoreTenureText();
