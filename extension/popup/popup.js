@@ -178,24 +178,37 @@ async function handleLogout() {
 }
 function updateActions() {
     $('analyze-button').disabled = !authenticated || !pageSupported || preparing;
+    $('report-toggle').disabled = !authenticated || !pageSupported || submittingReport
+        || preparing || pendingAction !== null || !$('loading-section').hidden;
     $('report-submit').disabled = !authenticated || !pageSupported || submittingReport || preparing
         || pendingAction !== null;
 }
+function setReportExpanded(expanded) {
+    $('report-details').hidden = !expanded;
+    $('report-toggle').setAttribute('aria-expanded', String(expanded));
+}
+function toggleReport() {
+    if ($('report-toggle').disabled) return;
+    setReportExpanded($('report-details').hidden);
+}
 function setPanelState(state) {
-    // El formulario ocupa el lugar del área principal de análisis.
-    // El título del marketplace permanece visible como contexto.
-    $('analysis-overview').hidden = state === 'correction' || state === 'loading';
+    // Los pasos son excluyentes: elección de precio -> corrección -> resultado.
+    // Los paneles entran con una transición CSS respetando reduced-motion.
+    const busy = state === 'price' || state === 'correction' || state === 'loading';
+    $('analysis-overview').hidden = busy;
     $('analyze-button').hidden = state !== 'initial';
+    $('temu-price-panel').hidden = state !== 'price';
+    $('facebook-correction').hidden = state !== 'correction';
     $('loading-section').hidden = state !== 'loading';
     $('result-section').hidden = state !== 'success';
     $('error-section').hidden = state !== 'error';
-    $('facebook-correction').hidden = state !== 'correction';
+    $('report-section').hidden = busy;
 }
 function renderAnalysis(value) {
     if (!authenticated) return;
     // Evitar que un cambio de almacenamiento en segundo plano interrumpa
     // la edición del formulario antes de pulsar Continuar o Cancelar.
-    if (pendingAction && !$('facebook-correction').hidden) return;
+    if (pendingAction && (!$('facebook-correction').hidden || !$('temu-price-panel').hidden)) return;
     const status = value?.status || 'initial';
     setPanelState(status);
     if (status === 'loading') {
@@ -284,7 +297,9 @@ async function loadCurrentPage() {
             pendingAction = null;
             lastPublicationId = null;
             setPanelState('initial');
+            setReportExpanded(false);
             $('correction-status').textContent = '';
+            $('temu-price-status').textContent = '';
             $('report-status').textContent = '';
             renderAnalysis({status:'initial'});
         }
@@ -1032,41 +1047,80 @@ function readFacebookForm(data) {
         description: $('fb-description').value.trim() || null
     };
 }
+function validTemuPrice(value) {
+    const text = typeof value === 'string' ? value.trim()
+        : typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
+    // Admitir importes como 9.507 y decimales de dos dígitos, sin monedas ni símbolos.
+    return /^(?:\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)$/.test(text)
+        && /[1-9]/.test(text);
+}
+function temuPriceCandidates(data) {
+    return Array.isArray(data.priceCandidates)
+        ? [...new Set(data.priceCandidates.filter(validTemuPrice).map(String))].slice(0, 8)
+        : [];
+}
+function requiresTemuPriceConfirmation(data) {
+    return data?.marketplace === 'TEMU' &&
+        (!validTemuPrice(data.price) || temuPriceCandidates(data).length > 1);
+}
+function updateTemuPriceSelection() {
+    const chosen = $('temu-confirm-price').value.trim();
+    for (const button of $('temu-price-options').querySelectorAll('button')) {
+        button.setAttribute('aria-pressed', String(button.dataset.price === chosen));
+    }
+}
 function showTemuPrices(data) {
-    const panel = $('temu-price-panel');
-    panel.hidden = currentMarketplace !== 'TEMU';
-    if (panel.hidden) return;
-
-    const prices = Array.isArray(data.priceCandidates)
-        ? [...new Set(data.priceCandidates)].slice(0, 8) : [];
+    const prices = temuPriceCandidates(data);
     const options = $('temu-price-options');
     options.replaceChildren();
-
-    const updateSelected = () => {
-        for (const button of options.querySelectorAll('button')) {
-            button.setAttribute('aria-pressed', String(button.dataset.price === $('fb-price').value.trim()));
-        }
-    };
+    const initial = validTemuPrice(data.price) ? String(data.price).trim()
+        : prices.length === 1 ? prices[0] : '';
+    $('temu-confirm-price').value = initial;
+    $('temu-price-status').textContent = '';
 
     for (const value of prices) {
-        if (typeof value !== 'string' || !/^\d[\d.,]{0,25}$/.test(value)) continue;
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'temu-price-option';
         button.dataset.price = value;
-        button.setAttribute('aria-label', `Usar ARS ${value} como precio de la publicación`);
-        button.textContent = `ARS ${value}`;
+        button.setAttribute('aria-label', 'Seleccionar ARS ' + value + ' como precio del artículo');
+        button.textContent = 'ARS ' + value;
         button.addEventListener('click', () => {
-            $('fb-price').value = value;
-            updateSelected();
+            $('temu-confirm-price').value = value;
+            $('temu-price-status').textContent = '';
+            updateTemuPriceSelection();
         });
         options.appendChild(button);
     }
     options.hidden = options.children.length === 0;
     $('temu-price-hint').textContent = prices.length > 1
-        ? 'Elegí el precio correspondiente a la variante y condiciones de compra. No selecciones el tachado ni promociones que no te correspondan.'
-        : 'Verificá el importe actual antes de continuar; puede depender de promociones.';
-    updateSelected();
+        ? 'Comprobá cuál es el precio real de tu variante. No uses un importe tachado ni descuentos que no te correspondan.'
+        : prices.length === 1
+            ? 'Verificá que el precio mostrado corresponda a tu variante y a las promociones aplicables.'
+            : 'No se pudo identificar un precio confiable. Escribí el importe en ARS tal como aparece en tu publicación.';
+    updateTemuPriceSelection();
+}
+function showCorrectionForm(data) {
+    fillFacebookForm(data);
+    const sellerHint = $('temu-seller-hint');
+    sellerHint.hidden = data.marketplace !== 'TEMU';
+    if (data.marketplace === 'TEMU') {
+        const rating = data.temuSellerRating;
+        const ratingText = typeof rating === 'number' && rating > 0
+            ? 'Calificación de tienda: ' + rating.toLocaleString('es-AR') + ' / 5. '
+            : '';
+        const count = data.temuSellerReviewCount;
+        const reviewText = Number.isInteger(count) && count >= 0
+            ? 'Reseñas de tienda: ' + count.toLocaleString('es-AR') + '. ' : '';
+        sellerHint.textContent = ratingText + reviewText +
+            (data.sellerBadge === 'TEMU_STAR_SELLER'
+                ? 'Star Seller aparece junto a la tienda. Ninguna señal implica seguridad garantizada.'
+                : 'Podés completar o corregir el nombre de la tienda si aparece en la publicación.');
+    }
+    $('fb-join-row').hidden = data.marketplace !== 'FACEBOOK_MARKETPLACE';
+    $('fb-seller').disabled = false;
+    $('correction-status').textContent = '';
+    setPanelState('correction');
 }
 function missingEssential(data) {
     return !data?.externalId || !data.title || !data.price ||
@@ -1081,35 +1135,82 @@ async function prepareData(action) {
     if (currentMarketplace === 'TEMU' && extractedData.currency !== 'ARS') {
         throw new Error('No se encontró información suficiente para confirmar que el precio de Temu está en ARS.');
     }
+    if (!extractedData.externalId) {
+        throw new Error('No se encontró el ID individual de la publicación. Revisá el anuncio.');
+    }
+
+    // En Temu se confirma el precio antes de pedir otras correcciones.
+    // Si hay alternativas, se exige confirmación incluso con precio extraído.
+    if (requiresTemuPriceConfirmation(extractedData)) {
+        pendingAction = action;
+        showTemuPrices(extractedData);
+        setPanelState('price');
+        updateActions();
+        return null;
+    }
     if (missingEssential(extractedData)) {
-        if (extractedData.externalId) {
-            pendingAction = action;
-            fillFacebookForm(extractedData);
-            showTemuPrices(extractedData);
-            const sellerHint = $('temu-seller-hint');
-            sellerHint.hidden = currentMarketplace !== 'TEMU';
-            if (currentMarketplace === 'TEMU') {
-                const rating = extractedData.temuSellerRating;
-                const ratingText = typeof rating === 'number' && rating > 0
-                    ? `Calificación de tienda: ${rating.toLocaleString('es-AR')} / 5. `
-                    : '';
-                const count = extractedData.temuSellerReviewCount;
-                const reviewText = Number.isInteger(count) && count >= 0
-                    ? `Reseñas de tienda: ${count.toLocaleString('es-AR')}. ` : '';
-                sellerHint.textContent = ratingText + reviewText +
-                    (extractedData.sellerBadge === 'TEMU_STAR_SELLER'
-                        ? 'Star Seller aparece junto a la tienda. Ninguna señal implica seguridad garantizada.'
-                        : 'Podés completar o corregir el nombre de la tienda si aparece en la publicación.');
-            }
-            $('fb-join-row').hidden = currentMarketplace !== 'FACEBOOK_MARKETPLACE';
-            $('fb-seller').disabled = false;
-            $('correction-status').textContent = '';
-            setPanelState('correction');
-            return null;
-        }
-        throw new Error('No se pudo obtener el título, precio, vendedor o ID individual. Revisá el anuncio.');
+        pendingAction = action;
+        showCorrectionForm(extractedData);
+        updateActions();
+        return null;
     }
     return extractedData;
+}
+async function finishPreparedAction(action, data) {
+    if (action === 'report') {
+        await restoreAnalysis();
+        await sendReport(data);
+    } else {
+        setPanelState('loading');
+        await startAnalysis(data);
+    }
+}
+async function confirmTemuPrice() {
+    if (!pendingAction || !extractedData || preparing || currentMarketplace !== 'TEMU'
+        || $('temu-price-panel').hidden) return;
+    const chosen = $('temu-confirm-price').value.trim();
+    if (!validTemuPrice(chosen)) {
+        $('temu-price-status').textContent = 'Seleccioná o ingresá un precio válido en ARS antes de continuar.';
+        return;
+    }
+    preparing = true;
+    $('temu-price-confirm').disabled = true;
+    $('temu-price-cancel').disabled = true;
+    updateActions();
+    const action = pendingAction;
+    try {
+        extractedData = {...extractedData, price: chosen};
+        $('temu-price-status').textContent = '';
+        if (missingEssential(extractedData)) {
+            showCorrectionForm(extractedData);
+        } else {
+            pendingAction = null;
+            await finishPreparedAction(action, extractedData);
+        }
+    } catch (error) {
+        const message = String(error.message || error);
+        if (pendingAction) {
+            $('temu-price-status').textContent = message;
+            setPanelState('price');
+        } else if (action === 'report') {
+            await restoreAnalysis();
+            $('report-status').textContent = 'No se pudo continuar: ' + message;
+        } else {
+            renderAnalysis({status: 'error', message});
+        }
+    } finally {
+        preparing = false;
+        $('temu-price-confirm').disabled = false;
+        $('temu-price-cancel').disabled = false;
+        updateActions();
+    }
+}
+async function cancelTemuPrice() {
+    if (preparing) return;
+    pendingAction = null;
+    $('temu-price-status').textContent = '';
+    setPanelState('initial');
+    await restoreAnalysis();
 }
 async function startAnalysis(data) {
     if (!pageKey) return;
@@ -1184,13 +1285,7 @@ async function continueFacebook() {
         extractedData = data;
         pendingAction = null;
         $('correction-status').textContent = '';
-        if (action === 'report') {
-            await restoreAnalysis();
-            await sendReport(data);
-        } else {
-            setPanelState('loading');
-            await startAnalysis(data);
-        }
+        await finishPreparedAction(action, data);
     } catch (error) {
         const message = String(error.message || error);
         if (pendingAction) {
@@ -1223,13 +1318,15 @@ $('theme-toggle').addEventListener('click', () => void toggleTheme());
 $('analyze-button').addEventListener('click', () => void analyzeClick());
 $('reanalyze-button').addEventListener('click', () => void analyzeClick());
 $('retry-button').addEventListener('click', () => void analyzeClick());
+$('report-toggle').addEventListener('click', () => toggleReport());
 $('report-form').addEventListener('submit', (event) => void reportSubmit(event));
 $('facebook-continue-button').addEventListener('click', () => void continueFacebook());
 $('facebook-cancel-button').addEventListener('click', () => void cancelFacebookCorrection());
-$('fb-price').addEventListener('input', () => {
-    for (const button of $('temu-price-options').querySelectorAll('button')) {
-        button.setAttribute('aria-pressed', String(button.dataset.price === $('fb-price').value.trim()));
-    }
+$('temu-price-confirm').addEventListener('click', () => void confirmTemuPrice());
+$('temu-price-cancel').addEventListener('click', () => void cancelTemuPrice());
+$('temu-confirm-price').addEventListener('input', () => {
+    $('temu-price-status').textContent = '';
+    updateTemuPriceSelection();
 });
 // Un vínculo temporal permite abrir el frontend sin enviar el JWT en la URL.
 async function openPublicationWithSession() {
