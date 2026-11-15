@@ -173,6 +173,19 @@ public class ExtensionNormalizationService {
                     "El identificador externo tiene un formato no reconocido.");
         }
 
+        // En un catálogo, el MLA de la URL identifica el PRODUCTO. Si
+        // importamos una oferta elegida explícitamente, su identidad viene
+        // del item_id corroborado en la página y validado al importar.
+        String selectedOfferId = imported.getSelectedOfferId();
+        if ("CATALOG_PRODUCT".equals(referenceType)
+                && selectedOfferId != null
+                && selectedOfferId.equals(extractedId)
+                && selectedOfferId.matches("MLA[1-9]\\d{5,}")) {
+            referenceType = "LISTING";
+            referenceId = selectedOfferId;
+            warnings.add("Oferta individual seleccionada dentro de un catálogo de Mercado Libre.");
+        }
+
         if (referenceId != null && extractedId != null &&
                 !referenceId.equals(extractedId)) {
 
