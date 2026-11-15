@@ -145,6 +145,7 @@ public class ExtensionProcessingService {
                                 // Completar solo una descripción vacía, sin sobrescribir la anterior.
                                 fillMissingTemuDescription(publication, imported);
                                 applyTemuProductEvidence(publication, imported);
+                                applyTemuCommercialEvidence(publication, imported);
                         } else if (marketplace == Marketplace.FACEBOOK_MARKETPLACE) {
 
                                 // Facebook: el identificador externo identifica el anuncio,
@@ -264,6 +265,7 @@ public class ExtensionProcessingService {
                                         publication.setSellerBadge("TEMU_STAR_SELLER");
                                 }
                                 applyTemuSellerEvidence(publication, imported);
+                                applyTemuCommercialEvidence(publication, imported);
                         }
 
                         // Conservar el año de incorporación observado en Facebook.
@@ -426,6 +428,30 @@ public class ExtensionProcessingService {
                         publication.setTemuProductRating(imported.getTemuProductRating());
                         publication.setTemuProductReviewCount(imported.getTemuProductReviewCount());
                         publication.setTemuProductObservedAt(java.time.LocalDateTime.now());
+                }
+        }
+
+        static void applyTemuCommercialEvidence(Publication publication, ExtensionImport imported) {
+                if (publication == null || imported == null
+                        || publication.getMarketplace() != Marketplace.TEMU) return;
+                // El texto de ventas siempre pertenece al producto y puede
+                // actualizarse incluso si no hubo nuevos datos de la tienda.
+                String sold = imported.getTemuProductSoldText();
+                if (TemuCommercialEvidence.parseProductSales(sold) != null) {
+                        publication.setTemuProductSoldText(sold);
+                        publication.setTemuProductSalesObservedAt(java.time.LocalDateTime.now());
+                }
+
+                // Un goods_id no acredita la identidad de la tienda: exigir
+                // que el nombre observado coincida con el vendedor asociado.
+                String name = imported.getSellerName();
+                if (publication.getSeller() == null || name == null
+                        || publication.getSeller().getName() == null
+                        || !publication.getSeller().getName().equalsIgnoreCase(name.trim())) return;
+                String tenure = imported.getTemuStoreTenureText();
+                if (TemuCommercialEvidence.parseStoreTenure(tenure) != null) {
+                        publication.setTemuStoreTenureText(tenure);
+                        publication.setTemuStoreTenureObservedAt(java.time.LocalDateTime.now());
                 }
         }
 
