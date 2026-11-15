@@ -115,3 +115,42 @@ docker compose up --build -d
 ```
 
 La extracción del DOM de Temu puede variar: si la publicación sigue en 2/3, inspeccionar el bloque de calificación junto al título sin asumir que los 286 comentarios están disponibles al abrir la página.
+
+
+## Señales complementarias de actividad comercial (V26)
+
+Temu puede mostrar en la misma página del producto indicadores de dos entidades **diferentes**:
+
+- `15K+ sold` junto al título del producto: **mínimo aproximado de unidades vendidas de ese artículo**, no ventas del vendedor ni recuento de pedidos verificable por MarketLens. Se extrae únicamente del encabezado de `#rightContent`, no del módulo de la tienda, donde puede aparecer `300K+ Sold`.
+- `1 year on Temu` dentro de la tarjeta de Tokki Shop: **antigüedad aproximada de la tienda**. Se extrae buscando el nombre de tienda observado dentro del DOM de `#rightContent`; no debe utilizarse una edad cercana a otro vendedor.
+
+Se envían `temuStoreTenureText` y `temuProductSoldText` por la extensión, se validan en el backend y se conservan sin perder su formato original en las columnas nuevas de Flyway `V26__temu_commercial_activity.sql`. Cada observación guardada en `publications` tiene una fecha independiente. Las observaciones caducan para evaluación tras **30 días** y las extracciones faltantes no renuevan su vigencia.
+
+Puntuación **experimental y conservadora**:
+
+| Señal observada | Puntos |
+| --- | ---: |
+| Tienda inequívocamente menor a una semana (por rango temporal mostrado) | +15 |
+| Tienda inequívocamente menor a 30 días, pero no necesariamente menor a una semana | +8 |
+| Tienda con un mes o más / dato insuficiente o vencido | +0 |
+| Producto con entre 0 y 4 unidades mostradas como cifra no abreviada, sin reseñas de producto suficientes para respaldarlo | +5 |
+| Producto con entre 5 y 9 unidades mostradas como cifra no abreviada, sin reseñas de producto suficientes | +3 |
+| Producto con `15K+ sold`, `1.2K+` o cualquier cifra abreviada / aproximada | +0 |
+
+Los valores `1 week on Temu` y `1 month on Temu` se interpretan como **rangos**, no como fechas exactas de incorporación. Los rangos se ajustan por el tiempo transcurrido desde la observación. Si ya se obtuvo una antigüedad exacta válida del vendedor, no duplicar su penalización.
+
+**No se altera el cálculo de cobertura de Temu (descripción, reputación de tienda y opiniones del producto).** Estas observaciones aportan factores de riesgo separados, sin degradar la reputación positiva o asumir que un producto con pocas ventas implica que el vendedor tiene pocas ventas.
+
+Para probar desde la raíz del repositorio:
+
+```powershell
+node --test extension/tests/temu-extractor.test.cjs
+cd backend
+.\mvnw.cmd test
+cd ../frontend
+npm run build
+cd ..
+docker compose up --build -d
+```
+
+Si el DOM comercial todavía no está cargado al abrir el popup, el extractor devuelve `null` para ese campo y **no se suma riesgo**. El modelo no inventa ventas ni antigüedad.
