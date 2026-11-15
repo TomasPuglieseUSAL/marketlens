@@ -160,3 +160,16 @@ docker compose up --build -d
 ```
 
 Si el DOM comercial todavía no está cargado al abrir el popup, el extractor devuelve `null` para ese campo y **no se suma riesgo**. El modelo no inventa ventas ni antigüedad.
+
+
+## Ajuste de interfaz del popup y clasificación de riesgo (noviembre 2026)
+
+**Popup, tanto Facebook Marketplace como Temu:** si es necesario corregir información, el panel principal con «Analizar publicación» se sustituye visualmente por el formulario. Después de «Continuar» se muestra el estado de procesamiento y, tras el análisis, el resultado. «Cancelar» permite abandonar el formulario y restaurar el estado de análisis previo. Los errores de validación permanecen visibles en el propio formulario. Mientras se edita, se deshabilita el envío de otro reporte.
+
+**Clasificación LOW en Temu:** el cálculo de cobertura sigue siendo 3 factores: información del producto, reputación del vendedor y reseñas del producto. La cobertura completa no garantiza seguridad ni que todas las señales tengan respaldo equivalente. Para evitar que un resultado 3/3, 0 puntos quede «indeterminado» aun con señales positivas, RiskEngine permite LOW sin ID ni recuento exacto de reseñas de tienda **únicamente cuando** hay cobertura completa, puntaje cero, valoración reciente de tienda >=4/5 y valoración reciente de producto >=4/5 respaldada por 10 o más reseñas de producto.
+
+El requisito antiguo (ID y >=10 reseñas de tienda) se mantiene como ruta alternativa para permitir LOW con cobertura suficiente. Los casos con cobertura parcial sin respaldo, datos vencidos, valoraciones desfavorables o muestra de producto insuficiente continúan siendo indeterminados si el puntaje no alcanza los umbrales de riesgo medio o alto. La etiqueta LOW significa «sin señales relevantes detectadas por las reglas actuales», no compra segura ni autenticidad verificada.
+
+Pruebas:
+- node --test extension/tests/*.test.cjs
+- .\mvnw.cmd test desde backend/, incluyendo TemuLowRiskClassificationTest
