@@ -26,7 +26,7 @@ MarketLens es un prototipo académico que permite registrar y analizar publicaci
 | --- | --- |
 | Backend | Java 21, Spring Boot 4, Spring Security, Spring Data JPA, Maven |
 | Autenticación | JWT y contraseñas protegidas mediante BCrypt |
-| Persistencia | PostgreSQL 17, Flyway (19 migraciones SQL) |
+| Persistencia | PostgreSQL 17 y migraciones SQL versionadas con Flyway |
 | Frontend | React, TypeScript y Vite |
 | Publicación del frontend | Nginx, con proxy de las rutas `/api` |
 | Extensión experimental | JavaScript y WebExtensions (Manifest V3) |
@@ -205,6 +205,7 @@ La instalación temporal normalmente se pierde al reiniciar Firefox.
 - Las integraciones externas opcionales, como Gemini, no están habilitadas en estos perfiles locales.
 - La compatibilidad de extracción depende del formato y de los cambios que realicen los marketplaces en sus páginas.
 - **Temu (experimental):** reconoce `goods.html?goods_id=...` y `*-g-<id>.html`. Solo importa precios cuya moneda ARS esté identificada explícitamente, no inventa identidad del vendedor y todavía no realiza comparaciones automáticas de precios. Consultá [TEMU-MVP.md](extension/TEMU-MVP.md).
+- **Mercado Libre (catálogo):** en páginas `/p/MLA...` la extensión puede identificar una oferta elegida cuando el panel visible expone un único enlace de oferta MLA/MLAU, un vendedor y un precio coherente. Si no, solicita abrir la oferta individual; no reutiliza el ID general de catálogo como ID de vendedor/oferta. La cobertura pasa a tres dimensiones cuando hay opiniones del producto observadas. Consultá [ML-CATALOG-AND-REVIEWS.md](extension/ML-CATALOG-AND-REVIEWS.md).
 
 ## Comandos útiles de Docker
 
