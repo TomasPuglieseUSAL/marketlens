@@ -349,7 +349,7 @@ function applyPanelState(state) {
     // Los pasos son excluyentes: elección de precio -> corrección -> resultado.
     // Los paneles entran con una transición CSS respetando reduced-motion.
     const busy = state === 'price' || state === 'correction' || state === 'loading';
-    if (busy && reportCloseTimer !== null) {
+    if (busy && (reportCloseTimer !== null || reportCollapseTimer !== null)) {
         // El reporte no puede terminar su cierre diferido después de
         // haber iniciado un análisis o cambiado a otro formulario.
         cancelReportClose();
