@@ -482,7 +482,8 @@ function conciseFactorLabel(factor) {
     const displayedSales = quoted?.[1].replace(/\s+sold\s*$/i, '').trim();
     const ratingLabel = rating ? rating[1].replace('.', ',') + '/5' : '';
 
-    if (code === 'TEMU_PRODUCT_REVIEWS_OBSERVED' || code === 'TEMU_LOW_PRODUCT_RATING'
+    if (code === 'ML_PRODUCT_REVIEWS_OBSERVED'
+            || code === 'TEMU_PRODUCT_REVIEWS_OBSERVED' || code === 'TEMU_LOW_PRODUCT_RATING'
             || code === 'TEMU_MODERATE_PRODUCT_RATING') {
         if (ratingLabel && reviews) {
             const prefix = code === 'TEMU_LOW_PRODUCT_RATING' ? 'Calificación baja: '
@@ -528,12 +529,19 @@ function renderRisk(value) {
     $('result-coverage').textContent = Number.isInteger(available) && Number.isInteger(total)
         ? `${available}/${total}` : '—';
     const coverage = String(evaluation.coverageStatus ?? '').toUpperCase();
-    $('result-coverage-note').textContent =
+    const factorDetails = Array.isArray(evaluation.coverageFactors)
+        ? evaluation.coverageFactors : [];
+    const missing = factorDetails.filter(item => item && item.available === false)
+        .map(item => item.name).filter(Boolean);
+    const detail = missing.length
+        ? 'Falta: ' + missing.join(', ') + '. '
+        : factorDetails.length ? 'Los tres factores se observaron. ' : '';
+    $('result-coverage-note').textContent = detail + (
         level === 'INDETERMINATE'
-            ? 'La cobertura mide datos disponibles, no su fiabilidad. Un puntaje bajo no demuestra que la oferta sea segura.'
+            ? 'La cobertura mide datos disponibles, no su fiabilidad.'
             : coverage === 'PARTIAL'
-                ? 'La cobertura de información es parcial; interpretá el puntaje con precaución.'
-                : 'Una clasificación de riesgo no garantiza que una operación sea segura o fraudulenta.';
+                ? 'La información disponible es parcial; interpretá el resultado con precaución.'
+                : 'La clasificación no garantiza una compra segura.');
     const factors = Array.isArray(evaluation.factors) ? evaluation.factors : [];
     $('result-factors').replaceChildren();
     for (const factor of factors.slice(0, 8)) {
@@ -593,12 +601,14 @@ async function loadCurrentPage() {
                 : currentMarketplace === 'OTHER'
                     ? 'Abrí una publicación de Mercado Libre, Facebook Marketplace o Temu.'
                     : 'Abrí una publicación individual antes de analizar.';
+        } else if (isMercadoLibreCatalogUrl(tab.url)) {
+            // El enlace del catálogo no identifica qué oferta eligió el usuario.
+            // No restaurar un resultado de otra oferta sólo por compartir URL.
+            setPanelState('initial');
+            $('status').textContent =
+                'Ficha de catálogo: elegí una oferta con vendedor y precio antes de analizar.';
         } else {
             await restoreAnalysis(nextKey);
-            if (isMercadoLibreCatalogUrl(tab.url)) {
-                $('status').textContent =
-                    'Ficha de catálogo: elegí una oferta y su vendedor antes de analizar.';
-            }
         }
         updateActions();
     } catch (error) {
@@ -630,7 +640,10 @@ function extractMercadoLibre() {
             )).filter(visible);
             // Ante una selección explícita, no mezclarla con las otras
             // tarjetas que siguen presentes en el mismo diálogo.
-            const groups = selected.length ? selected : [scope];
+            const groups = selected.length
+                ? selected.map(node =>
+                    node.closest?.('[data-testid*="offer"], li, .ui-pdp-buybox') || node.parentElement || node)
+                : [scope];
             for (const group of groups) {
                 const sellerText = group.innerText || group.textContent || '';
                 const sellerMatch = sellerText.match(
@@ -1526,6 +1539,12 @@ async function prepareData(action) {
         extractedData = await extractCurrentListing();
     }
     if (keyAtStart !== pageKey) throw new Error('La publicación cambió durante la extracción.');
+    if (currentMarketplace === 'MERCADO_LIBRE'
+            && isMercadoLibreCatalogUrl(activeTab?.url)
+            && extractedData?.externalId) {
+        // Dos ofertas del mismo catálogo no deben compartir estado de análisis.
+        pageKey = `${activeTab.id}:${activeTab.url.split('#')[0]}:offer:${extractedData.externalId}`;
+    }
     if (currentMarketplace === 'TEMU' && extractedData.currency !== 'ARS') {
         throw new Error('No se encontró información suficiente para confirmar que el precio de Temu está en ARS.');
     }
