@@ -112,6 +112,37 @@ public final class TemuCommercialEvidence {
         return new Signal("TEMU_STORE_TENURE_OBSERVED", description, 0);
     }
 
+    public static Signal evaluateStoreSales(Publication publication, LocalDateTime now) {
+        if (publication == null || publication.getMarketplace() != Marketplace.TEMU
+                || publication.getSeller() == null
+                || publication.getSeller().getName() == null
+                || publication.getSeller().getName().isBlank()
+                || !fresh(publication.getTemuStoreSalesObservedAt(), now)) return null;
+
+        SalesLowerBound sales = parseProductSales(publication.getTemuStoreSoldText());
+        if (sales == null) return null;
+        String description = "Temu muestra \"" + publication.getTemuStoreSoldText()
+                + "\" para la TIENDA. Es un historial comercial estimado, "
+                + "no un número de ventas verificado por MarketLens.";
+
+        // No inferir ventas escasas de un límite inferior abreviado.
+        if (sales.approximate())
+            return new Signal("TEMU_STORE_SALES_OBSERVED", description, 0);
+
+        // La tienda con reseñas explícitas ya tiene una regla de historial
+        // comercial; no aplicar una segunda penalización correlacionada.
+        if (publication.getTemuSellerReviewCount() != null)
+            return new Signal("TEMU_STORE_SALES_OBSERVED", description, 0);
+
+        if (sales.minimumUnits() < 5)
+            return new Signal("TEMU_VERY_FEW_STORE_SALES", description
+                    + " Actividad muy reducida observada para la tienda.", 10);
+        if (sales.minimumUnits() < 10)
+            return new Signal("TEMU_FEW_STORE_SALES", description
+                    + " Actividad todavía limitada observada para la tienda.", 5);
+        return new Signal("TEMU_STORE_SALES_OBSERVED", description, 0);
+    }
+
     public static Signal evaluateProductSales(Publication publication, LocalDateTime now) {
         if (publication == null || publication.getMarketplace() != Marketplace.TEMU
                 || !fresh(publication.getTemuProductSalesObservedAt(), now)) return null;
