@@ -135,6 +135,7 @@ async function getSession() {
     return validSession(stored[AUTH_KEY]) ? stored[AUTH_KEY] : null;
 }
 function showLoggedOut(message = 'Iniciá sesión para usar MarketLens.') {
+    cancelReportClose();
     updatePopupContent(() => {
         authenticated = false;
         resetLoadingTransition();
@@ -311,6 +312,13 @@ function applyPanelState(state) {
     // Los pasos son excluyentes: elección de precio -> corrección -> resultado.
     // Los paneles entran con una transición CSS respetando reduced-motion.
     const busy = state === 'price' || state === 'correction' || state === 'loading';
+    if (busy && reportCloseTimer !== null) {
+        // El reporte no puede terminar su cierre diferido después de
+        // haber iniciado un análisis o cambiado a otro formulario.
+        cancelReportClose();
+        $('report-details').hidden = true;
+        $('report-toggle').setAttribute('aria-expanded', 'false');
+    }
     $('analysis-title').textContent = ({
         price: 'Confirmar precio',
         correction: 'Completar datos',
