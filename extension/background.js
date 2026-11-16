@@ -234,9 +234,19 @@ async function analyze(pageKey, data) {
             const evaluation = await authenticatedRequest(
                 `/publications/${publicationId}/evaluations`, {method: 'POST'}
             );
+            // La ausencia del resumen no invalida la evaluación ya completada.
+            let communityReports = null;
+            try {
+                communityReports = await authenticatedRequest(
+                    `/publications/${publicationId}/reports/summary`
+                );
+            } catch {
+                // API del resumen no disponible: omitir el módulo de reportes.
+            }
             await writeAnalysisState(pageKey, {
                 status: 'success', publicationId, reused, sellerRefreshWarning,
                 evaluation: evaluation?.evaluation ?? evaluation,
+                communityReports,
                 message: 'Evaluación completada.'
             });
             return {ok: true, publicationId};
@@ -263,7 +273,15 @@ async function submitReport(data, reason, description) {
     const report = await authenticatedRequest(`/publications/${publicationId}/reports`, {
         method: 'POST', body: {reason, description}
     });
-    return {publicationId, reportId: report?.id ?? null};
+    let communityReports = null;
+    try {
+        communityReports = await authenticatedRequest(
+            `/publications/${publicationId}/reports/summary`
+        );
+    } catch {
+        // Reporte registrado. Un fallo de la consulta agregada no lo invalida.
+    }
+    return {publicationId, reportId: report?.id ?? null, communityReports};
 }
 
 ext.runtime.onMessage.addListener((message, _sender, sendResponse) => {
