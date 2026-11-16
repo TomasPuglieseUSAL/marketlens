@@ -15,7 +15,7 @@ export default function PublicationHighlights({ publication }: PublicationHighli
       <div className="publication-data-price">
         <small>Precio · ARS</small>
         <strong>
-          $ {publication.price.toLocaleString('es-AR', {
+          {'$ '}{publication.price.toLocaleString('es-AR', {
             minimumFractionDigits: 0,
             maximumFractionDigits: 2,
           })}
