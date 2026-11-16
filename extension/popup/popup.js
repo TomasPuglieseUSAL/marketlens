@@ -989,6 +989,56 @@ function extractMercadoLibre() {
         }
     }
     if (mlProductRating === null || mlProductReviewCount === null) {
+        // Estructura actual de Mercado Libre (reviews-capability-v3).
+        // La media y el número de OPINIONES deben proceder de un mismo
+        // módulo de reseñas del producto, no de la reputación del vendedor.
+        // "2 calificaciones" no se interpreta automáticamente como
+        // "2 opiniones": el texto accesible o los comentarios lo confirman.
+        const reviewSections = document.querySelectorAll(
+            '[data-testid="reviews-desktop"], [data-testid="reviews-mobile"], ' +
+            '#reviews_capability_v3'
+        );
+        for (const section of reviewSections) {
+            const average = parseMlRating(section.querySelector?.(
+                '.ui-review-capability__rating__average'
+            )?.textContent?.trim());
+            if (average === null) continue;
+
+            const accessible = section.querySelector?.(
+                '.ui-review-capability__rating__rating .andes-visually-hidden'
+            )?.textContent?.trim() || '';
+            const accessibleMatch = accessible.match(
+                /calificaci[oó]n\s+([1-5](?:[.,]\d)?)\s+de\s+5\s*[.,;:]?\s*(\d{1,3}(?:[.,]\d{3})+|\d+)\s+opiniones?\b/i
+            );
+            let count = accessibleMatch &&
+                    parseMlRating(accessibleMatch[1]) === average
+                ? parseMlReviewCount(accessibleMatch[2]) : null;
+
+            if (count === null) {
+                // Si falta el texto accesible, usar la cantidad explícita
+                // de opiniones/comentarios del mismo módulo. Evitar contar
+                // estrellas individuales y la etiqueta "calificaciones".
+                const labels = section.querySelectorAll?.(
+                    '.total-opinion, .ui-review-capability__rating__label'
+                ) || [];
+                for (const label of labels) {
+                    const match = (label.textContent || '').trim().match(
+                        /^(\d{1,3}(?:[.,]\d{3})+|\d+)\s+(?:opiniones|reseñas|comentarios)\b/i
+                    );
+                    if (match) {
+                        count = parseMlReviewCount(match[1]);
+                        if (count !== null) break;
+                    }
+                }
+            }
+            if (count !== null) {
+                mlProductRating = average;
+                mlProductReviewCount = count;
+                break;
+            }
+        }
+    }
+    if (mlProductRating === null || mlProductReviewCount === null) {
         mlProductRating = null;
         mlProductReviewCount = null;
     }
