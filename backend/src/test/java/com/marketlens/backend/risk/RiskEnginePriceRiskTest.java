@@ -44,6 +44,8 @@ class RiskEnginePriceRiskTest {
         assertEquals(40, result.getScore());
         assertEquals(RiskLevel.MEDIUM, result.getLevel());
         assertEquals(2, (int) result.getAvailableFactors());
+        // Mercado Libre ahora contempla tres dimensiones: descripción,
+        // vendedor y opiniones del producto. En este caso no hay reseñas.
         assertEquals(3, (int) result.getTotalFactors());
         assertEquals(2, result.getFactors().size());
         assertTrue(result.getFactors().stream().anyMatch(f ->

@@ -147,7 +147,22 @@ export interface Publication {
   marketplace: Marketplace
   externalId: string | null
   originalUrl: string | null
-  sellerId: number
+  sellerId: number | null
+  sellerName: string | null
+  sellerBadge: string | null
+  temuSellerRating: number | null
+  temuSellerReviewCount: number | null
+  temuProductRating: number | null
+  temuProductReviewCount: number | null
+  temuProductObservedAt: string | null
+  temuStoreId: string | null
+  temuSellerObservedAt: string | null
+  temuStoreTenureText: string | null
+  temuStoreTenureObservedAt: string | null
+  temuProductSoldText: string | null
+  temuProductSalesObservedAt: string | null
+  temuStoreSoldText: string | null
+  temuStoreSalesObservedAt: string | null
 }
 
 export interface CreatePublicationRequest {
@@ -185,7 +200,7 @@ export function getPublication(
   )
 }
 
-export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH'
+export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'INDETERMINATE'
 
 export interface RiskFactor {
   id: number
@@ -200,6 +215,10 @@ export interface RiskEvaluation {
   level: RiskLevel
   evaluatedAt: string
   factors: RiskFactor[]
+  coverageStatus?: 'COMPLETE' | 'PARTIAL' | 'INSUFFICIENT' | null
+  availableFactors?: number | null
+  totalFactors?: number | null
+  coverageFactors?: Array<{ code: string; name: string; available: boolean }> | null
 }
 
 export function evaluatePublication(
@@ -243,6 +262,28 @@ export interface Report {
   publicationId?: number
 }
 
+export interface CommunityReportReason {
+  reason: ReportReason
+  count: number
+}
+
+export interface CommunityReportSummary {
+  publicationId: number
+  recentReportCount: number
+  uniqueReporterCount: number
+  riskPoints: number
+  windowDays: number
+  reasons: CommunityReportReason[]
+}
+
+export function getCommunityReportSummary(token: string, publicationId: number) {
+  return apiRequest<CommunityReportSummary>(
+    `/publications/${publicationId}/reports/summary`,
+    {},
+    token
+  )
+}
+
 export interface CreateReportRequest {
   reason: ReportReason
   description: string
@@ -279,8 +320,8 @@ export interface PublicationListItem {
   title: string
   price: number
   marketplace: Marketplace
-  sellerId: number
-  sellerName: string
+  sellerId: number | null
+  sellerName: string | null
 }
 
 export interface PageResponse<T> {

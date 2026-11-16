@@ -85,7 +85,7 @@ export default function PublicationsList({
                   <strong>{publication.title}</strong>
 
                   <p>
-                    {publication.marketplace} · {publication.sellerName}
+                    {publication.marketplace} · {publication.sellerName ?? 'Vendedor no identificado'}
                   </p>
 
                   <small>

@@ -30,7 +30,8 @@ public class ExtensionImportService {
             String username) {
 
         if (!"MERCADO_LIBRE".equals(request.marketplace()) &&
-                !"FACEBOOK_MARKETPLACE".equals(request.marketplace())) {
+                !"FACEBOOK_MARKETPLACE".equals(request.marketplace()) &&
+                !"TEMU".equals(request.marketplace())) {
 
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -47,6 +48,37 @@ public class ExtensionImportService {
         validateLength(request.description(), 20000, "description");
         validateLength(request.url(), 2048, "url");
         validateLength(username, 255, "username");
+        validateLength(request.selectedOfferId(), 120, "selectedOfferId");
+
+        // No sustituir la identidad del producto del catálogo por un MLA
+        // individual sin una selección explícita y consistente.
+        String selectedOfferId = normalizeOptional(request.selectedOfferId());
+        if (selectedOfferId != null) {
+            String url = request.url();
+            String externalId = request.externalId();
+            boolean isCatalog = false;
+            try {
+                URI catalog = URI.create(url);
+                String host = catalog.getHost();
+                isCatalog = "https".equalsIgnoreCase(catalog.getScheme())
+                        && host != null
+                        && (host.equalsIgnoreCase("mercadolibre.com.ar")
+                            || host.toLowerCase(java.util.Locale.ROOT).endsWith(".mercadolibre.com.ar"))
+                        && catalog.getPath() != null
+                        && catalog.getPath().matches(
+                            "(?i)^/(?:[^/]+/)?p/MLA\\d{6,}/?$");
+            } catch (IllegalArgumentException ignored) {
+                // Se rechaza con el mismo mensaje que una referencia incoherente.
+            }
+            if (!"MERCADO_LIBRE".equals(request.marketplace())
+                    || !isCatalog
+                    || !selectedOfferId.matches("MLA[1-9]\\d{5,}")
+                    || !selectedOfferId.equalsIgnoreCase(externalId == null ? "" : externalId)
+                    || request.seller() == null || request.seller().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "La oferta seleccionada no coincide con un ID individual de Mercado Libre, vendedor y catálogo válidos.");
+            }
+        }
 
         if ("FACEBOOK_MARKETPLACE".equals(request.marketplace())) {
             validateFacebookUrl(request.url());
@@ -62,6 +94,7 @@ public class ExtensionImportService {
                 normalizeOptional(request.description()),
                 request.url().trim(),
                 username);
+        imported.setSelectedOfferId(selectedOfferId);
 
         Long externalSellerId = null;
 
@@ -87,6 +120,143 @@ public class ExtensionImportService {
 
         imported.setExternalSellerId(externalSellerId);
 
+        if ("TEMU".equals(request.marketplace()) && request.seller() != null
+                && request.seller().trim().matches(
+                   "(?i)^[0-5](?:[.,]\\d)?\\s+out\\s+of\\s+(?:five|5)\\s+stars?\\s*$")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El nombre de la tienda no puede ser una calificación del producto.");
+        }
+        java.math.BigDecimal temuRating = request.temuSellerRating();
+        if (temuRating != null) {
+            if (!"TEMU".equals(request.marketplace()) ||
+                    request.seller() == null || request.seller().isBlank() ||
+                    temuRating.compareTo(java.math.BigDecimal.ZERO) <= 0 ||
+                    temuRating.compareTo(new java.math.BigDecimal("5.0")) > 0 ||
+                    temuRating.scale() > 1) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "La puntuación de tienda Temu no es válida.");
+            }
+        }
+        imported.setTemuSellerRating(temuRating);
+
+        Integer reviewCount = request.temuSellerReviewCount();
+        String storeId = request.temuStoreId();
+        Boolean sectionObserved = request.temuSellerSectionObserved();
+        boolean anyTemuObservation = temuRating != null || reviewCount != null
+                || storeId != null || sectionObserved != null;
+        if (anyTemuObservation && !"TEMU".equals(request.marketplace())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Los datos de tienda Temu no corresponden a este marketplace.");
+        }
+        if (reviewCount != null && (reviewCount < 0 || reviewCount > 10000000)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El número de valoraciones de Temu no es válido.");
+        }
+        if (storeId != null && !storeId.matches("\\d{6,30}")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El identificador de tienda Temu no es válido.");
+        }
+        if ((reviewCount != null || storeId != null || Boolean.TRUE.equals(sectionObserved))
+                && (request.seller() == null || request.seller().isBlank())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Los datos comerciales de Temu requieren una tienda identificada.");
+        }
+        if (reviewCount != null && !Boolean.TRUE.equals(sectionObserved)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Las valoraciones de Temu requieren inspección de la tienda.");
+        }
+        imported.setTemuSellerObservation(reviewCount, storeId, sectionObserved);
+
+        // La valoración del PRODUCTO es independiente de la valoración de tienda.
+        java.math.BigDecimal productRating = request.temuProductRating();
+        Integer productReviews = request.temuProductReviewCount();
+        if ((productRating != null || productReviews != null)
+                && !"TEMU".equals(request.marketplace())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Las opiniones de producto Temu no corresponden a este marketplace.");
+        }
+        if (productRating != null && (productRating.compareTo(java.math.BigDecimal.ZERO) <= 0
+                || productRating.compareTo(new java.math.BigDecimal("5.0")) > 0
+                || productRating.scale() > 1)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La calificación del producto Temu no es válida.");
+        }
+        if (productReviews != null && (productReviews < 0 || productReviews > 10000000)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La cantidad de reseñas del producto Temu no es válida.");
+        }
+        // Admitimos observaciones parciales, pero no cuentan como cobertura completa.
+        imported.setTemuProductReviews(productRating, productReviews);
+
+        // Calificación y reseñas del PRODUCTO de Mercado Libre, distintas
+        // de la reputación del vendedor y sólo informativas por ahora.
+        java.math.BigDecimal mlRating = request.mlProductRating();
+        Integer mlReviews = request.mlProductReviewCount();
+        if ((mlRating != null || mlReviews != null)
+                && !"MERCADO_LIBRE".equals(request.marketplace())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Las opiniones de Mercado Libre no corresponden a este marketplace.");
+        }
+        if (mlRating != null && (mlRating.compareTo(java.math.BigDecimal.ZERO) <= 0
+                || mlRating.compareTo(new java.math.BigDecimal("5.0")) > 0
+                || mlRating.scale() > 1)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La calificación del producto Mercado Libre no es válida.");
+        }
+        if (mlReviews != null && (mlReviews <= 0 || mlReviews > 10000000)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Las opiniones del producto Mercado Libre no son válidas.");
+        }
+        // TRUE no significa cero opiniones: solo ausencia de calificación
+        // pública observada en el producto principal.
+        Boolean ratingUnavailable = request.mlProductRatingUnavailable();
+        if (ratingUnavailable != null && !"MERCADO_LIBRE".equals(request.marketplace())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El indicador de calificación no corresponde a este marketplace.");
+        }
+        if (Boolean.TRUE.equals(ratingUnavailable)
+                && (mlRating != null || mlReviews != null)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La ausencia observada contradice las métricas proporcionadas.");
+        }
+        imported.setMlProductReviews(mlRating, mlReviews);
+        imported.setMlProductRatingUnavailable(
+                Boolean.TRUE.equals(ratingUnavailable) ? true : null);
+        // Datos comerciales observados en regiones separadas del DOM:
+        // antigüedad de la TIENDA y ventas del PRODUCTO.
+        String tenure = request.temuStoreTenureText();
+        String sold = request.temuProductSoldText();
+        String storeSold = request.temuStoreSoldText();
+        if ((tenure != null || sold != null || storeSold != null)
+                && !"TEMU".equals(request.marketplace())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Los indicadores comerciales sólo corresponden a Temu.");
+        }
+        if ((tenure != null || storeSold != null)
+                && (request.seller() == null || request.seller().isBlank())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Los indicadores de la tienda requieren un vendedor identificado.");
+        }
+        if (tenure != null && (tenure.length() > 60
+                || TemuCommercialEvidence.parseStoreTenure(tenure) == null)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La antigüedad observada de la tienda no es válida.");
+        }
+        if (sold != null && (sold.length() > 60
+                || TemuCommercialEvidence.parseProductSales(sold) == null)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La cantidad de ventas observadas del producto no es válida.");
+        }
+        if (storeSold != null && (storeSold.length() > 60
+                || TemuCommercialEvidence.parseProductSales(storeSold) == null)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La cantidad de ventas observadas de la tienda no es válida.");
+        }
+        imported.setTemuCommercialObservation(
+                tenure == null ? null : tenure.trim(),
+                sold == null ? null : sold.trim(),
+                storeSold == null ? null : storeSold.trim());
+        // Validar IDs antes de interpolarlos en comprobaciones de URL.
         validateSellerMetadata(request);
 
         imported.setSellerMetadata(
@@ -168,11 +338,20 @@ public class ExtensionImportService {
                 boolean validHost = host != null &&
                         (host.equalsIgnoreCase("mercadolibre.com.ar") ||
                                 host.equalsIgnoreCase("www.mercadolibre.com.ar"));
-
+                boolean validPath = path != null && path.startsWith("/pagina/");
+                if ("TEMU".equals(request.marketplace())) {
+                    validHost = host != null && (host.equalsIgnoreCase("temu.com")
+                            || host.toLowerCase(java.util.Locale.ROOT).endsWith(".temu.com"));
+                    String wanted = request.temuStoreId();
+                    validPath = wanted != null && path != null &&
+                        (path.matches("(?i)^/.*-m-" + wanted + "\\.html/?$")
+                        || path.matches("(?i)^/mall\\.html/?$")
+                           && uri.getRawQuery() != null &&
+                              java.util.Arrays.stream(uri.getRawQuery().split("&"))
+                              .anyMatch(value -> value.equals("mall_id=" + wanted)));
+                }
                 if (!"https".equalsIgnoreCase(uri.getScheme()) ||
-                        !validHost ||
-                        path == null ||
-                        !path.startsWith("/pagina/") ||
+                        !validHost || !validPath ||
                         uri.getUserInfo() != null) {
 
                     throw new IllegalArgumentException();
@@ -185,8 +364,10 @@ public class ExtensionImportService {
             }
         }
 
-        if (badge != null &&
-                !badge.equals("MERCADOLIDER")) {
+        if (badge != null && !(
+                ("MERCADO_LIBRE".equals(request.marketplace()) && "MERCADOLIDER".equals(badge))
+                || ("TEMU".equals(request.marketplace()) && "TEMU_STAR_SELLER".equals(badge)
+                        && request.seller() != null && !request.seller().isBlank()))) {
 
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,

@@ -64,7 +64,10 @@ async function redeemCode(code: string): Promise<StoredSession> {
 export default function ExtensionLoginPage({ onSession }: Props) {
   const navigate = useNavigate()
   const [handoff] = useState<Handoff | null>(readHandoff)
-  const [error, setError] = useState('')
+  // Un enlace inválido se conoce al renderizar: no es un efecto secundario.
+  const [error, setError] = useState(
+    handoff ? '' : 'El enlace de la extensión no es válido.'
+  )
   const requestRef = useRef<Promise<StoredSession> | null>(null)
   const destination = handoff?.destination ?? '/dashboard'
 
@@ -77,10 +80,7 @@ export default function ExtensionLoginPage({ onSession }: Props) {
       window.location.pathname + window.location.search,
     )
 
-    if (!handoff) {
-      setError('El enlace de la extensión no es válido.')
-      return
-    }
+    if (!handoff) return
 
     if (!requestRef.current) requestRef.current = redeemCode(handoff.code)
     let active = true

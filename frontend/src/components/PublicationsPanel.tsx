@@ -11,6 +11,8 @@ import RiskEvaluationPanel from './RiskEvaluationPanel'
 import ReportsPanel from './ReportsPanel'
 import PublicationsList from './PublicationsList'
 import SellerSelect from './SellerSelect'
+import PublicationDescription from './PublicationDescription'
+import PublicationHighlights from './PublicationHighlights'
 import { Link } from 'react-router'
 
 interface PublicationsPanelProps {
@@ -257,10 +259,18 @@ export default function PublicationsPanel({
 
       <p><strong>ID:</strong> {publication.id}</p>
       <p><strong>Título:</strong> {publication.title}</p>
-      <p><strong>Descripción:</strong> {publication.description}</p>
-      <p><strong>Precio:</strong> {publication.price}</p>
+      <PublicationHighlights publication={publication} />
       <p><strong>Marketplace:</strong> {publication.marketplace}</p>
-      <p><strong>Vendedor:</strong> {publication.sellerId}</p>
+      <PublicationDescription
+        key={publication.id}
+        description={publication.description}
+      />
+      {publication.marketplace === 'TEMU' && publication.temuSellerRating != null && (
+        <p><strong>Calificación de tienda:</strong> {publication.temuSellerRating}/5 (observada en Temu)</p>
+      )}
+      {publication.sellerBadge === 'TEMU_STAR_SELLER' && (
+        <p><strong>Etiqueta de la tienda:</strong> Star Seller (observada; no verificada por MarketLens)</p>
+      )}
 
       {publication.externalId && (
         <p>
@@ -268,17 +278,15 @@ export default function PublicationsPanel({
         </p>
       )}
 
-      {publication.originalUrl && (
-        <p>
-          <strong>URL original:</strong>{' '}
-          <a
-            href={publication.originalUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Abrir publicación
-          </a>
-        </p>
+      {publication.originalUrl && /^https?:\/\//i.test(publication.originalUrl) && (
+        <a
+          href={publication.originalUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="action-link original-publication-button"
+        >
+          Abrir publicación original ↗
+        </a>
       )}
 
       <Link

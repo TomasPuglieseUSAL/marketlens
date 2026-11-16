@@ -104,7 +104,49 @@ public class ExtensionProcessingService {
                                                 "La publicación existente tiene otro tipo de referencia.");
                         }
 
-                        if (marketplace == Marketplace.FACEBOOK_MARKETPLACE) {
+                        if (marketplace == Marketplace.TEMU) {
+                                // goods_id no confirma la identidad de una tienda.
+                                // Conservar datos previos salvo información compatible con la observación.
+                                if (publication.getPrice().compareTo(normalized.price()) != 0) {
+                                        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                                                "El precio del producto Temu cambió; se requiere una nueva observación.");
+                                }
+                                String incomingName = normalized.sellerName();
+                                Seller previous = publication.getSeller();
+                                if (incomingName != null && !incomingName.isBlank()) {
+                                        if (previous == null) {
+                                                publication.setSeller(createObservedTemuSeller(incomingName));
+                                        } else if (previous.getName() == null ||
+                                                !previous.getName().equalsIgnoreCase(incomingName.trim())) {
+                                                // Corrección acotada para registros antiguos en los que
+                                                // un texto de puntuación del PRODUCTO se tomó por vendedor.
+                                                // No modificar un vendedor existente con nombre real.
+                                                if (previous.getName() != null &&
+                                                        previous.getName().matches(
+                                                            "(?i)^\\s*[0-5](?:[.,]\\d)?\\s+out\\s+of\\s+(?:five|5)\\s+stars?\\s*$")) {
+                                                        publication.setSeller(createObservedTemuSeller(incomingName));
+                                                } else {
+                                                        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                                                                "La tienda observada de Temu no coincide con la registrada.");
+                                                }
+                                        }
+                                }
+                                if ("TEMU_STAR_SELLER".equals(imported.getSellerBadge())
+                                        && incomingName != null && !incomingName.isBlank()) {
+                                        publication.setSellerBadge("TEMU_STAR_SELLER");
+                                }
+                                if (publication.getSeller() != null &&
+                                        incomingName != null &&
+                                        publication.getSeller().getName().equalsIgnoreCase(incomingName.trim())) {
+                                        applyTemuSellerEvidence(publication, imported);
+                                }
+                                // Una extracción más reciente puede incluir detalles que faltaban
+                                // cuando se creó esta publicación (p. ej., #goodsDetail de Temu).
+                                // Completar solo una descripción vacía, sin sobrescribir la anterior.
+                                fillMissingTemuDescription(publication, imported);
+                                applyTemuProductEvidence(publication, imported);
+                                applyTemuCommercialEvidence(publication, imported);
+                        } else if (marketplace == Marketplace.FACEBOOK_MARKETPLACE) {
 
                                 // Facebook: el identificador externo identifica el anuncio,
                                 // pero el vendedor no dispone de una identidad verificada
@@ -142,17 +184,29 @@ public class ExtensionProcessingService {
                         } else {
 
                                 // Mercado Libre: conservar la verificación original.
-                                Long existingSellerId = publication.getSeller().getExternalSellerId();
-
-                                if (verified == null ||
-                                                !Objects.equals(
-                                                                existingSellerId,
-                                                                verified.id())) {
-
+                                Seller previousSeller = publication.getSeller();
+                                Long existingSellerId = previousSeller == null ? null
+                                                : previousSeller.getExternalSellerId();
+                                String previousSellerName = previousSeller == null ? null
+                                                : previousSeller.getName();
+                                // La misma referencia MLA/MLAU y el mismo nombre
+                                // observado permiten actualizar señales públicas
+                                // sin OAuth. Nunca cambiar ni inventar un ID verificado.
+                                boolean sameObservedName = previousSellerName != null
+                                                && normalized.sellerName() != null
+                                                && previousSellerName.trim().equalsIgnoreCase(
+                                                                normalized.sellerName().trim());
+                                Long incomingObservedId = imported.getExternalSellerId();
+                                boolean idConflict = existingSellerId != null
+                                                && incomingObservedId != null
+                                                && !Objects.equals(existingSellerId, incomingObservedId);
+                                boolean verifiedConflict = verified != null
+                                                && existingSellerId != null
+                                                && !Objects.equals(existingSellerId, verified.id());
+                                if (!sameObservedName || idConflict || verifiedConflict) {
                                         throw new ResponseStatusException(
                                                         HttpStatus.CONFLICT,
-                                                        "No se pudo confirmar que la publicación " +
-                                                                        "pertenezca al mismo vendedor.");
+                                                        "La publicación ya existe, pero no coincide la identidad del vendedor.");
                                 }
 
                                 if (publication.getPrice().compareTo(
@@ -165,9 +219,12 @@ public class ExtensionProcessingService {
                                 }
                         }
 
-                        if (marketplace == Marketplace.MERCADO_LIBRE && verified != null) {
-                                updateVerifiedSeller(publication.getSeller(), verified);
-                                sellerRepository.save(publication.getSeller());
+                        if (marketplace == Marketplace.MERCADO_LIBRE) {
+                                if (verified != null) {
+                                        updateVerifiedSeller(publication.getSeller(), verified);
+                                        sellerRepository.save(publication.getSeller());
+                                }
+                                applyMercadoLibreObservedEvidence(publication, imported);
                         }
 
                         status = "REUSED";
@@ -180,9 +237,12 @@ public class ExtensionProcessingService {
                         Seller savedSeller;
 
                         if (marketplace == Marketplace.MERCADO_LIBRE) {
-
                                 savedSeller = resolveSeller(normalized, verified);
-
+                        } else if (marketplace == Marketplace.TEMU) {
+                                // Nombre de tienda observado en esta publicación; no identidad verificada.
+                                savedSeller = normalized.sellerName() == null
+                                        || normalized.sellerName().isBlank()
+                                        ? null : createObservedTemuSeller(normalized.sellerName());
                         } else {
 
                                 Seller seller = new Seller();
@@ -203,6 +263,9 @@ public class ExtensionProcessingService {
 
                         publication.setTitle(imported.getTitle());
                         publication.setDescription(imported.getDescription());
+                        if (marketplace == Marketplace.TEMU) {
+                                applyTemuProductEvidence(publication, imported);
+                        }
 
                         publication.setPrice(normalized.price());
                         publication.setMarketplace(marketplace);
@@ -212,6 +275,16 @@ public class ExtensionProcessingService {
                         publication.setOriginalUrl(imported.getOriginalUrl());
 
                         publication.setSeller(savedSeller);
+                        if (marketplace == Marketplace.MERCADO_LIBRE) {
+                                applyMercadoLibreObservedEvidence(publication, imported);
+                        }
+                        if (marketplace == Marketplace.TEMU && savedSeller != null) {
+                                if ("TEMU_STAR_SELLER".equals(imported.getSellerBadge())) {
+                                        publication.setSellerBadge("TEMU_STAR_SELLER");
+                                }
+                                applyTemuSellerEvidence(publication, imported);
+                                applyTemuCommercialEvidence(publication, imported);
+                        }
 
                         // Conservar el año de incorporación observado en Facebook.
                         // No representa una antigüedad exacta en días.
@@ -283,7 +356,10 @@ public class ExtensionProcessingService {
                                                 "USER_PRODUCT".equals(referenceType)))
                                 ||
                                 ("FACEBOOK_MARKETPLACE".equals(marketplace) &&
-                                                "LISTING".equals(referenceType));
+                                                "LISTING".equals(referenceType))
+                                ||
+                                ("TEMU".equals(marketplace) &&
+                                                "PRODUCT".equals(referenceType));
 
                 if (!supported) {
                         throw new ResponseStatusException(
@@ -331,8 +407,9 @@ public class ExtensionProcessingService {
                                         "El precio tiene demasiados decimales.");
                 }
 
-                if (normalized.sellerName() == null ||
-                                normalized.sellerName().isBlank()) {
+                if (!"TEMU".equals(marketplace) &&
+                                (normalized.sellerName() == null ||
+                                normalized.sellerName().isBlank())) {
                         throw new ResponseStatusException(
                                         HttpStatus.UNPROCESSABLE_ENTITY,
                                         "No se identificó al vendedor.");
@@ -347,6 +424,116 @@ public class ExtensionProcessingService {
                                         HttpStatus.UNPROCESSABLE_ENTITY,
                                         "Hay una inconsistencia entre los identificadores.");
                 }
+        }
+
+        static void applyMercadoLibreObservedEvidence(
+                        Publication publication, ExtensionImport imported) {
+                if (publication.getMarketplace() != Marketplace.MERCADO_LIBRE) return;
+                if (Boolean.TRUE.equals(imported.getMlProductRatingUnavailable())) {
+                        // Corregir las métricas antiguas si una observación nueva
+                        // confirma que la ficha principal no tiene calificación.
+                        publication.setMlProductRating(null);
+                        publication.setMlProductReviewCount(null);
+                        publication.setMlProductRatingUnavailable(true);
+                        publication.setMlProductObservedAt(java.time.LocalDateTime.now());
+                } else if (MercadoLibreProductReviewEvidence.hasMetrics(
+                        imported.getMlProductRating(), imported.getMlProductReviewCount())) {
+                        publication.setMlProductRating(imported.getMlProductRating());
+                        publication.setMlProductReviewCount(imported.getMlProductReviewCount());
+                        publication.setMlProductRatingUnavailable(false);
+                        publication.setMlProductObservedAt(java.time.LocalDateTime.now());
+                }
+                // Si la extracción fue inconclusa, no reemplazar datos antiguos.
+                Integer observedLevel = imported.getSellerReputationLevel();
+                if (publication.getSeller() != null
+                        && observedLevel != null && observedLevel >= 1 && observedLevel <= 5) {
+                        publication.setMlSellerReputationObserved(observedLevel);
+                        publication.setMlSellerReputationObservedAt(java.time.LocalDateTime.now());
+                }
+        }
+
+        static void fillMissingTemuDescription(Publication publication, ExtensionImport imported) {
+                if (publication == null || imported == null) return;
+                String previous = publication.getDescription();
+                String incoming = imported.getDescription();
+                if ((previous == null || previous.isBlank())
+                        && incoming != null && !incoming.isBlank()) {
+                        publication.setDescription(incoming);
+                }
+        }
+
+        static void applyTemuProductEvidence(Publication publication, ExtensionImport imported) {
+                if (publication == null || imported == null) return;
+                // Conservar la observación anterior si la nueva extracción
+                // no trae ambos valores; la fecha antigua vencerá igualmente.
+                if (TemuProductReviewEvidence.hasMetrics(
+                        imported.getTemuProductRating(),
+                        imported.getTemuProductReviewCount())) {
+                        publication.setTemuProductRating(imported.getTemuProductRating());
+                        publication.setTemuProductReviewCount(imported.getTemuProductReviewCount());
+                        publication.setTemuProductObservedAt(java.time.LocalDateTime.now());
+                }
+        }
+
+        static void applyTemuCommercialEvidence(Publication publication, ExtensionImport imported) {
+                if (publication == null || imported == null
+                        || publication.getMarketplace() != Marketplace.TEMU) return;
+                // El texto de ventas siempre pertenece al producto y puede
+                // actualizarse incluso si no hubo nuevos datos de la tienda.
+                String sold = imported.getTemuProductSoldText();
+                if (TemuCommercialEvidence.parseProductSales(sold) != null) {
+                        publication.setTemuProductSoldText(sold);
+                        publication.setTemuProductSalesObservedAt(java.time.LocalDateTime.now());
+                }
+
+                // Un goods_id no acredita la identidad de la tienda: exigir
+                // que el nombre observado coincida con el vendedor asociado.
+                String name = imported.getSellerName();
+                if (publication.getSeller() == null || name == null
+                        || publication.getSeller().getName() == null
+                        || !publication.getSeller().getName().equalsIgnoreCase(name.trim())) return;
+                String tenure = imported.getTemuStoreTenureText();
+                if (TemuCommercialEvidence.parseStoreTenure(tenure) != null) {
+                        publication.setTemuStoreTenureText(tenure);
+                        publication.setTemuStoreTenureObservedAt(java.time.LocalDateTime.now());
+                }
+                String storeSold = imported.getTemuStoreSoldText();
+                if (TemuCommercialEvidence.parseProductSales(storeSold) != null) {
+                        publication.setTemuStoreSoldText(storeSold);
+                        publication.setTemuStoreSalesObservedAt(java.time.LocalDateTime.now());
+                }
+        }
+
+        private void applyTemuSellerEvidence(Publication publication, ExtensionImport imported) {
+                String incomingStoreId = imported.getTemuStoreId();
+                String previousId = publication.getTemuStoreId();
+                if (previousId != null && incomingStoreId != null &&
+                        !previousId.equals(incomingStoreId)) {
+                        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                                "La tienda de Temu no coincide con el identificador anteriormente registrado.");
+                }
+                if (incomingStoreId != null) publication.setTemuStoreId(incomingStoreId);
+
+                if (Boolean.TRUE.equals(imported.getTemuSellerSectionObserved())
+                        || imported.getTemuSellerRating() != null
+                        || imported.getTemuSellerReviewCount() != null) {
+                        publication.setTemuSellerRating(imported.getTemuSellerRating());
+                        publication.setTemuSellerReviewCount(imported.getTemuSellerReviewCount());
+                        publication.setTemuSellerSectionObserved(imported.getTemuSellerSectionObserved());
+                        publication.setTemuSellerObservedAt(java.time.LocalDateTime.now());
+                }
+        }
+
+        private Seller createObservedTemuSeller(String name) {
+                Seller seller = new Seller();
+                seller.setName(name.trim());
+                seller.setMarketplace(Marketplace.TEMU);
+                // Sin identificador externo ni reputación comprobada.
+                seller.setExternalSellerId(null);
+                seller.setReputation(null);
+                seller.setReputationLevel(null);
+                seller.setAccountAgeDays(null);
+                return sellerRepository.save(seller);
         }
 
         private record VerifiedSeller(

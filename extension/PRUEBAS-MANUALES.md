@@ -93,3 +93,12 @@ Al concluir, completá en tu copia de esta guía:
 - Confirmación final: **Extensión probada** / **Extensión parcialmente probada** / **Extensión pendiente**.
 
 Esta verificación manual complementa los tests automáticos del backend y la prueba de instalación limpia con Docker. **No constituye una auditoría integral de seguridad.**
+
+
+## Prueba experimental de Temu
+
+- Abrí una página de producto `goods.html?goods_id=...` o `*-g-<id>.html`.
+- Si el precio y su moneda ARS figuran en metadatos confiables, comprobá que el popup permita analizar.
+- Verificá que el vendedor se presente como "No identificado" cuando corresponda.
+- Si el producto ofrece otra moneda o un rango de precios, la extensión no debe convertir o elegir un precio arbitrario.
+- Consultá [TEMU-MVP.md](TEMU-MVP.md) para conocer el alcance.

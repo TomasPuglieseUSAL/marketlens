@@ -1,5 +1,6 @@
 package com.marketlens.backend.service;
 
+import com.marketlens.backend.dto.RiskCoverageFactorResponse;
 import com.marketlens.backend.entity.Marketplace;
 import com.marketlens.backend.entity.Publication;
 import com.marketlens.backend.entity.RiskCoverageStatus;
@@ -10,105 +11,60 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Component
 public class RiskCoverageCalculator {
 
-    private static final int TOTAL_FACTORS = 3;
+    public static boolean hasSellerEvidence(Publication publication, LocalDateTime now) {
+        Seller seller = publication.getSeller();
+        if (seller == null) return false;
+        Integer level = seller.getReputationLevel();
+        BigDecimal legacy = seller.getReputation();
+        return (level != null && level >= 1 && level <= 5)
+                || (legacy != null && legacy.compareTo(BigDecimal.ZERO) >= 0
+                    && legacy.compareTo(BigDecimal.ONE) <= 0)
+                || SellerActivityEvidence.detect(seller, now)
+                    != SellerActivityEvidence.ActivitySignal.NONE
+                || TemuSellerRiskScoring.hasObservedReputation(publication, now)
+                || MercadoLibreSellerEvidence.hasObservedReputation(publication, now);
+    }
 
-    public void applyCoverage(
-            Publication publication,
-            RiskEvaluation evaluation) {
+    /**
+     * Un solo criterio para el conteo y el detalle que recibe la extensión.
+     * Las reseñas del PRODUCTO no se confunden con señales del vendedor.
+     */
+    public static List<RiskCoverageFactorResponse> factors(Publication publication) {
+        LocalDateTime now = LocalDateTime.now();
+        List<RiskCoverageFactorResponse> result = new ArrayList<>();
+        String description = publication.getDescription();
+        result.add(new RiskCoverageFactorResponse("DESCRIPTION",
+                "Información del producto", description != null && !description.isBlank()));
+        result.add(new RiskCoverageFactorResponse("SELLER_REPUTATION",
+                "Reputación o actividad del vendedor", hasSellerEvidence(publication, now)));
 
-        int available = countAvailableFactors(publication);
-
-        RiskCoverageStatus status;
-
-        if (available == TOTAL_FACTORS) {
-            status = RiskCoverageStatus.COMPLETE;
-
-        } else if (available == 0) {
-            status = RiskCoverageStatus.INSUFFICIENT;
-
-        } else {
-            status = RiskCoverageStatus.PARTIAL;
+        Marketplace marketplace = publication.getMarketplace();
+        if (marketplace == Marketplace.TEMU || marketplace == Marketplace.MERCADO_LIBRE) {
+            boolean hasReviews = marketplace == Marketplace.TEMU
+                    ? TemuProductReviewEvidence.hasObservedEvidence(publication, now)
+                    : MercadoLibreProductReviewEvidence.hasObservedEvidence(publication, now);
+            result.add(new RiskCoverageFactorResponse("PRODUCT_REVIEWS",
+                    "Calificación y opiniones del producto", hasReviews));
         }
+        return List.copyOf(result);
+    }
+
+    public void applyCoverage(Publication publication, RiskEvaluation evaluation) {
+        List<RiskCoverageFactorResponse> evidence = factors(publication);
+        int available = (int) evidence.stream().filter(RiskCoverageFactorResponse::available).count();
+        int total = evidence.size();
+        RiskCoverageStatus status = available == total ? RiskCoverageStatus.COMPLETE
+                : available == 0 ? RiskCoverageStatus.INSUFFICIENT
+                : RiskCoverageStatus.PARTIAL;
 
         evaluation.setCoverageStatus(status);
         evaluation.setAvailableFactors(available);
-        evaluation.setTotalFactors(TOTAL_FACTORS);
+        evaluation.setTotalFactors(total);
     }
-
-    private int countAvailableFactors(Publication publication) {
-
-        int available = 0;
-
-        // -------------------------------------
-        // 1. Descripción de la publicación
-        // -------------------------------------
-
-        String description = publication.getDescription();
-
-        if (description != null && !description.isBlank()) {
-            available++;
-        }
-
-        Seller seller = publication.getSeller();
-
-        if (seller == null) {
-            return available;
-        }
-
-        // -------------------------------------
-        // 2. Reputación del vendedor
-        // -------------------------------------
-
-        Integer reputationLevel = seller.getReputationLevel();
-
-        BigDecimal reputation = seller.getReputation();
-
-        boolean hasReputationLevel = reputationLevel != null &&
-                reputationLevel >= 1 &&
-                reputationLevel <= 5;
-
-        boolean hasLegacyReputation = reputation != null &&
-                reputation.compareTo(BigDecimal.ZERO) >= 0 &&
-                reputation.compareTo(BigDecimal.ONE) <= 0;
-
-        // Una observación comercial verificable también cubre esta dimensión:
-        // ventas numéricas, ventas insuficientes declaradas por la fuente,
-        // o un catálogo pequeño observado recientemente.
-        boolean hasCommercialEvidence = SellerActivityEvidence.detect(
-                seller, LocalDateTime.now())
-                != SellerActivityEvidence.ActivitySignal.NONE;
-
-        if (hasReputationLevel ||
-                hasLegacyReputation ||
-                hasCommercialEvidence) {
-            available++;
-        }
-
-        // -------------------------------------
-        // 3. Antigüedad de la cuenta
-        // -------------------------------------
-
-        Integer accountAgeDays = seller.getAccountAgeDays();
-
-        boolean hasExactAccountAge = accountAgeDays != null &&
-                accountAgeDays >= 0;
-
-        Integer facebookJoinYear = publication.getFacebookJoinYear();
-
-        boolean hasFacebookJoinYear = publication.getMarketplace() == Marketplace.FACEBOOK_MARKETPLACE &&
-                facebookJoinYear != null &&
-                facebookJoinYear >= 2004 &&
-                facebookJoinYear <= java.time.Year.now().getValue();
-
-        if (hasExactAccountAge || hasFacebookJoinYear) {
-            available++;
-        }
-
-        return available;
-    }
-
 }

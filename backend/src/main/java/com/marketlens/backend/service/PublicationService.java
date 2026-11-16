@@ -77,8 +77,8 @@ public class PublicationService {
             publication.getTitle(),
             publication.getPrice(),
             publication.getMarketplace(),
-            publication.getSeller().getId(),
-            publication.getSeller().getName()
+            publication.getSeller() == null ? null : publication.getSeller().getId(),
+            publication.getSeller() == null ? null : publication.getSeller().getName()
         ));
     }
 
@@ -90,7 +90,22 @@ public class PublicationService {
         publication.getTitle(),
         publication.getDescription(),
         publication.getPrice(),
-        publication.getSeller().getId(),
+        publication.getSeller() == null ? null : publication.getSeller().getId(),
+        publication.getSeller() == null ? null : publication.getSeller().getName(),
+        publication.getSellerBadge(),
+        publication.getTemuSellerRating(),
+        publication.getTemuSellerReviewCount(),
+        publication.getTemuProductRating(),
+        publication.getTemuProductReviewCount(),
+        publication.getTemuProductObservedAt(),
+        publication.getTemuStoreId(),
+        publication.getTemuSellerObservedAt(),
+        publication.getTemuStoreTenureText(),
+        publication.getTemuStoreTenureObservedAt(),
+        publication.getTemuProductSoldText(),
+        publication.getTemuProductSalesObservedAt(),
+        publication.getTemuStoreSoldText(),
+        publication.getTemuStoreSalesObservedAt(),
         publication.getMarketplace(),
         publication.getExternalId(),
         publication.getOriginalUrl(),

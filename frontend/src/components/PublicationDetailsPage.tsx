@@ -8,6 +8,8 @@ import {
 
 import RiskEvaluationPanel from './RiskEvaluationPanel'
 import ReportsPanel from './ReportsPanel'
+import PublicationDescription from './PublicationDescription'
+import PublicationHighlights from './PublicationHighlights'
 
 interface PublicationDetailsPageProps {
   token: string
@@ -20,70 +22,64 @@ const marketplaceLabels: Record<string, string> = {
   OTHER: 'Otros',
 }
 
-export default function PublicationDetailsPage({
-  token,
-}: PublicationDetailsPageProps) {
+// La validación de la ruta se resuelve al renderizar, sin efectos.
+export default function PublicationDetailsPage({ token }: PublicationDetailsPageProps) {
   const { id } = useParams<{ id: string }>()
+  const publicationId = Number(id)
+  const validId = id !== undefined
+    && /^\d+$/.test(id)
+    && Number.isSafeInteger(publicationId)
+    && publicationId > 0
 
-  const [publication, setPublication] =
-    useState<Publication | null>(null)
+  if (!validId) {
+    return (
+      <section className="publication-details-page">
+        <Link to="/publications" className="back-link">
+          ← Volver a publicaciones
+        </Link>
+        <p className="error" role="alert">El ID de la publicación no es válido.</p>
+      </section>
+    )
+  }
 
+  // Un cambio de ID crea un estado nuevo: nunca muestra la publicación
+  // anterior durante la carga de la siguiente.
+  return <ValidPublicationDetails key={publicationId} token={token} publicationId={publicationId} />
+}
+
+function ValidPublicationDetails({
+  token,
+  publicationId,
+}: {
+  token: string
+  publicationId: number
+}) {
+  const [publication, setPublication] = useState<Publication | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-
-  const publicationId = Number(id)
-
-  const validId =
-    id !== undefined &&
-    /^\d+$/.test(id) &&
-    Number.isSafeInteger(publicationId) &&
-    publicationId > 0
 
   useEffect(() => {
     let cancelled = false
 
-    if (!validId) {
-      setPublication(null)
-      setError('El ID de la publicación no es válido.')
-      setLoading(false)
-      return
-    }
-
-    async function loadPublication() {
-      setLoading(true)
-      setError('')
-      setPublication(null)
-
-      try {
-        const result = await getPublication(
-          token,
-          publicationId
-        )
-
+    // La solicitud HTTP es asíncrona. Evitamos inicializaciones síncronas
+    // de estado dentro del efecto y respuestas de rutas ya desmontadas.
+    void getPublication(token, publicationId)
+      .then((result) => {
+        if (!cancelled) setPublication(result)
+      })
+      .catch((err: unknown) => {
         if (!cancelled) {
-          setPublication(result)
+          setError(err instanceof Error
+            ? err.message
+            : 'No se pudo cargar la publicación.')
         }
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : 'No se pudo cargar la publicación.'
-          )
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
 
-    void loadPublication()
-
-    return () => {
-      cancelled = true
-    }
-  }, [token, publicationId, validId])
+    return () => { cancelled = true }
+  }, [token, publicationId])
 
   const originalUrl = publication?.originalUrl
 
@@ -126,28 +122,79 @@ export default function PublicationDetailsPage({
               </span>
             </div>
 
-            <div className="publication-main-data">
-              <div>
-                <small>Precio</small>
+            <PublicationHighlights publication={publication} />
 
-                <strong>
-                  {publication.price.toLocaleString('es-AR')}
-                </strong>
-              </div>
+            {publication.marketplace === 'TEMU' && publication.temuSellerReviewCount != null && (
+              <p className="session-message" role="note">
+                <strong>Valoraciones de tienda:</strong> {publication.temuSellerReviewCount.toLocaleString('es-AR')}
+                {' '}· Recuento observado, no cantidad de ventas.
+              </p>
+            )}
+            {publication.marketplace === 'TEMU' && publication.temuStoreId && (
+              <p><strong>ID de tienda Temu:</strong> {publication.temuStoreId}</p>
+            )}
+            {publication.marketplace === 'TEMU' && publication.temuSellerObservedAt && (
+              <p><small>Datos de tienda observados: {new Date(publication.temuSellerObservedAt).toLocaleString('es-AR')}</small></p>
+            )}
+            {publication.marketplace === 'TEMU' && publication.temuSellerRating != null && (
+              <p className="session-message" role="note">
+                <strong>Calificación de tienda:</strong>{' '}
+                {publication.temuSellerRating.toLocaleString('es-AR')} / 5
+                {' '}· Valor observado en Temu; distinto de la calificación del producto.
+              </p>
+            )}
 
-              <div>
-                <small>Vendedor</small>
+            {publication.marketplace === 'TEMU' && publication.temuProductRating != null
+              && publication.temuProductReviewCount != null && (
+              <p className="session-message" role="note">
+                <strong>Opiniones del producto:</strong>{' '}
+                {publication.temuProductRating.toLocaleString('es-AR')} / 5
+                {' '}· {publication.temuProductReviewCount.toLocaleString('es-AR')} reseñas.
+                {' '}Estas opiniones no equivalen a ventas verificadas ni garantizan autenticidad.
+                {publication.temuProductObservedAt &&
+                  <> Observadas: {new Date(publication.temuProductObservedAt).toLocaleString('es-AR')}.</>}
+              </p>
+            )}
 
-                <strong>
-                  #{publication.sellerId}
-                </strong>
-              </div>
-            </div>
+            {publication.marketplace === 'TEMU' && publication.temuStoreTenureText && (
+              <p className="session-message" role="note">
+                <strong>Antigüedad aproximada de la tienda:</strong>{' '}
+                {publication.temuStoreTenureText}.
+                {' '}Es una estimación de Temu, no la fecha exacta de apertura.
+                {publication.temuStoreTenureObservedAt &&
+                  <> Observada: {new Date(publication.temuStoreTenureObservedAt).toLocaleString('es-AR')}.</>}
+              </p>
+            )}
+            {publication.marketplace === 'TEMU' && publication.temuStoreSoldText && (
+              <p className="session-message" role="note">
+                <strong>Actividad comercial de la tienda:</strong>{' '}
+                {publication.temuStoreSoldText}.
+                {' '}Cifra observada y posiblemente aproximada, no verificada por MarketLens.
+                {publication.temuStoreSalesObservedAt &&
+                  <> Observada: {new Date(publication.temuStoreSalesObservedAt).toLocaleString('es-AR')}.</>}
+              </p>
+            )}
+            {publication.marketplace === 'TEMU' && publication.temuProductSoldText && (
+              <p className="session-message" role="note">
+                <strong>Actividad observada del producto:</strong>{' '}
+                {publication.temuProductSoldText}.
+                {' '}No equivale a ventas totales verificadas del vendedor.
+                {publication.temuProductSalesObservedAt &&
+                  <> Observada: {new Date(publication.temuProductSalesObservedAt).toLocaleString('es-AR')}.</>}
+              </p>
+            )}
 
-            <div className="publication-description">
-              <h3>Descripción</h3>
-              <p>{publication.description}</p>
-            </div>
+            {publication.marketplace === 'TEMU' && publication.sellerBadge === 'TEMU_STAR_SELLER' && (
+              <p className="session-message" role="note">
+                <strong>Star Seller</strong> · Distintivo observado en Temu; no equivale
+                a reputación verificada ni garantiza que la compra sea segura.
+              </p>
+            )}
+
+            <PublicationDescription
+              key={publication.id}
+              description={publication.description}
+            />
 
             {publication.externalId && (
               <p>
@@ -161,7 +208,7 @@ export default function PublicationDetailsPage({
                 href={safeOriginalUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="external-link"
+                className="action-link original-publication-button"
               >
                 Abrir publicación original ↗
               </a>

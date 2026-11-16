@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>MarketLens</title>
   <link rel="stylesheet" href="popup.css">
+  <script src="temu-extractor.js" defer></script>
   <script src="popup.js" defer></script>
 </head>
 <body>
@@ -22,7 +23,7 @@
       </button>
     </header>
 
-    <section class="card auth-card" aria-labelledby="auth-title">
+    <section id="auth-card" class="card auth-card" aria-labelledby="auth-title">
       <div class="section-heading">
         <h2 id="auth-title">Tu cuenta</h2>
         <button id="logout-button" type="button" class="link-button" hidden>Cerrar sesión</button>
@@ -43,18 +44,47 @@
           <h2 id="analysis-title">Analizar publicación</h2>
           <span id="marketplace" class="small-tag">Detectando…</span>
         </div>
-        <p id="page-title" class="listing-title">Consultando pestaña…</p>
-        <p id="status" class="muted" role="status" aria-live="polite">Identificando publicación…</p>
+        <div id="analysis-overview">
+          <p id="page-title" class="listing-title">Consultando pestaña…</p>
+          <p id="status" class="muted" role="status" aria-live="polite">Identificando publicación…</p>
 
-        <button id="analyze-button" type="button" class="primary main-action" disabled>
-          <span aria-hidden="true" class="action-icon">◎</span>
-          <span>Analizar publicación</span>
-        </button>
+          <button id="analyze-button" type="button" class="primary main-action" disabled>
+            <span aria-hidden="true" class="action-icon">◎</span>
+            <span>Analizar publicación</span>
+          </button>
+        </div>
+
+        <section id="temu-price-panel" class="temu-price-panel" aria-labelledby="temu-price-title" hidden>
+          <p class="step-eyebrow">Antes de continuar · Temu</p>
+          <h3 id="temu-price-title">Confirmá el precio de la publicación</h3>
+          <p class="price-guidance">
+            Temu puede mostrar <strong>precios promocionales</strong>,
+            <strong>importes tachados</strong> y <strong>variantes diferentes</strong>.
+            Elegí el importe en <strong>ARS</strong> que corresponde a tu compra.
+          </p>
+          <div id="temu-price-options" class="temu-price-options" role="group" aria-label="Importes encontrados en Temu"></div>
+          <label for="temu-confirm-price">Precio elegido (ARS)</label>
+          <input id="temu-confirm-price" type="text" inputmode="decimal"
+                 placeholder="Ej.: 9507" aria-describedby="temu-price-hint">
+          <p id="temu-price-hint" class="price-guidance price-guidance-secondary"></p>
+          <p id="temu-price-status" class="form-error" role="alert" aria-live="polite"></p>
+          <div class="correction-actions">
+            <button id="temu-price-confirm" type="button" class="primary">Confirmar precio</button>
+            <button id="temu-price-cancel" type="button" class="outline">Cancelar</button>
+          </div>
+        </section>
 
         <div id="loading-section" class="loading-state" role="status" aria-live="polite" hidden>
-          <span class="spinner" aria-hidden="true"></span>
+          <div class="analysis-loading-mark" aria-hidden="true">
+            <span class="spinner"></span>
+            <span class="analysis-loading-center">◈</span>
+          </div>
           <strong>Analizando publicación…</strong>
           <span id="loading-message" class="muted">Preparando análisis…</span>
+          <div class="analysis-loading-track" aria-hidden="true">
+            <span></span>
+          </div>
+          <span class="loading-note muted small">El resultado aparecerá aquí al finalizar.</span>
         </div>
 
         <section id="result-section" class="result-card" aria-label="Resultado del análisis" hidden>
@@ -71,6 +101,18 @@
           </div>
           <p id="result-coverage-note" class="muted small"></p>
           <ul id="result-factors" class="factor-list" hidden></ul>
+          <aside id="community-report-summary" class="community-report-summary"
+                 aria-label="Reportes recientes de la comunidad" hidden>
+            <div class="community-report-heading">
+              <strong>⚑ Reportes comunitarios</strong>
+              <span id="community-report-users"></span>
+            </div>
+            <p id="community-report-count"></p>
+            <ul id="community-report-reasons" class="community-report-reasons"></ul>
+            <p id="community-report-disclaimer" class="muted small">
+              Reportes de usuarios, aún no verificados.
+            </p>
+          </aside>
           <button id="open-publication-button" type="button" class="outline full-width">Ver en MarketLens ↗</button>
           <button id="reanalyze-button" type="button" class="subtle-button full-width">Volver a analizar</button>
         </section>
@@ -84,11 +126,12 @@
         <section id="facebook-correction" class="correction-card" aria-label="Completar datos de la publicación" hidden>
           <h3>Completá los datos faltantes</h3>
           <p class="muted small">Revisá o completá los campos que el sitio no permitió extraer automáticamente.</p>
+          <p id="temu-seller-hint" class="muted small" hidden></p>
           <label for="fb-title">Título</label>
           <input id="fb-title" type="text" maxlength="255">
           <label for="fb-price">Precio (ARS)</label>
           <input id="fb-price" type="text" placeholder="250000">
-          <label for="fb-seller">Vendedor</label>
+          <label for="fb-seller">Vendedor (si está identificado)</label>
           <input id="fb-seller" type="text" maxlength="255">
           <div id="fb-join-row">
             <label for="fb-join-year">Año de ingreso a Facebook (opcional)</label>
@@ -96,17 +139,32 @@
           </div>
           <label for="fb-description">Descripción (opcional)</label>
           <textarea id="fb-description" rows="3" maxlength="5000"></textarea>
-          <button id="facebook-continue-button" type="button" class="primary">Continuar</button>
+          <p id="correction-status" class="muted small" role="status" aria-live="polite"></p>
+          <div class="correction-actions">
+            <button id="facebook-continue-button" type="button" class="primary">Continuar</button>
+            <button id="facebook-cancel-button" type="button" class="outline">Cancelar</button>
+          </div>
         </section>
       </section>
 
-      <section class="card report-card" aria-labelledby="report-title">
-        <div class="section-heading">
-          <h2 id="report-title">Reporte manual</h2>
-          <span aria-hidden="true">⚑</span>
+      <section id="report-section" class="report-section" aria-labelledby="report-toggle">
+        <button id="report-toggle" type="button" class="report-toggle"
+                aria-expanded="false" aria-controls="report-details" disabled>
+          <span class="report-toggle-icon" aria-hidden="true">⚑</span>
+          <span class="report-toggle-label">Reportar algo sospechoso</span>
+          <svg id="report-chevron" class="report-chevron" viewBox="0 0 16 16"
+               width="16" height="16" aria-hidden="true" focusable="false">
+            <path d="m3.5 6 4.5 4.5 4.5-4.5"></path>
+          </svg>
+        </button>
+        <div id="report-success" class="report-success" role="status" aria-live="polite" hidden>
+          <span class="report-success-icon" aria-hidden="true">✓</span>
+          <span id="report-success-message"></span>
         </div>
-        <p class="muted small">¿Notaste algo sospechoso? Tu reporte complementa el análisis automático.</p>
-        <form id="report-form">
+        <div id="report-details" class="card report-card" hidden>
+          <h2 id="report-title">Reporte manual</h2>
+          <p class="muted small">¿Notaste algo sospechoso? Tu reporte complementa el análisis automático.</p>
+          <form id="report-form">
           <label for="report-reason">Motivo</label>
           <select id="report-reason" required>
             <option value="" selected disabled>Seleccioná un motivo</option>
@@ -121,7 +179,8 @@
           <textarea id="report-description" rows="3" maxlength="2000" placeholder="Contanos qué observaste…"></textarea>
           <button id="report-submit" type="submit" class="outline full-width" disabled>Enviar reporte</button>
         </form>
-        <p id="report-status" role="status" aria-live="polite" class="muted small"></p>
+          <p id="report-status" role="status" aria-live="polite" class="muted small"></p>
+        </div>
       </section>
     </div>
 

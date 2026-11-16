@@ -49,10 +49,45 @@ let extractedData = null;
 let lastPublicationId = null;
 let submittingReport = false;
 let preparing = false;
+let lastRenderedPanelStatus = null;
+
+// La carga exitosa permanece perceptible incluso cuando el backend responde rápido.
+// Los errores y la preferencia de movimiento reducido no esperan artificialmente.
+const MIN_LOADING_VISIBLE_MS = 1500;
+const LOGOUT_FADE_MS = 180;
+let loadingStartedAt = null;
+let scheduledReveal = null;
+let deferredSuccessfulResult = null;
+let logoutInProgress = false;
+const REPORT_CLOSE_SCROLL_MS = 420;
+const REPORT_COLLAPSE_MS = 300;
+let reportCloseTimer = null;
+let reportCollapseTimer = null;
+
+// Los navegadores redimensionan externamente los popups de forma discreta.
+// Mantener una altura de ventana fija con CSS y animar solo el contenido.
+function updatePopupContent(update) {
+    return update();
+}
+
+function prefersReducedMotion() {
+    return typeof matchMedia === 'function'
+        && matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+function cancelScheduledReveal() {
+    if (scheduledReveal !== null) clearTimeout(scheduledReveal);
+    scheduledReveal = null;
+    deferredSuccessfulResult = null;
+}
+function resetLoadingTransition() {
+    cancelScheduledReveal();
+    loadingStartedAt = null;
+}
 
 const marketplaceLabels = {
     MERCADO_LIBRE: 'Mercado Libre',
     FACEBOOK_MARKETPLACE: 'Facebook Marketplace',
+    TEMU: 'Temu',
     OTHER: 'No compatible'
 };
 
@@ -66,18 +101,49 @@ function detectMarketplace(url) {
             matchesDomain(host, 'mercadolibre.com') ||
             matchesDomain(host, 'mercadolivre.com.br')) return 'MERCADO_LIBRE';
         if (matchesDomain(host, 'facebook.com')) return 'FACEBOOK_MARKETPLACE';
+        if (matchesDomain(host, 'temu.com')) return 'TEMU';
         return 'OTHER';
     } catch { return 'OTHER'; }
+}
+// Solo ML es identificable sin query: otros marketplaces pueden necesitarla.
+function canonicalPageUrl(url, marketplace) {
+    try {
+        const parsed = new URL(url);
+        return marketplace === 'MERCADO_LIBRE'
+            ? parsed.origin + parsed.pathname
+            : parsed.href.split('#')[0];
+    } catch {
+        return String(url ?? '').split('#')[0];
+    }
+}
+function isMercadoLibreCatalogUrl(url) {
+    try {
+        return detectMarketplace(url) === 'MERCADO_LIBRE'
+            && /\/(?:[^/]+\/)?p\/MLA\d{6,}\/?$/i.test(new URL(url).pathname);
+    } catch {
+        return false;
+    }
 }
 function isSupportedPage(url, marketplace) {
     try {
         const path = new URL(url).pathname;
+        // Una ficha de catálogo puede tener una oferta elegida y mostrada.
+        // La identidad MLA/MLAU se resuelve dentro del extractor; la ficha
+        // genérica por sí sola nunca es una referencia importable.
+        if (marketplace === 'MERCADO_LIBRE' && isMercadoLibreCatalogUrl(url))
+            return true;
         if (marketplace === 'FACEBOOK_MARKETPLACE')
             return /^\/marketplace\/item\/\d{6,30}\/?$/.test(path);
+        if (marketplace === 'TEMU') {
+            const address = new URL(url);
+            const id = address.searchParams.get('goods_id');
+            return (/^\/goods\.html\/?$/i.test(path) && /^\d{6,30}$/.test(id ?? '')) ||
+                /-g-\d{6,30}\.html\/?$/i.test(path);
+        }
         if (marketplace === 'MERCADO_LIBRE')
             return /\/up\/MLAU\d{6,}/i.test(path) ||
                 /(?:^|\/)MLA-?\d{6,}/i.test(path) ||
-                /\/p\/MLA\d{6,}/i.test(path);
+                isMercadoLibreCatalogUrl(url);
         return false;
     } catch {return false;}
 }
@@ -91,26 +157,49 @@ function validSession(auth) {
         typeof auth.expiresAt === 'number' && auth.expiresAt > Date.now();
 }
 async function getSession() {
-    const stored = await ext.storage.local.get(AUTH_KEY);
-    return validSession(stored[AUTH_KEY]) ? stored[AUTH_KEY] : null;
+    const reply = await ext.runtime.sendMessage({type: 'AUTH_ACCESS'});
+    return reply?.ok && typeof reply.token === 'string'
+        ? {token: reply.token} : null;
+}
+async function restoreLastUsername() {
+    const stored = await ext.storage.local.get('marketlensLastUsername');
+    if (typeof stored.marketlensLastUsername === 'string'
+            && !$('login-username').value) {
+        $('login-username').value = stored.marketlensLastUsername;
+    }
 }
 function showLoggedOut(message = 'Iniciá sesión para usar MarketLens.') {
-    authenticated = false;
-    $('auth-status').textContent = message;
-    $('login-form').hidden = false;
-    $('logout-button').hidden = true;
-    $('authenticated-content').hidden = true;
+    cancelReportClose();
+    $('report-success').hidden = true;
+    updatePopupContent(() => {
+        authenticated = false;
+        resetLoadingTransition();
+        // Nunca ocultar el formulario de acceso por el estado del análisis.
+        $('auth-card').hidden = false;
+        $('auth-status').textContent = message;
+        $('login-form').hidden = false;
+        $('logout-button').hidden = true;
+        $('authenticated-content').hidden = true;
+    });
 }
 function showLoggedIn(username) {
-    authenticated = true;
-    $('auth-status').textContent = username;
-    $('login-form').hidden = true;
-    $('logout-button').hidden = false;
-    $('authenticated-content').hidden = false;
-    updateActions();
+    updatePopupContent(() => {
+        authenticated = true;
+        $('auth-status').textContent = username;
+        $('login-form').hidden = true;
+        $('logout-button').hidden = false;
+        $('authenticated-content').hidden = false;
+        updateActions();
+    });
 }
 async function checkAuthentication() {
-    const session = await getSession();
+    let session;
+    try {
+        session = await getSession();
+    } catch {
+        showLoggedOut('No se pudo comprobar la sesión. Reintentá al recuperar la conexión.');
+        return;
+    }
     if (!session) { showLoggedOut(); return; }
     let response;
     try {
@@ -123,12 +212,24 @@ async function checkAuthentication() {
         return;
     }
     if (response.status === 401) {
-        await ext.storage.local.remove(AUTH_KEY);
-        showLoggedOut('Tu sesión expiró. Iniciá sesión nuevamente.');
-        return;
+        // Un JWT puede ser rechazado antes del vencimiento local (por ejemplo,
+        // al cambiar la clave del backend). Renovar una vez sin borrar secretos.
+        try {
+            const reply = await ext.runtime.sendMessage({type: 'AUTH_ACCESS', force: true});
+            if (reply?.ok && typeof reply.token === 'string') {
+                response = await fetch(`${API_BASE}/users/me`, {
+                    headers: {Authorization: `Bearer ${reply.token}`},
+                    credentials: 'omit'
+                });
+            }
+        } catch {
+            // Un fallo de red no implica revocación de la sesión persistente.
+        }
     }
     if (!response.ok) {
-        showLoggedOut(`Error de autenticación HTTP ${response.status}.`);
+        showLoggedOut(response.status === 401
+            ? 'No se pudo validar la sesión. Iniciá sesión nuevamente.'
+            : `Error de autenticación HTTP ${response.status}.`);
         return;
     }
     const me = await response.json().catch(() => ({}));
@@ -139,22 +240,13 @@ async function handleLogin(event) {
     $('login-button').disabled = true;
     $('auth-status').textContent = 'Iniciando sesión…';
     try {
-        const response = await fetch(`${API_BASE}/auth/login`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            credentials: 'omit',
-            body: JSON.stringify({
-                username: $('login-username').value.trim(),
-                password: $('login-password').value
-            })
+        const username = $('login-username').value.trim();
+        const reply = await ext.runtime.sendMessage({
+            type: 'AUTH_LOGIN',
+            username,
+            password: $('login-password').value
         });
-        const result = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(result?.message || `HTTP ${response.status}`);
-        if (!result?.token || !Number.isFinite(result?.expiresIn) || result.expiresIn <= 0)
-            throw new Error('Respuesta de inicio de sesión inválida.');
-        await ext.storage.local.set({
-            [AUTH_KEY]: {token: result.token, expiresAt: Date.now() + result.expiresIn * 1000}
-        });
+        if (!reply?.ok) throw new Error(reply?.error || 'No se pudo iniciar sesión.');
         $('login-password').value = '';
         await checkAuthentication();
         await loadCurrentPage();
@@ -163,24 +255,270 @@ async function handleLogin(event) {
     } finally { $('login-button').disabled = false; }
 }
 async function handleLogout() {
-    await ext.storage.local.remove(AUTH_KEY);
-    await ext.storage.session.remove(AUTH_KEY).catch(() => {});
-    $('login-password').value = '';
-    showLoggedOut('Sesión cerrada.');
+    if (logoutInProgress) return;
+    logoutInProgress = true;
+    $('logout-button').disabled = true;
+    // Inhabilitar interacciones del análisis inmediatamente. La credencial
+    // se elimina sin esperar a la transición visual.
+    authenticated = false;
+    updateActions();
+    resetLoadingTransition();
+    const animate = !prefersReducedMotion();
+    if (animate) {
+        $('auth-card').classList.add('auth-exiting');
+        $('authenticated-content').classList.add('auth-exiting');
+    }
+    const visualExit = animate
+        ? new Promise(resolve => setTimeout(resolve, LOGOUT_FADE_MS))
+        : Promise.resolve();
+    try {
+        const reply = await ext.runtime.sendMessage({type: 'AUTH_LOGOUT'});
+        if (!reply?.ok) throw new Error(reply?.error || 'No se pudo cerrar sesión.');
+        await ext.storage.session.remove(AUTH_KEY).catch(() => {});
+        await visualExit;
+        $('login-password').value = '';
+        showLoggedOut(reply.remoteRevoked === false
+            ? 'Sesión cerrada localmente. No se pudo confirmar la revocación en el servidor.'
+            : 'Sesión cerrada.');
+    } catch (error) {
+        // No afirmar que se cerró la sesión cuando falló la revocación.
+        await visualExit;
+        authenticated = true;
+        $('auth-status').textContent = 'No se pudo cerrar sesión. Reintentá.';
+        updateActions();
+    } finally {
+        $('auth-card').classList.remove('auth-exiting');
+        $('authenticated-content').classList.remove('auth-exiting');
+        $('logout-button').disabled = false;
+        logoutInProgress = false;
+    }
 }
 function updateActions() {
     $('analyze-button').disabled = !authenticated || !pageSupported || preparing;
-    $('report-submit').disabled = !authenticated || !pageSupported || submittingReport || preparing;
+    $('report-toggle').disabled = !authenticated || !pageSupported || submittingReport
+        || preparing || pendingAction !== null || !$('loading-section').hidden;
+    $('report-submit').disabled = !authenticated || !pageSupported || submittingReport || preparing
+        || pendingAction !== null;
+}
+function scrollToManualReport() {
+    if (typeof requestAnimationFrame !== 'function') return;
+    requestAnimationFrame(() => {
+        const details = $('report-details');
+        if (details.hidden || $('report-section').hidden) return;
+        details.scrollIntoView?.({
+            behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+            block: 'start'
+        });
+    });
+}
+function cancelReportClose() {
+    if (reportCloseTimer !== null) clearTimeout(reportCloseTimer);
+    if (reportCollapseTimer !== null) clearTimeout(reportCollapseTimer);
+    reportCloseTimer = null;
+    reportCollapseTimer = null;
+    const details = $('report-details');
+    details.classList?.remove('is-closing');
+    details.style?.removeProperty('--report-open-height');
+    details.inert = false;
+}
+function setReportExpanded(expanded) {
+    // Para cambios de publicación, logout y navegación se aplica el estado
+    // directamente. El cierre animado se reserva al clic del usuario.
+    cancelReportClose();
+    const wasHidden = $('report-details').hidden;
+    updatePopupContent(() => {
+        $('report-details').hidden = !expanded;
+        $('report-toggle').setAttribute('aria-expanded', String(expanded));
+    });
+    if (expanded && wasHidden) scrollToManualReport();
+}
+function animateReportCollapse() {
+    const details = $('report-details');
+    if (details.hidden) return;
+    if (prefersReducedMotion()) {
+        setReportExpanded(false);
+        return;
+    }
+
+    // Mantener el formulario en el DOM mientras disminuyen su altura y
+    // opacidad; ocultarlo solamente al terminar la animación.
+    const openHeight = details.getBoundingClientRect?.().height;
+    if (Number.isFinite(openHeight) && openHeight > 0) {
+        details.style?.setProperty('--report-open-height', openHeight + 'px');
+    }
+    details.inert = true;
+    details.classList?.add('is-closing');
+    $('report-toggle').setAttribute('aria-expanded', 'false');
+    reportCollapseTimer = setTimeout(() => {
+        reportCollapseTimer = null;
+        setReportExpanded(false);
+    }, REPORT_COLLAPSE_MS);
+}
+// Llevar el scroll solo hasta la sección de reportes, no al comienzo del popup.
+// El límite anticipa la altura disponible tras la contracción para evitar
+// un segundo salto cuando el navegador ajuste el máximo de scroll.
+function collapseReportKeepingContext() {
+    if (prefersReducedMotion()) {
+        setReportExpanded(false);
+        return;
+    }
+
+    const body = document.body;
+    const root = document.scrollingElement || document.documentElement;
+    const scroller = body?.scrollTop > 0 ? body : root;
+    const details = $('report-details');
+    const currentTop = scroller?.scrollTop ?? 0;
+    const toggleTop = $('report-toggle').getBoundingClientRect?.().top;
+    const headerBottom = document.querySelector?.('.brand')?.getBoundingClientRect?.().bottom ?? 0;
+    const desiredTop = Number.isFinite(toggleTop)
+        ? Math.max(0, currentTop + toggleTop - Math.max(0, headerBottom) - 12)
+        : currentTop;
+
+    const openHeight = details.getBoundingClientRect?.().height;
+    const style = typeof getComputedStyle === 'function' ? getComputedStyle(details) : null;
+    const margins = (parseFloat(style?.marginTop) || 0)
+        + (parseFloat(style?.marginBottom) || 0);
+    const maxAfterClose = Number.isFinite(scroller?.scrollHeight)
+        && Number.isFinite(scroller?.clientHeight)
+        && scroller.clientHeight > 0
+        && Number.isFinite(openHeight)
+        ? Math.max(0, scroller.scrollHeight - scroller.clientHeight - openHeight - margins)
+        : currentTop;
+    const targetTop = Math.min(currentTop, desiredTop, maxAfterClose);
+
+    if (scroller?.scrollTo && currentTop - targetTop > 4) {
+        scroller.scrollTo({top: targetTop, behavior: 'smooth'});
+        reportCloseTimer = setTimeout(() => {
+            reportCloseTimer = null;
+            animateReportCollapse();
+        }, REPORT_CLOSE_SCROLL_MS);
+    } else {
+        animateReportCollapse();
+    }
+}
+function toggleReport() {
+    if ($('report-toggle').disabled) return;
+    // Al abrir una nueva denuncia, retirar la confirmación anterior.
+    $('report-success').hidden = true;
+    // Otro clic durante el retorno o la desaparición cancela el cierre.
+    if (reportCloseTimer !== null || reportCollapseTimer !== null) {
+        cancelReportClose();
+        $('report-toggle').setAttribute('aria-expanded', 'true');
+        return;
+    }
+    if ($('report-details').hidden) {
+        setReportExpanded(true);
+        return;
+    }
+
+    collapseReportKeepingContext();
+}
+// Después de registrar correctamente una denuncia, animar el cierre y
+// mantener la confirmación fuera del formulario. No modificar el puntaje
+// de una evaluación que ya se había guardado.
+function showReportSubmitted(publicationId) {
+    $('report-status').textContent = '';
+    $('report-success-message').textContent =
+        'Reporte registrado para la publicación #' + publicationId
+        + '. El puntaje anterior se actualizará al volver a analizar.';
+    $('report-success').hidden = false;
+    if ($('report-details').hidden) return;
+
+    collapseReportKeepingContext();
 }
 function setPanelState(state) {
+    updatePopupContent(() => applyPanelState(state));
+}
+function applyPanelState(state) {
+    // Los pasos son excluyentes: elección de precio -> corrección -> resultado.
+    // Los paneles entran con una transición CSS respetando reduced-motion.
+    const busy = state === 'price' || state === 'correction' || state === 'loading';
+    if (busy && (reportCloseTimer !== null || reportCollapseTimer !== null)) {
+        // El reporte no puede terminar su cierre diferido después de
+        // haber iniciado un análisis o cambiado a otro formulario.
+        cancelReportClose();
+        $('report-details').hidden = true;
+        $('report-toggle').setAttribute('aria-expanded', 'false');
+    }
+    $('analysis-title').textContent = ({
+        price: 'Confirmar precio',
+        correction: 'Completar datos',
+        loading: 'Analizando publicación',
+        success: 'Resultado del análisis',
+        error: 'Análisis incompleto'
+    })[state] || 'Analizar publicación';
+    $('analysis-overview').hidden = busy;
     $('analyze-button').hidden = state !== 'initial';
+    $('temu-price-panel').hidden = state !== 'price';
+    $('facebook-correction').hidden = state !== 'correction';
     $('loading-section').hidden = state !== 'loading';
     $('result-section').hidden = state !== 'success';
     $('error-section').hidden = state !== 'error';
+    $('report-section').hidden = busy;
+    // Una clase del contenedor permite centrar verticalmente la carga
+    // dentro de la ventana fija, sin alterar el resto de las pantallas.
+    const popup = document.querySelector?.('.popup');
+    if (popup?.classList) {
+        if (state === 'loading') popup.classList.add('is-analyzing');
+        else popup.classList.remove('is-analyzing');
+    }
+    // Durante un análisis se prioriza la información de la publicación.
+    // La sección de usuario reaparece al mostrar el resultado o un error.
+    $('auth-card').hidden = authenticated && busy;
+}
+function scrollToAnalysisResult() {
+    // El contenedor mantiene su altura; solo se desplaza su contenido.
+    if (typeof requestAnimationFrame !== 'function') return;
+    requestAnimationFrame(() => {
+        const result = $('result-section');
+        if (result.hidden) return;
+        result.scrollIntoView?.({
+            behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+            block: 'start'
+        });
+    });
 }
 function renderAnalysis(value) {
     if (!authenticated) return;
+    // Evitar que un cambio de almacenamiento en segundo plano interrumpa
+    // la edición del formulario antes de pulsar Continuar o Cancelar.
+    if (pendingAction && (!$('facebook-correction').hidden || !$('temu-price-panel').hidden)) return;
     const status = value?.status || 'initial';
+
+    if (status === 'loading') {
+        if (lastRenderedPanelStatus !== 'loading') {
+            resetLoadingTransition();
+            loadingStartedAt = Date.now();
+        }
+    } else if (status === 'success' && loadingStartedAt !== null
+            && !prefersReducedMotion()) {
+        const remaining = MIN_LOADING_VISIBLE_MS - (Date.now() - loadingStartedAt);
+        if (remaining > 0) {
+            deferredSuccessfulResult = value;
+            if (scheduledReveal === null) {
+                const expectedPageKey = pageKey;
+                scheduledReveal = setTimeout(() => {
+                    scheduledReveal = null;
+                    const result = deferredSuccessfulResult;
+                    deferredSuccessfulResult = null;
+                    if (result && authenticated && pageKey === expectedPageKey) {
+                        renderAnalysis(result);
+                    }
+                }, remaining);
+            }
+            return;
+        }
+        resetLoadingTransition();
+    } else {
+        resetLoadingTransition();
+    }
+
+    const previousStatus = lastRenderedPanelStatus;
+    updatePopupContent(() => applyRenderedAnalysis(value, status));
+    if (status === 'success' && previousStatus !== 'success') scrollToAnalysisResult();
+}
+function applyRenderedAnalysis(value, status) {
+    lastRenderedPanelStatus = status;
     setPanelState(status);
     if (status === 'loading') {
         $('loading-message').textContent = value.message || 'Procesando…';
@@ -194,10 +532,99 @@ function renderAnalysis(value) {
             ? 'Publicación existente evaluada nuevamente.'
             : 'Análisis completado.') +
             (value.sellerRefreshWarning ? ` ${value.sellerRefreshWarning}` : '');
+        // El foco de scroll se aplica fuera de la mutación, después de
+        // iniciar (o terminar) la interpolación de altura.
     } else if (pageSupported) {
         $('status').textContent = 'Publicación compatible detectada.';
     }
     updateActions();
+}
+// Las explicaciones completas se conservan en la evaluación del backend.
+ // El popup muestra frases breves; los detalles permanecen en MarketLens.
+function conciseFactorLabel(factor) {
+    const full = String(factor?.description ?? factor?.reason ?? factor?.name ?? '').trim();
+    if (!full) return '';
+    const code = String(factor?.code ?? '').toUpperCase();
+    const rating = full.match(/\b([0-5](?:[.,]\d+)?)\s*\/\s*5\b/);
+    const reviews = full.match(/\b(\d[\d.,]*)\s+opiniones\b/i);
+    const quoted = full.match(/[“"]([^"”]{1,60})[”"]/);
+    // Temu muestra "16K+ sold" o "300K+ Sold"; "sold" es un texto de UI,
+    // no parte del valor que interesa al usuario.
+    const displayedSales = quoted?.[1].replace(/\s+sold\s*$/i, '').trim();
+    const ratingLabel = rating ? rating[1].replace('.', ',') + '/5' : '';
+
+    if (code === 'ML_FEW_PRODUCT_REVIEWS' && reviews)
+        return 'Muestra reducida: ' + reviews[1] + ' opiniones.';
+    if (code === 'ML_PRODUCT_REVIEWS_OBSERVED' || code === 'ML_LOW_PRODUCT_RATING'
+            || code === 'ML_MODERATE_PRODUCT_RATING'
+            || code === 'TEMU_PRODUCT_REVIEWS_OBSERVED' || code === 'TEMU_LOW_PRODUCT_RATING'
+            || code === 'TEMU_MODERATE_PRODUCT_RATING') {
+        if (ratingLabel && reviews) {
+            const prefix = code === 'TEMU_LOW_PRODUCT_RATING'
+                || code === 'ML_LOW_PRODUCT_RATING' ? 'Calificación baja: '
+                : code === 'TEMU_MODERATE_PRODUCT_RATING'
+                    || code === 'ML_MODERATE_PRODUCT_RATING' ? 'Calificación moderada: '
+                : 'Calificación: ';
+            return prefix + ratingLabel + ' (' + reviews[1] + ' opiniones).';
+        }
+    }
+    if (code === 'ML_SELLER_REPUTATION_OBSERVED' && ratingLabel)
+        return 'Reputación del vendedor: ' + ratingLabel + ' (observada).';
+    if (code === 'MODERATE_SELLER_REPUTATION')
+        return 'Reputación intermedia del vendedor: 3/5.';
+    if (code === 'TEMU_SELLER_RATING_OBSERVED' && ratingLabel)
+        return 'Tienda: ' + ratingLabel + ' (valoración observada).';
+    if (code === 'TEMU_STAR_SELLER_OBSERVED')
+        return 'Temu muestra el distintivo Star Seller.';
+    if (code === 'TEMU_STORE_TENURE_OBSERVED' && quoted)
+        return 'Antigüedad de tienda: ' + quoted[1] + ' (aproximada).';
+    if (code === 'TEMU_STORE_SALES_OBSERVED' && displayedSales)
+        return 'Ventas de tienda: ' + displayedSales + '.';
+    if (code === 'TEMU_PRODUCT_SALES_OBSERVED' && displayedSales)
+        return 'Ventas del producto: ' + displayedSales + '.';
+
+    // Para otros factores, usar la primera frase solo cuando existe
+    // una explicación secundaria. Nunca cortar números a mitad de texto.
+    const firstSentence = full.match(/^(.+?[.!?])(?:\s|$)/)?.[1];
+    return full.length > 115 && firstSentence ? firstSentence : full;
+}
+const communityReasonLabels = {
+    SUSPICIOUS_PRICE: 'Precio sospechoso',
+    SUSPICIOUS_SELLER: 'Vendedor sospechoso',
+    SUSPICIOUS_DESCRIPTION: 'Descripción sospechosa',
+    PAYMENT_OUTSIDE_PLATFORM: 'Pago fuera de la plataforma',
+    POSSIBLE_IMPERSONATION: 'Posible suplantación',
+    OTHER: 'Otro motivo'
+};
+function renderCommunityReportSummary(summary) {
+    const panel = $('community-report-summary');
+    const reporters = summary?.uniqueReporterCount;
+    if (!Number.isSafeInteger(reporters) || reporters <= 0) {
+        panel.hidden = true;
+        return;
+    }
+    panel.hidden = false;
+    $('community-report-users').textContent =
+        reporters + (reporters === 1 ? ' usuario' : ' usuarios');
+    const total = Number.isSafeInteger(summary.recentReportCount)
+        ? summary.recentReportCount : reporters;
+    const windowDays = Number.isSafeInteger(summary.windowDays)
+        ? summary.windowDays : 90;
+    $('community-report-count').textContent =
+        total + (total === 1 ? ' reporte' : ' reportes')
+        + ' en ' + windowDays + ' días.'
+        + (summary.riskPoints > 0
+            ? ' Factor comunitario: +' + summary.riskPoints + ' puntos.'
+            : ' Sin penalización automática.');
+    const reasons = $('community-report-reasons');
+    reasons.replaceChildren();
+    for (const entry of (Array.isArray(summary.reasons) ? summary.reasons : []).slice(0, 3)) {
+        const label = communityReasonLabels[String(entry?.reason ?? '')];
+        if (!label || !Number.isSafeInteger(entry.count) || entry.count <= 0) continue;
+        const li = document.createElement('li');
+        li.textContent = label + ' (' + entry.count + ')';
+        reasons.appendChild(li);
+    }
 }
 function renderRisk(value) {
     const evaluation = value.evaluation || {};
@@ -205,10 +632,10 @@ function renderRisk(value) {
     const level = String(evaluation.level || 'INDETERMINATE').toUpperCase();
     $('result-section').dataset.level = level;
     const labels = {
-        LOW: ['Riesgo bajo', 'No se detectaron señales importantes dentro de la información disponible.', '✓'],
+        LOW: ['Riesgo bajo', 'No se detectaron señales relevantes en los datos analizados. No garantiza autenticidad ni una compra segura.', '✓'],
         MEDIUM: ['Riesgo medio', 'Se detectaron factores que conviene revisar.', '!'],
         HIGH: ['Riesgo alto', 'Se detectaron múltiples señales de riesgo.', '!'],
-        INDETERMINATE: ['Riesgo indeterminado', 'Información insuficiente para clasificar el riesgo.', '?']
+        INDETERMINATE: ['Riesgo indeterminado', 'Los datos disponibles no tienen respaldo suficiente para clasificar el riesgo.', '?']
     };
     const descriptor = labels[level] ?? ['Riesgo: ' + level, 'Resultado del análisis.', '?'];
     $('result-level').textContent = descriptor[0];
@@ -220,22 +647,33 @@ function renderRisk(value) {
     $('result-coverage').textContent = Number.isInteger(available) && Number.isInteger(total)
         ? `${available}/${total}` : '—';
     const coverage = String(evaluation.coverageStatus ?? '').toUpperCase();
-    $('result-coverage-note').textContent =
+    const factorDetails = Array.isArray(evaluation.coverageFactors)
+        ? evaluation.coverageFactors : [];
+    const missing = factorDetails.filter(item => item && item.available === false)
+        .map(item => item.name).filter(Boolean);
+    const detail = missing.length
+        ? 'Falta: ' + missing.join(', ') + '. '
+        : factorDetails.length ? 'Todos los factores disponibles fueron observados. ' : '';
+    $('result-coverage-note').textContent = detail + (
         level === 'INDETERMINATE'
-            ? 'Un puntaje bajo con datos insuficientes no significa que la oferta sea segura.'
+            ? 'La cobertura mide datos disponibles, no su fiabilidad.'
             : coverage === 'PARTIAL'
-                ? 'La cobertura de información es parcial; interpretá el puntaje con precaución.'
-                : 'Una clasificación de riesgo no garantiza que una operación sea segura o fraudulenta.';
+                ? 'La información disponible es parcial; interpretá el resultado con precaución.'
+                : 'La clasificación no garantiza una compra segura.');
     const factors = Array.isArray(evaluation.factors) ? evaluation.factors : [];
     $('result-factors').replaceChildren();
     for (const factor of factors.slice(0, 8)) {
         const label = factor?.description ?? factor?.reason ?? factor?.name;
         if (typeof label !== 'string' || !label.trim()) continue;
         const li = document.createElement('li');
-        li.textContent = label;
+        li.textContent = conciseFactorLabel(factor);
+        // Tooltip con texto completo para quien necesite profundizar, sin
+        // inundar visualmente el resumen.
+        if (li.textContent !== label) li.title = label;
         $('result-factors').appendChild(li);
     }
     $('result-factors').hidden = $('result-factors').children.length === 0;
+    renderCommunityReportSummary(value.communityReports);
     $('open-publication-button').disabled = !Number.isSafeInteger(lastPublicationId);
 }
 function pageStateKey(key = pageKey) { return `marketlens:analysis:${key}`; }
@@ -255,28 +693,44 @@ async function loadCurrentPage() {
         const tabs = await ext.tabs.query({active: true, currentWindow: true});
         const tab = tabs[0];
         if (!tab?.url || !Number.isInteger(tab.id)) throw new Error('No se pudo consultar la pestaña activa.');
-        const nextKey = `${tab.id}:${tab.url.split('#')[0]}`;
+        const nextMarketplace = detectMarketplace(tab.url);
+        const nextKey = `${tab.id}:${canonicalPageUrl(tab.url, nextMarketplace)}`;
         const changed = nextKey !== pageKey;
         activeTab = tab;
         pageKey = nextKey;
-        currentMarketplace = detectMarketplace(tab.url);
+        currentMarketplace = nextMarketplace;
         pageSupported = isSupportedPage(tab.url, currentMarketplace);
         $('marketplace').textContent = marketplaceLabels[currentMarketplace] ?? 'Otro';
         $('page-title').textContent = tab.title || 'Publicación sin título';
         if (changed) {
+            resetLoadingTransition();
             extractedData = null;
             pendingAction = null;
             lastPublicationId = null;
-            $('facebook-correction').hidden = true;
+            setPanelState('initial');
+            setReportExpanded(false);
+            $('correction-status').textContent = '';
+            $('temu-price-status').textContent = '';
             $('report-status').textContent = '';
+            $('report-success').hidden = true;
             renderAnalysis({status:'initial'});
         }
         if (!pageSupported) {
             setPanelState('initial');
-            $('status').textContent = currentMarketplace === 'OTHER'
-                ? 'Abrí una publicación de Mercado Libre o Facebook Marketplace.'
-                : 'Abrí una publicación individual antes de analizar.';
-        } else await restoreAnalysis(nextKey);
+            $('status').textContent = isMercadoLibreCatalogUrl(tab.url)
+                ? 'Esta es una ficha de catálogo. Abrí una oferta de un vendedor para analizarla.'
+                : currentMarketplace === 'OTHER'
+                    ? 'Abrí una publicación de Mercado Libre, Facebook Marketplace o Temu.'
+                    : 'Abrí una publicación individual antes de analizar.';
+        } else if (isMercadoLibreCatalogUrl(tab.url)) {
+            // El enlace del catálogo no identifica qué oferta eligió el usuario.
+            // No restaurar un resultado de otra oferta sólo por compartir URL.
+            setPanelState('initial');
+            $('status').textContent =
+                'Ficha de catálogo: elegí una oferta con vendedor y precio antes de analizar.';
+        } else {
+            await restoreAnalysis(nextKey);
+        }
         updateActions();
     } catch (error) {
         pageSupported = false;
@@ -286,6 +740,315 @@ async function loadCurrentPage() {
 }
 
 function extractMercadoLibre() {
+    // Una página de catálogo no representa una publicación identificable,
+    // pero el panel de compra puede mostrar una oferta individual seleccionada.
+    // Exigir que en un mismo panel VISIBLE haya enlace MLA/MLAU, vendedor y
+    // precio: no elegir una oferta al azar entre recomendaciones o variantes.
+    const isCatalog = /\/(?:[^/]+\/)?p\/MLA\d{6,}\/?$/i.test(window.location.pathname);
+    function selectedCatalogOffer() {
+        if (!isCatalog) return null;
+
+        // Buybox nuevo: el radiobutton con "checked" puede pertenecer
+        // a una alternativa NO seleccionada (atributo HTML inicial).
+        // La selección efectiva está indicada por --SELECTED y debe
+        // coincidir con el item_id que el formulario enviaría al checkout.
+        const form = document.querySelector('#buybox-form');
+        if (form) {
+            const rows = [...form.querySelectorAll(
+                'li.ui-pdp-buy-box-offers__offer-list-item'
+            )];
+            if (rows.length) {
+                const active = rows.filter(row =>
+                    row.classList?.contains(
+                        'ui-pdp-buy-box-offers__offer-list-item--SELECTED')
+                );
+                if (active.length !== 1) return null;
+
+                const selected = active[0];
+                const radio = selected.querySelector(
+                    'input.andes-radio__input[id]'
+                );
+                const inputId = radio?.id || radio?.getAttribute('value');
+                const checkoutId = form.querySelector(
+                    'input[type="hidden"][name="item_id"]'
+                )?.value;
+                if (!/^MLA[1-9]\d{5,}$/i.test(inputId || '')
+                        || checkoutId !== inputId) return null;
+
+                // Precio principal de la oferta; nunca tomar cuotas,
+                // precio sin impuestos ni el monto de otra alternativa.
+                const amount = selected.querySelector(
+                    '.ui-pdp-buy-box-offers__offer-price ' +
+                    '.ui-pdp-price__second-line .andes-money-amount'
+                );
+                const fraction = amount?.querySelector(
+                    '.andes-money-amount__fraction'
+                )?.textContent?.trim();
+                const cents = amount?.querySelector(
+                    '.andes-money-amount__cents'
+                )?.textContent?.trim();
+
+                // El nombre de tienda debe provenir de LA MISMA oferta.
+                const seller = selected.querySelector(
+                    '.ui-pdp-seller-summary__header__title ' +
+                    '.ui-pdp-seller-summary__link'
+                )?.textContent ||
+                    selected.querySelector('#seller')?.textContent ||
+                    selected.querySelector(
+                        '.ui-pdp-seller-summary__header__image-container__image'
+                    )?.getAttribute('alt');
+                const sellerName = seller?.replace(/\s+/g, ' ').trim()
+                    .replace(/^vendido\s+por\s*:?[ ]*/i, '')
+                    .replace(/^tienda\s+oficial\s*/i, '').trim();
+                if (!fraction || !sellerName) return null;
+
+                return {
+                    externalId: inputId.toUpperCase(),
+                    selectedOfferId: inputId.toUpperCase(),
+                    // Guardar la URL REAL del catálogo como procedencia,
+                    // no inventar una permalink de publicación individual.
+                    url: window.location.href.split('#')[0],
+                    seller: sellerName,
+                    price: cents ? fraction + ',' + cents : fraction,
+                    currency: /\bpesos\b/i.test(
+                        amount?.getAttribute('aria-label') || '') ? 'ARS' : null,
+                    source: selected
+                };
+            }
+
+            // Catálogo con una única oferta visible y SIN lista de opciones.
+            // Mercado Libre deja la oferta MLA del checkout en el buybox,
+            // incluso si la URL identifica un producto de catálogo MLA.
+            // Corroborar ID, procedencia, vendedor y precio principal;
+            // no confundir este caso con una selección ambigua.
+            if (!form.querySelector('.ui-pdp-buy-box-offers')) {
+                const catalogId = window.location.pathname.match(
+                    /\/p\/(MLA\d{6,})\/?$/i
+                )?.[1]?.toUpperCase();
+                const parentId = form.querySelector(
+                    'input[type="hidden"][name="parent_url"]'
+                )?.value?.match(/^\/p\/(MLA\d{6,})\/?$/i)?.[1]?.toUpperCase();
+                const checkoutItems = [...form.querySelectorAll(
+                    'input[type="hidden"][name="item_id"]'
+                )];
+                const offerId = checkoutItems.length === 1
+                    ? checkoutItems[0].value?.toUpperCase() : null;
+
+                // En páginas con navegación de variantes por React, el
+                // parent_url oculto puede quedar apuntando al catálogo
+                // anterior. Nunca confiar sólo en ese formulario cuando
+                // contradice la URL actual. La referencia independiente
+                // "Vender uno igual" vincula itemId y productId actuales.
+                let catalogLinkedToOffer = catalogId && parentId === catalogId;
+                if (!catalogLinkedToOffer && catalogId &&
+                        /^MLA[1-9]\d{5,}$/i.test(offerId ?? '')) {
+                    const links = [...document.querySelectorAll(
+                        'a.ui-pdp-syi__link[href]'
+                    )];
+                    // Exigir exactamente UNA prueba explícita, no elegir un
+                    // enlace de un carrusel ni resultados de otra oferta.
+                    const confirmations = links.filter(link => {
+                        try {
+                            if (link.closest?.(
+                                '.poly-card, .ui-recommendations-carousel-wrapper-ref'
+                            )) return false;
+                            const address = new URL(
+                                link.getAttribute('href'),
+                                window.location.href
+                            );
+                            if (address.protocol !== 'https:' ||
+                                    address.hostname !== window.location.hostname ||
+                                    address.pathname !== '/syi/core/list/equals') {
+                                return false;
+                            }
+                            return address.searchParams.get('itemId')
+                                ?.toUpperCase() === offerId &&
+                                address.searchParams.get('productId')
+                                ?.toUpperCase() === catalogId;
+                        } catch {
+                            return false;
+                        }
+                    });
+                    // Si el parent_url corresponde a otra ficha, un link
+                    // independiente explícito permite resolver la oferta
+                    // actual. Sin corroboración, mantener el rechazo.
+                    catalogLinkedToOffer = links.length === 1 &&
+                        confirmations.length === 1;
+                }
+
+                const sellers = [...form.querySelectorAll(
+                    '.ui-pdp-seller-summary__header__title ' +
+                    '.ui-pdp-seller-summary__link'
+                )];
+                const sellerName = sellers.length === 1
+                    ? sellers[0].textContent?.replace(/\s+/g, ' ').trim() : null;
+
+                // Distintos selectores de variantes pueden coexistir (color,
+                // almacenamiento y estado del reacondicionado). Cada grupo
+                // debe tener UNA opción elegida y apuntar al catálogo actual.
+                // Dos opciones seleccionadas de distintos grupos no son
+                // dos ofertas individuales.
+                const gradeGroups = [...document.querySelectorAll(
+                    '.ui-pdp-outside_variations__thumbnails'
+                )];
+                const gradeItems = [...document.querySelectorAll(
+                    '.ui-pdp-outside_variations__thumbnails__item'
+                )];
+                const isSelectedGrade = node => node.classList?.contains(
+                    'ui-pdp-outside_variations__thumbnails__item--SELECTED'
+                );
+                const selectedGrades = gradeItems.filter(isSelectedGrade);
+                let selectedGradeMatches = true;
+                if (gradeItems.length || gradeGroups.length) {
+                    // Compatibilidad con HTML antiguo de un único selector.
+                    selectedGradeMatches = gradeGroups.length > 0
+                        ? gradeGroups.every(group => {
+                            const items = [...group.querySelectorAll(
+                                '.ui-pdp-outside_variations__thumbnails__item'
+                            )];
+                            return items.length > 0 &&
+                                items.filter(isSelectedGrade).length === 1;
+                        }) && selectedGrades.length === gradeGroups.length
+                        : selectedGrades.length === 1;
+                    if (selectedGradeMatches) {
+                        selectedGradeMatches = selectedGrades.every(node => {
+                            try {
+                                const selectedUrl = new URL(
+                                    node.getAttribute('href'),
+                                    window.location.href
+                                );
+                                const selectedCatalogId = selectedUrl.pathname.match(
+                                    /\/p\/(MLA\d{6,})\/?$/i
+                                )?.[1]?.toUpperCase();
+                                return selectedUrl.hostname ===
+                                    window.location.hostname &&
+                                    selectedCatalogId === catalogId;
+                            } catch {
+                                return false;
+                            }
+                        });
+                    }
+                }
+
+                // En varias fichas de reacondicionados el precio principal
+                // está FUERA de #buybox-form. También hay montos accesorios
+                // (cuotas, tarjetas, recomendaciones). Identificar el ÚNICO
+                // precio principal con meta[itemprop="price"], y verificar
+                // que coincida con la cifra visible y esté fuera de carruseles.
+                const mainPrices = [...document.querySelectorAll(
+                    '.ui-pdp-price__second-line .andes-money-amount'
+                )].filter(node =>
+                    node.querySelector?.('meta[itemprop="price"]') &&
+                    !node.closest?.(
+                        '.poly-card, .ui-recommendations-carousel-wrapper-ref, ' +
+                        '.ui-pdp-buy-box-offers__offer-list-item'
+                    )
+                );
+                const amount = mainPrices.length === 1 ? mainPrices[0] : null;
+                const fraction = amount?.querySelector(
+                    '.andes-money-amount__fraction'
+                )?.textContent?.trim();
+                const cents = amount?.querySelector(
+                    '.andes-money-amount__cents'
+                )?.textContent?.trim();
+                const structuredPrice = amount?.querySelector(
+                    'meta[itemprop="price"]'
+                )?.getAttribute('content');
+                const observedPrice = fraction
+                    ? Number(fraction.replace(/\./g, '') + (cents ? '.' + cents : ''))
+                    : NaN;
+                const metadataPrice = structuredPrice != null
+                    ? Number(structuredPrice) : NaN;
+                const isARS = /\bpesos\b/i.test(
+                    amount?.getAttribute('aria-label') ?? ''
+                );
+                if (catalogId && catalogLinkedToOffer &&
+                        selectedGradeMatches &&
+                        /^MLA[1-9]\d{5,}$/i.test(offerId || '') &&
+                        offerId !== catalogId && sellerName &&
+                        Number.isFinite(observedPrice) && observedPrice > 0 &&
+                        Number.isFinite(metadataPrice) &&
+                        Math.abs(observedPrice - metadataPrice) < 0.011 && isARS) {
+                    return {
+                        externalId: offerId,
+                        selectedOfferId: offerId,
+                        url: window.location.href.split('#')[0],
+                        seller: sellerName,
+                        price: cents ? fraction + ',' + cents : fraction,
+                        currency: 'ARS',
+                        source: form
+                    };
+                }
+            }
+        }
+
+        // Estructuras alternativas anteriores: únicamente identificamos
+        // enlaces de oferta y jamás usamos el ID global /p/MLA... .
+        const visible = node => Boolean(node)
+            && !node.hidden && node.getAttribute?.('aria-hidden') !== 'true'
+            && (!node.getClientRects || node.getClientRects().length > 0);
+        const scopes = Array.from(document.querySelectorAll(
+            '[role="dialog"], [aria-modal="true"], .andes-modal, .ui-pdp-buybox'
+        )).filter(visible);
+        const candidates = new Map();
+
+        for (const scope of scopes) {
+            const selected = Array.from(scope.querySelectorAll(
+                '[aria-selected="true"], [aria-checked="true"], [data-selected="true"]'
+            )).filter(visible);
+            // Ante una selección explícita, no mezclarla con las otras
+            // tarjetas que siguen presentes en el mismo diálogo.
+            const groups = selected.length
+                ? selected.map(node =>
+                    node.closest?.('[data-testid*="offer"], li, .ui-pdp-buybox') || node.parentElement || node)
+                : [scope];
+            for (const group of groups) {
+                const sellerText = group.innerText || group.textContent || '';
+                const sellerMatch = sellerText.match(
+                    /(?:vendido\s+por|tienda)\s*:?\s*([^\r\n]+)/i
+                );
+                const sellerName = sellerMatch?.[1]?.replace(/\s+/g, ' ').trim();
+                const priceContainer = group.querySelector(
+                    '.ui-pdp-price__second-line .andes-money-amount'
+                ) || group.querySelector('.andes-money-amount');
+                const amount = priceContainer?.querySelector(
+                    '.andes-money-amount__fraction'
+                )?.textContent?.trim();
+                const cents = priceContainer?.querySelector(
+                    '.andes-money-amount__cents'
+                )?.textContent?.trim();
+                if (!sellerName || !amount) continue;
+
+                for (const link of group.querySelectorAll('a[href]')) {
+                    const href = link.getAttribute('href');
+                    let address;
+                    try { address = new URL(href, window.location.href); }
+                    catch { continue; }
+                    if (address.protocol !== 'https:' ||
+                            !/(^|\.)mercadolibre\.com(\.ar)?$/.test(address.hostname)) continue;
+                    const user = address.pathname.match(/\/up\/(MLAU\d{6,})(?:\/|$)/i);
+                    const item = address.pathname.match(/(?:^|\/)MLA-?(\d{6,})(?=[\/-]|$)/i);
+                    if (!user && !item) continue;
+                    const id = user ? user[1].toUpperCase() : 'MLA' + item[1];
+                    candidates.set(id, {
+                        externalId: id,
+                        url: address.href.split('#')[0],
+                        seller: sellerName,
+                        price: cents ? amount + ',' + cents : amount,
+                        source: group
+                    });
+                }
+            }
+        }
+        return candidates.size === 1 ? [...candidates.values()][0] : null;
+    }
+    const catalogOffer = selectedCatalogOffer();
+    if (isCatalog && !catalogOffer) {
+        return {
+            found: false,
+            message: 'La ficha muestra un producto de catálogo, pero no pude identificar una oferta con vendedor, precio e ID individual. Abrí el enlace de la oferta elegida y analizala allí.'
+        };
+    }
     function getText(selector) {
         return document.querySelector(selector)?.textContent?.trim() || null;
     }
@@ -355,48 +1118,115 @@ function extractMercadoLibre() {
         return null;
     }
 
-    function findProduct(data) {
-        if (!data || typeof data !== 'object') return null;
+    // El documento incluye carruseles promocionados con reseñas de OTROS
+    // productos. Ni sus tarjetas ni su JSON-LD sirven como evidencia.
+    function belongsToRecommendations(element) {
+        return Boolean(element?.closest?.(
+            '.ui-recommendations-carousel-wrapper-ref, ' +
+            '.ui-recommendations-carousel-snapped, .poly-card, ' +
+            '.poly-component__reviews, [data-testid="recommendations"]'
+        ));
+    }
+    function normalizeProductName(value) {
+        return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    }
+    function isCurrentProduct(data) {
+        const rawUrl = data?.url || data?.['@id'];
+        if (typeof rawUrl === 'string' && rawUrl.trim()) {
+            try {
+                const structured = new URL(rawUrl, window.location.href);
+                const currentPath = window.location.pathname.replace(/\/$/, '');
+                const structuredPath = structured.pathname.replace(/\/$/, '');
+                const sameHost = structured.hostname.replace(/^www\./i, '') ===
+                    window.location.hostname.replace(/^www\./i, '');
+                if (sameHost && structuredPath === currentPath) return true;
+                // Los títulos de las URLs SEO pueden cambiar sin modificar
+                // la identidad de la publicación (/up/MLAU..., /p/MLA...).
+                const publicationId = path => path.match(
+                    /\/(?:up\/)?(MLAU\d+)(?=\/|$)/i
+                )?.[1] || path.match(
+                    /\/(?:p\/)?(MLA\d+)(?=\/|$)/i
+                )?.[1] || path.match(
+                    /(?:^|\/)MLA-?(\d{6,})(?=\/|$)/i
+                )?.[1];
+                const currentId = publicationId(currentPath);
+                const metadataId = publicationId(structuredPath);
+                if (sameHost && currentId && metadataId
+                        && currentId.toUpperCase() === metadataId.toUpperCase()) return true;
+                // Si el JSON-LD identifica expresamente otra ficha, nunca
+                // reutilizar su rating aunque el nombre sea muy parecido.
+                if (/\/(?:up\/MLAU\d+|p\/MLA\d+|MLA-?\d{6,})/i.test(structuredPath)) {
+                    return false;
+                }
+            } catch {
+                return false;
+            }
+        }
 
+        // Sin URL utilizable, exigir correspondencia estricta con el h1.
+        const heading = normalizeProductName(
+            document.querySelector('h1.ui-pdp-title')?.textContent);
+        const name = normalizeProductName(data?.name);
+        if (!heading || !name) return false;
+        if (heading === name) return true;
+        const headTokens = new Set(heading.split(' '));
+        const nameTokens = new Set(name.split(' '));
+        const digits = tokens => [...tokens].filter(t => /\d/.test(t)).sort().join('|');
+        if (digits(headTokens) !== digits(nameTokens)) return false;
+        const shorter = headTokens.size < nameTokens.size ? headTokens : nameTokens;
+        if (shorter.size < 5) return false;
+        const shared = [...shorter].filter(t =>
+            (shorter === headTokens ? nameTokens : headTokens).has(t)).length;
+        return shared / shorter.size >= 0.9;
+    }
+    function findCurrentProduct(data) {
+        if (!data || typeof data !== 'object') return null;
         if (Array.isArray(data)) {
-            for (const item of data) {
-                const found = findProduct(item);
-                if (found) return found;
+            for (const entry of data) {
+                const product = findCurrentProduct(entry);
+                if (product) return product;
             }
             return null;
         }
-
-        const types = Array.isArray(data['@type'])
-            ? data['@type']
-            : [data['@type']];
-
-        if (types.some((type) =>
-            typeof type === 'string' &&
-            (type === 'Product' || type.endsWith('/Product'))
-        )) {
+        const types = Array.isArray(data['@type']) ? data['@type'] : [data['@type']];
+        if (types.some(t => typeof t === 'string'
+                && (t === 'Product' || t.endsWith('/Product')))
+                && isCurrentProduct(data)) {
             return data;
         }
-
-        return findProduct(data['@graph']);
+        return findCurrentProduct(data['@graph']);
     }
 
-    // Intentar recuperar los datos estructurados JSON-LD.
+    // Inspeccionar todos los bloques JSON-LD, pero seleccionar únicamente
+    // el Product asociado a la URL o al título de la ficha principal.
     let product = null;
-
     for (const script of document.querySelectorAll(
         'script[type="application/ld+json"]'
     )) {
         try {
-            product = findProduct(JSON.parse(script.textContent));
-
+            product = findCurrentProduct(JSON.parse(script.textContent));
             if (product) break;
         } catch {
-            // Ignorar bloques que no contengan JSON válido.
+            // Ignorar JSON-LD inválido.
         }
     }
 
     // URL sin fragmento de navegación.
-    const pageUrl = window.location.href.split('#')[0];
+    // El contexto comercial (item_id seleccionado y vendedor del catálogo)
+    // viaja por campos específicos, no por los trackers del enlace.
+    const extractedPageUrl = catalogOffer?.url || window.location.href;
+    let pageUrl = extractedPageUrl.split('#')[0];
+    try {
+        const parsedPage = new URL(extractedPageUrl, window.location.href);
+        if (parsedPage.protocol === 'https:' &&
+                /(^|\.)(mercadolibre\.com(?:\.ar)?|mercadolivre\.com\.br)$/i
+                    .test(parsedPage.hostname)) {
+            pageUrl = parsedPage.origin + parsedPage.pathname;
+        }
+    } catch {
+        // Una URL no reconocible será rechazada por el backend.
+    }
 
     // Analizar solamente la ruta, sin parámetros.
     const pathname = window.location.pathname;
@@ -412,11 +1242,11 @@ function extractMercadoLibre() {
     );
 
     // Determinar el identificador principal.
-    const externalId = userProductMatch
+    const externalId = catalogOffer?.externalId || (userProductMatch
         ? userProductMatch[1].toUpperCase()
         : itemMatch
             ? `MLA${itemMatch[1]}`
-            : null;
+            : null);
 
     // Evitar interpretar páginas de búsqueda como productos.
     const isProductPage =
@@ -461,17 +1291,148 @@ function extractMercadoLibre() {
         }
     }
 
+    // Opiniones del producto: JSON-LD Product.aggregateRating. La cifra
+    // reviewCount corresponde a opiniones, no a ventas ni al vendedor.
+    // No inferir cantidades exactas desde "1.2K+" ni sustituir ratingCount.
+    function parseMlReviewCount(raw) {
+        if (raw == null) return null;
+        const text = String(raw).trim();
+        if (!/^(?:\d+|\d{1,3}(?:[.,]\d{3})+)$/.test(text)) return null;
+        const count = Number(text.replace(/[.,]/g, ''));
+        return Number.isSafeInteger(count) && count > 0 && count <= 10000000
+            ? count : null;
+    }
+    function parseMlRating(raw) {
+        if (raw == null) return null;
+        const value = String(raw).trim().replace(',', '.');
+        if (!/^[0-5](?:\.\d)?$/.test(value)) return null;
+        const rating = Number(value);
+        return rating > 0 && rating <= 5 ? rating : null;
+    }
+    const productRating = Array.isArray(product?.aggregateRating)
+        ? product.aggregateRating[0] : product?.aggregateRating;
+    let mlProductRating = parseMlRating(productRating?.ratingValue);
+    let mlProductReviewCount = parseMlReviewCount(productRating?.reviewCount);
+    if (mlProductRating === null || mlProductReviewCount === null) {
+        // Alternativa conservadora si falta JSON-LD: exigir estrellas y
+        // recuento de opiniones en un MISMO bloque de reseñas de producto,
+        // nunca en el panel de reputación del vendedor.
+        const reviewBlocks = document.querySelectorAll(
+            '.ui-pdp-review__rating, .ui-pdp-reviews__rating, ' +
+            '.ui-pdp-review__rating__summary, [data-testid="product-reviews"]'
+        );
+        for (const block of reviewBlocks) {
+            if (belongsToRecommendations(block)) continue;
+            const text = block.innerText || block.textContent || '';
+            const countMatch = text.match(/(\d{1,3}(?:[.,]\d{3})+|\d+)\s+(?:opiniones|reseñas)\b/i);
+            const averageText = block.querySelector?.(
+                '.ui-pdp-review__rating__average, .ui-pdp-reviews__rating__average'
+            )?.textContent?.trim() || text;
+            const scoreMatch = averageText.match(/(?:^|[^\d])([1-5](?:[.,]\d)?)(?:\s*\/\s*5)?(?:\b|$)/);
+            const rating = parseMlRating(scoreMatch?.[1]);
+            const count = parseMlReviewCount(countMatch?.[1]);
+            if (rating !== null && count !== null) {
+                mlProductRating = rating;
+                mlProductReviewCount = count;
+                break;
+            }
+        }
+    }
+    if (mlProductRating === null || mlProductReviewCount === null) {
+        // Estructura actual de Mercado Libre (reviews-capability-v3).
+        // La media y el número de OPINIONES deben proceder de un mismo
+        // módulo de reseñas del producto, no de la reputación del vendedor.
+        // "2 calificaciones" no se interpreta automáticamente como
+        // "2 opiniones": el texto accesible o los comentarios lo confirman.
+        const reviewSections = document.querySelectorAll(
+            '[data-testid="reviews-desktop"], [data-testid="reviews-mobile"], ' +
+            '#reviews_capability_v3'
+        );
+        for (const section of reviewSections) {
+            if (belongsToRecommendations(section)) continue;
+            const average = parseMlRating(section.querySelector?.(
+                '.ui-review-capability__rating__average'
+            )?.textContent?.trim());
+            if (average === null) continue;
+
+            const accessible = section.querySelector?.(
+                '.ui-review-capability__rating__rating .andes-visually-hidden'
+            )?.textContent?.trim() || '';
+            const accessibleMatch = accessible.match(
+                /calificaci[oó]n\s+([1-5](?:[.,]\d)?)\s+de\s+5\s*[.,;:]?\s*(\d{1,3}(?:[.,]\d{3})+|\d+)\s+opiniones?\b/i
+            );
+            let count = accessibleMatch &&
+                    parseMlRating(accessibleMatch[1]) === average
+                ? parseMlReviewCount(accessibleMatch[2]) : null;
+
+            if (count === null) {
+                // Si falta el texto accesible, usar la cantidad explícita
+                // de opiniones/comentarios del mismo módulo. Evitar contar
+                // estrellas individuales y la etiqueta "calificaciones".
+                const labels = section.querySelectorAll?.(
+                    '.total-opinion, .ui-review-capability__rating__label'
+                ) || [];
+                for (const label of labels) {
+                    const match = (label.textContent || '').trim().match(
+                        /^(\d{1,3}(?:[.,]\d{3})+|\d+)\s+(?:opiniones|reseñas|comentarios)\b/i
+                    );
+                    if (match) {
+                        count = parseMlReviewCount(match[1]);
+                        if (count !== null) break;
+                    }
+                }
+            }
+            if (count !== null) {
+                mlProductRating = average;
+                mlProductReviewCount = count;
+                break;
+            }
+        }
+    }
+    // Las puntuaciones que Mercado Libre incluye en JSON-LD son válidas
+    // aun sin módulo de opiniones visible, siempre que correspondan a
+    // ESTA ficha (ver findCurrentProduct), no a recomendaciones.
+    // La ausencia de datos estructurados y visibles, en cambio, puede
+    // informar una señal leve si la página terminó de cargar.
+    const mainReviewModules = document.querySelectorAll(
+        '.ui-pdp-review__rating, .ui-pdp-reviews__rating, ' +
+        '.ui-pdp-review__rating__summary, [data-testid="product-reviews"], ' +
+        '[data-testid="reviews-desktop"], [data-testid="reviews-mobile"], ' +
+        '#reviews_capability_v3'
+    );
+    const mainReviewModulePresent = [...mainReviewModules]
+        .some(node => !belongsToRecommendations(node));
+    const hasQuestions = Boolean(document.querySelector(
+        '.ui-pdp-questions, .ui-pdp-questions__container, ' +
+        '#questions, #questions-section, [data-testid="questions"]'
+    ));
+    const structuredRatingPresent = productRating != null
+        && (productRating.ratingValue != null || productRating.reviewCount != null);
+    if (mlProductRating === null || mlProductReviewCount === null) {
+        mlProductRating = null;
+        mlProductReviewCount = null;
+    }
+    const mlProductRatingUnavailable = (
+        mlProductRating === null && mlProductReviewCount === null &&
+        !mainReviewModulePresent && !structuredRatingPresent &&
+        document.readyState === 'complete' &&
+        Boolean(document.querySelector('h1.ui-pdp-title')) &&
+        hasQuestions
+    ) ? true : null;
+
     const offers = Array.isArray(product?.offers)
         ? product.offers[0]
         : product?.offers;
 
     price =
+        catalogOffer?.price ||
         price ||
         getMeta('meta[property="product:price:amount"]') ||
         getMeta('meta[itemprop="price"]') ||
         (offers?.price != null ? String(offers.price) : null);
 
     const currency =
+        catalogOffer?.currency ||
         getMeta('meta[property="product:price:currency"]') ||
         offers?.priceCurrency ||
         null;
@@ -513,9 +1474,9 @@ function extractMercadoLibre() {
         }
     }
 
-    const sellerName =
-        normalizeMercadoLibreSellerName(seller)
-        || extractSellerNameFromText();
+    const sellerName = catalogOffer
+        ? normalizeMercadoLibreSellerName(catalogOffer.seller)
+        : normalizeMercadoLibreSellerName(seller) || extractSellerNameFromText();
 
     const description =
         getText('.ui-pdp-description__content') ||
@@ -528,14 +1489,19 @@ function extractMercadoLibre() {
     // Información pública del vendedor
     // -------------------------------------
 
-    const sellerPanel = document.querySelector(
-        '.ui-pdp-seller-summary'
-    );
+    // En catálogos, leer el resumen comercial únicamente dentro de la
+    // fila de la oferta elegida, nunca desde otra tarjeta de vendedor.
+    const sellerPanel = catalogOffer
+        ? catalogOffer.source?.querySelector?.('.ui-pdp-seller-summary') ?? null
+        : document.querySelector('.ui-pdp-seller-summary');
 
-    const sellerLink = document.querySelector(
-        '.ui-pdp-seller-summary__header__title ' +
-        '.ui-pdp-seller-summary__link'
-    );
+    const sellerLink = catalogOffer
+        ? sellerPanel?.querySelector?.(
+            '.ui-pdp-seller-summary__header__title .ui-pdp-seller-summary__link'
+          ) ?? null
+        : document.querySelector(
+            '.ui-pdp-seller-summary__header__title .ui-pdp-seller-summary__link'
+          );
 
     // Enlace al perfil comercial del vendedor.
     let sellerProfileUrl = null;
@@ -627,17 +1593,40 @@ function extractMercadoLibre() {
     // Mercado Libre también usa un panel de vendedor independiente
     // de .ui-pdp-seller-summary. Asociarlo al MISMO vendedor antes
     // de tomar indicadores comerciales (evita leer otro vendedor).
-    const sellerDetailsPanel = Array.from(
-        document.querySelectorAll('.ui-seller-data')
-    ).find(panel => {
+    // La reputación está debajo del formulario, como bloque hermano
+    // .ui-seller-data dentro del sidebar. En catálogos exigir además un
+    // enlace del propio panel con item_id de la oferta elegida: el nombre
+    // del vendedor por sí solo no basta para vincular una reputación.
+    const sellerScope = catalogOffer?.source?.closest?.(
+        '.ui-pdp--sticky-wrapper-right'
+    );
+    const sellerDetailsCandidates = Array.from(
+        sellerScope?.querySelectorAll?.('.ui-seller-data')
+        ?? document.querySelectorAll('.ui-seller-data')
+    );
+    const sellerDetailsPanel = sellerDetailsCandidates.find(panel => {
         const heading = panel.querySelector(
             '.ui-seller-data-header__title'
         )?.textContent?.trim();
-        return Boolean(
+        const sameSeller = Boolean(
             sellerName && heading &&
             normalizeMercadoLibreSellerName(heading)?.toLowerCase() ===
                 sellerName.toLowerCase()
         );
+        if (!sameSeller) return false;
+        if (!catalogOffer) return true;
+
+        const references = panel.querySelectorAll('a[href*="item_id="]');
+        return Array.from(references).some(link => {
+            try {
+                const href = link.getAttribute('href');
+                const address = new URL(href, window.location.href);
+                return address.searchParams.get('item_id')?.toUpperCase()
+                    === catalogOffer.externalId;
+            } catch {
+                return false;
+            }
+        });
     }) ?? null;
 
     // Solo se usan los paneles atribuidos a este vendedor;
@@ -727,11 +1716,20 @@ function extractMercadoLibre() {
     // Reputación pública del vendedor
     // -------------------------------------
 
-    const reputationThermometers = [
-        ...document.querySelectorAll(
-            'ul.ui-seller-data-status__thermometer[value]'
-        )
-    ];
+    // Nunca combinar termómetros de vendedores diferentes. En una
+    // selección de catálogo solo leer el panel correlacionado por
+    // nombre e item_id. En ofertas normales se conserva el fallback.
+    const reputationThermometers = Array.from(
+        catalogOffer
+            ? sellerDetailsPanel?.querySelectorAll(
+                'ul.ui-seller-data-status__thermometer[value]'
+              ) ?? []
+            : sellerDetailsPanel?.querySelectorAll(
+                'ul.ui-seller-data-status__thermometer[value]'
+              ) ?? document.querySelectorAll(
+                'ul.ui-seller-data-status__thermometer[value]'
+              )
+    );
 
     let sellerReputationLevel = null;
 
@@ -755,13 +1753,22 @@ function extractMercadoLibre() {
         externalId,
         description,
         url: pageUrl,
-        sellerProfileUrl,
-        sellerBadge,
-        sellerSalesText,
-        sellerListedProductsText,
-        sellerInsufficientSalesText,
-        sellerReputationLevel,
-        sellerId
+        // Usar señales comerciales en el catálogo únicamente si el panel
+        // del vendedor está corroborado para la oferta seleccionada.
+        sellerProfileUrl: catalogOffer && !sellerDetailsPanel ? null : sellerProfileUrl,
+        sellerBadge: catalogOffer && !sellerDetailsPanel ? null : sellerBadge,
+        sellerSalesText: catalogOffer && !sellerDetailsPanel ? null : sellerSalesText,
+        sellerListedProductsText: catalogOffer && !sellerDetailsPanel
+            ? null : sellerListedProductsText,
+        sellerInsufficientSalesText: catalogOffer && !sellerDetailsPanel
+            ? null : sellerInsufficientSalesText,
+        sellerReputationLevel: catalogOffer && !sellerDetailsPanel
+            ? null : sellerReputationLevel,
+        sellerId: catalogOffer ? null : sellerId,
+        selectedOfferId: catalogOffer?.selectedOfferId ?? null,
+        mlProductRating,
+        mlProductReviewCount,
+        mlProductRatingUnavailable
     };
 }
 
@@ -960,7 +1967,8 @@ function extractFacebookMarketplace() {
 async function extractCurrentListing() {
     if (!activeTab?.id || !pageSupported) throw new Error('Abrí una publicación compatible.');
     const extractor = currentMarketplace === 'MERCADO_LIBRE'
-        ? extractMercadoLibre : extractFacebookMarketplace;
+        ? extractMercadoLibre : currentMarketplace === 'TEMU'
+            ? extractTemu : extractFacebookMarketplace;
     const results = await ext.scripting.executeScript({
         target: {tabId: activeTab.id}, func: extractor
     });
@@ -978,6 +1986,9 @@ function fillFacebookForm(data) {
     $('fb-description').value = data.description ?? '';
 }
 function readFacebookForm(data) {
+    const chosenSeller = $('fb-seller').value.trim();
+    const sameObservedSeller = chosenSeller.toLocaleLowerCase() ===
+        String(data.seller ?? '').trim().toLocaleLowerCase();
     const year = $('fb-join-year').value.trim();
     const joinYear = year ? Number(year) : null;
     if (joinYear !== null && (!Number.isInteger(joinYear) || joinYear < 2004 || joinYear > new Date().getFullYear())) {
@@ -986,32 +1997,203 @@ function readFacebookForm(data) {
     return {...data,
         title: $('fb-title').value.trim(),
         price: $('fb-price').value.trim(),
-        seller: $('fb-seller').value.trim(),
+        seller: chosenSeller || null,
+        sellerBadge: data.marketplace === 'TEMU' && !sameObservedSeller
+            ? null : data.sellerBadge,
+        temuSellerRating: data.marketplace === 'TEMU' && !sameObservedSeller
+            ? null : data.temuSellerRating,
+        temuSellerReviewCount: data.marketplace === 'TEMU' && !sameObservedSeller
+            ? null : data.temuSellerReviewCount,
+        // Las opiniones del producto son independientes de la identidad de la tienda.
+        temuProductRating: data.temuProductRating ?? null,
+        temuProductReviewCount: data.temuProductReviewCount ?? null,
+        temuProductSoldText: data.temuProductSoldText ?? null,
+        temuStoreSoldText: data.marketplace === 'TEMU' && !sameObservedSeller
+            ? null : data.temuStoreSoldText,
+        temuStoreTenureText: data.marketplace === 'TEMU' && !sameObservedSeller
+            ? null : data.temuStoreTenureText,
+        temuStoreId: data.marketplace === 'TEMU' && !sameObservedSeller
+            ? null : data.temuStoreId,
+        temuSellerSectionObserved: data.marketplace === 'TEMU' && !sameObservedSeller
+            ? false : data.temuSellerSectionObserved,
+        sellerProfileUrl: data.marketplace === 'TEMU' && !sameObservedSeller
+            ? null : data.sellerProfileUrl,
         facebookJoinYear: joinYear,
         description: $('fb-description').value.trim() || null
     };
 }
+function validTemuPrice(value) {
+    const text = typeof value === 'string' ? value.trim()
+        : typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
+    // Admitir importes como 9.507 y decimales de dos dígitos, sin monedas ni símbolos.
+    return /^(?:\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)$/.test(text)
+        && /[1-9]/.test(text);
+}
+function temuPriceCandidates(data) {
+    return Array.isArray(data.priceCandidates)
+        ? [...new Set(data.priceCandidates.filter(validTemuPrice).map(String))].slice(0, 8)
+        : [];
+}
+function requiresTemuPriceConfirmation(data) {
+    if (data?.marketplace !== 'TEMU') return false;
+    const candidates = temuPriceCandidates(data);
+    return !validTemuPrice(data.price) || candidates.length > 1
+        || (candidates.length === 1 && candidates[0] !== String(data.price).trim());
+}
+function updateTemuPriceSelection() {
+    const chosen = $('temu-confirm-price').value.trim();
+    for (const button of $('temu-price-options').querySelectorAll('button')) {
+        button.setAttribute('aria-pressed', String(button.dataset.price === chosen));
+    }
+}
+function showTemuPrices(data) {
+    const prices = temuPriceCandidates(data);
+    const options = $('temu-price-options');
+    options.replaceChildren();
+    const initial = validTemuPrice(data.price) ? String(data.price).trim()
+        : prices.length === 1 ? prices[0] : '';
+    $('temu-confirm-price').value = initial;
+    $('temu-price-status').textContent = '';
+
+    for (const value of prices) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'temu-price-option';
+        button.dataset.price = value;
+        button.setAttribute('aria-label', 'Seleccionar ARS ' + value + ' como precio del artículo');
+        button.textContent = 'ARS ' + value;
+        button.addEventListener('click', () => {
+            $('temu-confirm-price').value = value;
+            $('temu-price-status').textContent = '';
+            updateTemuPriceSelection();
+        });
+        options.appendChild(button);
+    }
+    options.hidden = options.children.length === 0;
+    $('temu-price-hint').textContent = prices.length > 1
+        ? 'Comprobá cuál es el precio real de tu variante. No uses un importe tachado ni descuentos que no te correspondan.'
+        : prices.length === 1
+            ? 'Verificá que el precio mostrado corresponda a tu variante y a las promociones aplicables.'
+            : 'No se pudo identificar un precio confiable. Escribí el importe en ARS tal como aparece en tu publicación.';
+    updateTemuPriceSelection();
+}
+function showCorrectionForm(data) {
+    fillFacebookForm(data);
+    const sellerHint = $('temu-seller-hint');
+    sellerHint.hidden = data.marketplace !== 'TEMU';
+    if (data.marketplace === 'TEMU') {
+        const rating = data.temuSellerRating;
+        const ratingText = typeof rating === 'number' && rating > 0
+            ? 'Calificación de tienda: ' + rating.toLocaleString('es-AR') + ' / 5. '
+            : '';
+        const count = data.temuSellerReviewCount;
+        const reviewText = Number.isInteger(count) && count >= 0
+            ? 'Reseñas de tienda: ' + count.toLocaleString('es-AR') + '. ' : '';
+        sellerHint.textContent = ratingText + reviewText +
+            (data.sellerBadge === 'TEMU_STAR_SELLER'
+                ? 'Star Seller aparece junto a la tienda. Ninguna señal implica seguridad garantizada.'
+                : 'Podés completar o corregir el nombre de la tienda si aparece en la publicación.');
+    }
+    $('fb-join-row').hidden = data.marketplace !== 'FACEBOOK_MARKETPLACE';
+    $('fb-seller').disabled = false;
+    $('correction-status').textContent = '';
+    setPanelState('correction');
+}
 function missingEssential(data) {
-    return !data?.externalId || !data.title || !data.price || !data.seller;
+    return !data?.externalId || !data.title || !data.price ||
+        (data.marketplace !== 'TEMU' && !data.seller);
 }
 async function prepareData(action) {
     const keyAtStart = pageKey;
-    if (!extractedData || currentMarketplace === 'MERCADO_LIBRE') {
+    if (!extractedData || currentMarketplace === 'MERCADO_LIBRE' || currentMarketplace === 'TEMU') {
         extractedData = await extractCurrentListing();
     }
     if (keyAtStart !== pageKey) throw new Error('La publicación cambió durante la extracción.');
+    if (currentMarketplace === 'MERCADO_LIBRE'
+            && isMercadoLibreCatalogUrl(activeTab?.url)
+            && extractedData?.externalId) {
+        // Dos ofertas del mismo catálogo no deben compartir estado de análisis.
+        pageKey = `${activeTab.id}:${canonicalPageUrl(activeTab.url, currentMarketplace)}:offer:${extractedData.externalId}`;
+    }
+    if (currentMarketplace === 'TEMU' && extractedData.currency !== 'ARS') {
+        throw new Error('No se encontró información suficiente para confirmar que el precio de Temu está en ARS.');
+    }
+    if (!extractedData.externalId) {
+        throw new Error('No se encontró el ID individual de la publicación. Revisá el anuncio.');
+    }
+
+    // En Temu se confirma el precio antes de pedir otras correcciones.
+    // Si hay alternativas, se exige confirmación incluso con precio extraído.
+    if (requiresTemuPriceConfirmation(extractedData)) {
+        pendingAction = action;
+        showTemuPrices(extractedData);
+        setPanelState('price');
+        updateActions();
+        return null;
+    }
     if (missingEssential(extractedData)) {
-        if (extractedData.externalId) {
-            pendingAction = action;
-            fillFacebookForm(extractedData);
-            $('fb-join-row').hidden = currentMarketplace !== 'FACEBOOK_MARKETPLACE';
-            $('facebook-correction').hidden = false;
-            $('status').textContent = 'Faltan datos. Completalos para continuar.';
-            return null;
-        }
-        throw new Error('No se pudo obtener el título, precio, vendedor o ID individual. Revisá el anuncio.');
+        pendingAction = action;
+        showCorrectionForm(extractedData);
+        updateActions();
+        return null;
     }
     return extractedData;
+}
+async function finishPreparedAction(action, data) {
+    if (action === 'report') {
+        await restoreAnalysis();
+        await sendReport(data);
+    } else {
+        setPanelState('loading');
+        await startAnalysis(data);
+    }
+}
+async function confirmTemuPrice() {
+    if (!pendingAction || !extractedData || preparing || currentMarketplace !== 'TEMU'
+        || $('temu-price-panel').hidden) return;
+    const chosen = $('temu-confirm-price').value.trim();
+    if (!validTemuPrice(chosen)) {
+        $('temu-price-status').textContent = 'Seleccioná o ingresá un precio válido en ARS antes de continuar.';
+        return;
+    }
+    preparing = true;
+    $('temu-price-confirm').disabled = true;
+    $('temu-price-cancel').disabled = true;
+    updateActions();
+    const action = pendingAction;
+    try {
+        extractedData = {...extractedData, price: chosen};
+        $('temu-price-status').textContent = '';
+        if (missingEssential(extractedData)) {
+            showCorrectionForm(extractedData);
+        } else {
+            pendingAction = null;
+            await finishPreparedAction(action, extractedData);
+        }
+    } catch (error) {
+        const message = String(error.message || error);
+        if (pendingAction) {
+            $('temu-price-status').textContent = message;
+            setPanelState('price');
+        } else if (action === 'report') {
+            await restoreAnalysis();
+            $('report-status').textContent = 'No se pudo continuar: ' + message;
+        } else {
+            renderAnalysis({status: 'error', message});
+        }
+    } finally {
+        preparing = false;
+        $('temu-price-confirm').disabled = false;
+        $('temu-price-cancel').disabled = false;
+        updateActions();
+    }
+}
+async function cancelTemuPrice() {
+    if (preparing) return;
+    pendingAction = null;
+    $('temu-price-status').textContent = '';
+    setPanelState('initial');
+    await restoreAnalysis();
 }
 async function startAnalysis(data) {
     if (!pageKey) return;
@@ -1037,6 +2219,7 @@ async function analyzeClick() {
 async function sendReport(data) {
     if (submittingReport) return;
     submittingReport = true;
+    $('report-success').hidden = true;
     $('report-submit').textContent = 'Enviando reporte…';
     $('report-status').textContent = 'Identificando publicación y registrando reporte…';
     updateActions();
@@ -1048,10 +2231,30 @@ async function sendReport(data) {
             description: $('report-description').value.trim()
         });
         if (!reply?.ok) throw new Error(reply?.error || 'No se pudo registrar el reporte.');
+        const currentlyAnalyzedId = lastPublicationId;
         lastPublicationId = reply.publicationId;
-        $('report-status').textContent = `Reporte registrado correctamente para la publicación #${reply.publicationId}.`;
+        // No cambiar el puntaje histórico. Sí reflejar el recuento actual.
+        if (reply.communityReports && currentlyAnalyzedId === reply.publicationId
+                && !$('result-section').hidden) {
+            renderCommunityReportSummary(reply.communityReports);
+            if (pageKey) {
+                try {
+                    const key = pageStateKey();
+                    const cached = (await ext.storage.local.get(key))[key];
+                    if (cached?.status === 'success' && cached.publicationId === reply.publicationId) {
+                        await ext.storage.local.set({[key]: {
+                            ...cached, communityReports: reply.communityReports
+                        }});
+                    }
+                } catch {
+                    // El reporte ya se envió: fallar al guardar el resumen local
+                    // no debe comunicar falsamente que el envío fue rechazado.
+                }
+            }
+        }
         $('report-description').value = '';
         $('report-reason').value = '';
+        showReportSubmitted(reply.publicationId);
     } catch (error) {
         $('report-status').textContent = `No se pudo enviar: ${error.message || error}`;
     } finally {
@@ -1073,19 +2276,44 @@ async function reportSubmit(event) {
     } finally {preparing = false; updateActions();}
 }
 async function continueFacebook() {
-    if (!pendingAction || !extractedData) return;
+    if (!pendingAction || !extractedData || preparing) return;
+    let action = pendingAction;
+    preparing = true;
+    $('facebook-continue-button').disabled = true;
+    $('facebook-cancel-button').disabled = true;
+    updateActions();
     try {
         const data = readFacebookForm(extractedData);
-        if (missingEssential(data)) throw new Error('Completá título, precio y nombre del vendedor.');
+        if (missingEssential(data)) throw new Error(data.marketplace === 'TEMU'
+            ? 'Completá título y precio en ARS.' : 'Completá título, precio y nombre del vendedor.');
         extractedData = data;
-        $('facebook-correction').hidden = true;
-        const action = pendingAction;
         pendingAction = null;
-        if (action === 'report') await sendReport(data);
-        else await startAnalysis(data);
+        $('correction-status').textContent = '';
+        await finishPreparedAction(action, data);
     } catch (error) {
-        $('status').textContent = error.message;
+        const message = String(error.message || error);
+        if (pendingAction) {
+            // Error de validación: permanecer en el formulario.
+            $('correction-status').textContent = message;
+        } else if (action === 'report') {
+            await restoreAnalysis();
+            $('report-status').textContent = `No se pudo continuar: ${message}`;
+        } else {
+            renderAnalysis({status: 'error', message});
+        }
+    } finally {
+        preparing = false;
+        $('facebook-continue-button').disabled = false;
+        $('facebook-cancel-button').disabled = false;
+        updateActions();
     }
+}
+async function cancelFacebookCorrection() {
+    if (preparing) return;
+    pendingAction = null;
+    $('correction-status').textContent = '';
+    setPanelState('initial');
+    await restoreAnalysis();
 }
 
 $('login-form').addEventListener('submit', (event) => void handleLogin(event));
@@ -1094,8 +2322,16 @@ $('theme-toggle').addEventListener('click', () => void toggleTheme());
 $('analyze-button').addEventListener('click', () => void analyzeClick());
 $('reanalyze-button').addEventListener('click', () => void analyzeClick());
 $('retry-button').addEventListener('click', () => void analyzeClick());
+$('report-toggle').addEventListener('click', () => toggleReport());
 $('report-form').addEventListener('submit', (event) => void reportSubmit(event));
 $('facebook-continue-button').addEventListener('click', () => void continueFacebook());
+$('facebook-cancel-button').addEventListener('click', () => void cancelFacebookCorrection());
+$('temu-price-confirm').addEventListener('click', () => void confirmTemuPrice());
+$('temu-price-cancel').addEventListener('click', () => void cancelTemuPrice());
+$('temu-confirm-price').addEventListener('input', () => {
+    $('temu-price-status').textContent = '';
+    updateTemuPriceSelection();
+});
 // Un vínculo temporal permite abrir el frontend sin enviar el JWT en la URL.
 async function openPublicationWithSession() {
     const id = lastPublicationId;
@@ -1148,7 +2384,8 @@ ext.storage.onChanged.addListener((changes, area) => {
     if (changes[THEME_STORAGE_KEY]) applyTheme(changes[THEME_STORAGE_KEY].newValue);
     const taskKey = pageKey && pageStateKey();
     if (taskKey && changes[taskKey]) renderAnalysis(changes[taskKey].newValue);
-    if (changes[AUTH_KEY] && !changes[AUTH_KEY].newValue) showLoggedOut('La sesión expiró o se cerró.');
+    if (changes[AUTH_KEY] && !changes[AUTH_KEY].newValue && !logoutInProgress)
+        showLoggedOut('La sesión expiró o se cerró.');
 });
 ext.tabs.onActivated.addListener(() => void loadCurrentPage());
 ext.tabs.onUpdated.addListener((_id, changes, tab) => {
@@ -1157,6 +2394,7 @@ ext.tabs.onUpdated.addListener((_id, changes, tab) => {
 
 void (async () => {
     await restoreTheme();
+    await restoreLastUsername();
     await checkAuthentication();
     await loadCurrentPage();
 })().catch(error => showLoggedOut(`No se pudo iniciar la extensión: ${error.message}`));

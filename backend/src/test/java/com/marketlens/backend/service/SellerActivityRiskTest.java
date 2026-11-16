@@ -25,7 +25,7 @@ class SellerActivityRiskTest {
         RiskEvaluation e = engine.evaluate(publication(seller));
         assertEquals(score, (int) e.getScore());
         assertEquals(coverage, (int) e.getAvailableFactors());
-        assertEquals(3, (int) e.getTotalFactors());
+        assertEquals(2, (int) e.getTotalFactors());
     }
 
     private void assertOneCode(Seller seller, int score, String code) {

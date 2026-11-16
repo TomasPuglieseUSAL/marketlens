@@ -107,7 +107,11 @@ public class ExtensionNormalizationService {
 
                 String marketplace = imported.getMarketplace();
 
-                if ("FACEBOOK_MARKETPLACE".equals(marketplace)) {
+                if ("TEMU".equals(marketplace)) {
+                    referenceId = TemuProductUrls.parse(imported.getOriginalUrl());
+                    if (referenceId != null) referenceType = "PRODUCT";
+
+                } else if ("FACEBOOK_MARKETPLACE".equals(marketplace)) {
 
                     String host = uri.getHost();
 
@@ -169,6 +173,19 @@ public class ExtensionNormalizationService {
                     "El identificador externo tiene un formato no reconocido.");
         }
 
+        // En un catálogo, el MLA de la URL identifica el PRODUCTO. Si
+        // importamos una oferta elegida explícitamente, su identidad viene
+        // del item_id corroborado en la página y validado al importar.
+        String selectedOfferId = imported.getSelectedOfferId();
+        if ("CATALOG_PRODUCT".equals(referenceType)
+                && selectedOfferId != null
+                && selectedOfferId.equals(extractedId)
+                && selectedOfferId.matches("MLA[1-9]\\d{5,}")) {
+            referenceType = "LISTING";
+            referenceId = selectedOfferId;
+            warnings.add("Oferta individual seleccionada dentro de un catálogo de Mercado Libre.");
+        }
+
         if (referenceId != null && extractedId != null &&
                 !referenceId.equals(extractedId)) {
 
@@ -225,6 +242,9 @@ public class ExtensionNormalizationService {
 
         String normalized = raw.trim();
 
+        if ("TEMU".equals(marketplace)) {
+            return normalized.matches("\\d{6,30}") ? normalized : null;
+        }
         if ("FACEBOOK_MARKETPLACE".equals(marketplace)) {
             return normalized.matches("\\d{6,30}")
                     ? normalized

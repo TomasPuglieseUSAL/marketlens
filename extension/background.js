@@ -5,6 +5,130 @@ const API_BASE = 'http://localhost:8080/api';
 const AUTH_KEY = 'marketlensAuth';
 const activeAnalyses = new Map();
 const activeResolutions = new Map();
+const REFRESH_SKEW_MS = 60_000;
+let pendingRefresh = null;
+let logoutPending = false;
+
+// El coordinador es el único que rota y persiste credenciales de la extensión.
+function validAuthResponse(data) {
+    return typeof data?.token === 'string' && data.token.length > 0
+        && Number.isFinite(data.expiresIn) && data.expiresIn > 0
+        && typeof data.refreshToken === 'string'
+        && /^[1-9][0-9]{0,18}\.[A-Za-z0-9_-]{43}$/.test(data.refreshToken);
+}
+async function loginPersistently(username, password) {
+    if (logoutPending) throw new Error('Se está cerrando la sesión.');
+    const response = await fetch(`${API_BASE}/auth/extension-login`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'omit',
+        body: JSON.stringify({username, password})
+    });
+    if (!response.ok) throw new Error('No se pudo iniciar sesión. Revisá las credenciales.');
+    const result = await response.json();
+    if (!validAuthResponse(result)) throw new Error('Respuesta de autenticación inválida.');
+    const previous = (await ext.storage.local.get(AUTH_KEY))[AUTH_KEY];
+    // Una sesión antigua solo se revoca después de guardar la nueva.
+    await ext.storage.local.set({
+        [AUTH_KEY]: {
+            token: result.token,
+            expiresAt: Date.now() + result.expiresIn * 1000,
+            refreshToken: result.refreshToken
+        },
+        'marketlensLastUsername': username
+    });
+    if (previous?.refreshToken && previous.refreshToken !== result.refreshToken) {
+        void revokeRemote(previous.refreshToken);
+    }
+    return {ok: true};
+}
+async function revokeRemote(refreshToken) {
+    try {
+        const response = await fetch(`${API_BASE}/auth/logout`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            credentials: 'omit',
+            body: JSON.stringify({refreshToken})
+        });
+        return response.ok;
+    } catch {
+        // El cierre local sigue siendo posible sin conectividad.
+        return false;
+    }
+}
+async function logoutPersistently() {
+    logoutPending = true;
+    try {
+        const current = (await ext.storage.local.get(AUTH_KEY))[AUTH_KEY];
+        await ext.storage.local.remove(AUTH_KEY);
+        const remoteRevoked = current?.refreshToken
+            ? await revokeRemote(current.refreshToken) : true;
+        return {ok: true, remoteRevoked};
+    } finally {
+        logoutPending = false;
+    }
+}
+async function renewSession(force = false) {
+    if (pendingRefresh) return pendingRefresh;
+    const job = (async () => {
+        if (logoutPending) throw new Error('Se está cerrando la sesión.');
+        const snapshot = (await ext.storage.local.get(AUTH_KEY))[AUTH_KEY];
+        if (!snapshot?.refreshToken) throw new Error('Iniciá sesión nuevamente.');
+        if (!force && snapshot.token && snapshot.expiresAt > Date.now() + REFRESH_SKEW_MS) {
+            return snapshot;
+        }
+
+        let response;
+        try {
+            response = await fetch(`${API_BASE}/auth/refresh`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                credentials: 'omit',
+                body: JSON.stringify({refreshToken: snapshot.refreshToken})
+            });
+        } catch {
+            throw new Error('No se pudo conectar al servidor. Reintentá cuando vuelva a estar disponible.');
+        }
+        if (response.status === 401 || response.status === 400) {
+            // No borrar una sesión nueva que pudo haberse escrito mientras tanto.
+            const current = (await ext.storage.local.get(AUTH_KEY))[AUTH_KEY];
+            if (current?.refreshToken === snapshot.refreshToken) {
+                await ext.storage.local.remove(AUTH_KEY);
+            }
+            throw new Error('La sesión persistente dejó de ser válida. Iniciá sesión nuevamente.');
+        }
+        if (!response.ok) throw new Error('No se pudo renovar la sesión por un error del servidor.');
+        const result = await response.json().catch(() => null);
+        if (!validAuthResponse(result)) throw new Error('Respuesta de renovación inválida.');
+        const current = (await ext.storage.local.get(AUTH_KEY))[AUTH_KEY];
+        if (logoutPending || current?.refreshToken !== snapshot.refreshToken) {
+            await revokeRemote(result.refreshToken);
+            throw new Error('La sesión cambió durante la renovación.');
+        }
+        const next = {
+            token: result.token,
+            expiresAt: Date.now() + result.expiresIn * 1000,
+            refreshToken: result.refreshToken
+        };
+        await ext.storage.local.set({[AUTH_KEY]: next});
+        return next;
+    })();
+    pendingRefresh = job;
+    try {
+        return await job;
+    } finally {
+        if (pendingRefresh === job) pendingRefresh = null;
+    }
+}
+async function accessSession(force = false) {
+    const current = (await ext.storage.local.get(AUTH_KEY))[AUTH_KEY];
+    if (logoutPending || !current) throw new Error('Iniciá sesión nuevamente.');
+    if (!force && current.token && current.expiresAt > Date.now() + REFRESH_SKEW_MS) {
+        return current;
+    }
+    return renewSession(force);
+}
+
 
 function taskStorageKey(pageKey) {
     return `marketlens:analysis:${pageKey}`;
@@ -15,47 +139,91 @@ function normalizeError(error) {
 }
 
 async function authenticatedRequest(path, options = {}) {
-    const stored = await ext.storage.local.get(AUTH_KEY);
-    const auth = stored[AUTH_KEY];
-    if (!auth?.token || !Number.isFinite(auth.expiresAt) || auth.expiresAt <= Date.now()) {
-        throw new Error('Iniciá sesión nuevamente para continuar.');
-    }
-
-    let response;
-    try {
-        response = await fetch(`${API_BASE}${path}`, {
-            method: options.method ?? 'GET',
-            headers: {
-                Authorization: `Bearer ${auth.token}`,
-                ...(options.body === undefined ? {} : {'Content-Type': 'application/json'})
-            },
-            credentials: 'omit',
-            ...(options.body === undefined ? {} : {body: JSON.stringify(options.body)})
-        });
-    } catch {
-        throw new Error('No se pudo conectar con el backend de MarketLens.');
-    }
-
+    let auth = await accessSession();
+    const send = async (session) => {
+        try {
+            return await fetch(`${API_BASE}${path}`, {
+                method: options.method ?? 'GET',
+                headers: {
+                    Authorization: `Bearer ${session.token}`,
+                    ...(options.body === undefined ? {} : {'Content-Type': 'application/json'})
+                },
+                credentials: 'omit',
+                ...(options.body === undefined ? {} : {body: JSON.stringify(options.body)})
+            });
+        } catch {
+            throw new Error('No se pudo conectar con el backend de MarketLens.');
+        }
+    };
+    let response = await send(auth);
     if (response.status === 401) {
-        await ext.storage.local.remove(AUTH_KEY);
-        throw new Error('Tu sesión expiró. Iniciá sesión nuevamente.');
+        // Una sola renovación y un único reintento después de 401.
+        // Si otra tarea ya renovó, aprovechar su token.
+        const now = (await ext.storage.local.get(AUTH_KEY))[AUTH_KEY];
+        auth = now?.token && now.token !== auth.token ? now : await accessSession(true);
+        response = await send(auth);
+    }
+    if (response.status === 401) {
+        throw new Error('El servidor rechazó la sesión. Iniciá sesión nuevamente.');
     }
 
     const result = await response.json().catch(() => null);
     if (!response.ok) {
         const raw = result?.message || result?.detail || result?.error;
-        const message = typeof raw === 'string' ? raw.slice(0, 350) : `Error HTTP ${response.status}`;
-        throw new Error(message);
+        const detail = typeof raw === 'string' ? raw.slice(0, 350) : 'Error de respuesta';
+        const method = options.method ?? 'GET';
+        throw new Error(`${method} ${path} → HTTP ${response.status}: ${detail}`);
     }
     return result;
 }
 
 function requireExtractedData(data) {
-    if (!data || !['MERCADO_LIBRE', 'FACEBOOK_MARKETPLACE'].includes(data.marketplace) ||
-        !data.externalId || !data.title || !data.price || !data.seller) {
+    // En el catálogo el MLA de la URL identifica al producto. Solo aceptar
+    // el item_id individual si el formulario de compra lo corroboró.
+    if (data?.marketplace === 'MERCADO_LIBRE' && typeof data.url === 'string') {
+        let catalog = false;
+        try {
+            catalog = /\/(?:[^/]+\/)?p\/MLA\d{6,}\/?$/i
+                .test(new URL(data.url).pathname);
+        } catch {
+            // La validación de URL del backend emitirá el error pertinente.
+        }
+        if (catalog && (!/^MLA[1-9]\d{5,}$/i.test(data.selectedOfferId ?? '')
+                || data.selectedOfferId !== data.externalId || !data.seller)) {
+            throw new Error('No se pudo confirmar la oferta elegida. Seleccioná una oferta con precio y vendedor identificados.');
+        }
+    }
+    if (!data || !['MERCADO_LIBRE', 'FACEBOOK_MARKETPLACE', 'TEMU'].includes(data.marketplace) ||
+        !data.externalId || !data.title || !data.price ||
+        (data.marketplace !== 'TEMU' && !data.seller)) {
         throw new Error('Faltan datos esenciales del anuncio (título, precio, vendedor o ID).');
     }
     return data;
+}
+
+// Mantener el identificador de publicación y la URL de catálogo, pero
+// no persistir parámetros publicitarios ni fragmentos de Mercado Libre.
+// Para Temu y Facebook la query puede determinar el producto o la variante.
+function canonicalImportUrl(data) {
+    if (data?.marketplace !== 'MERCADO_LIBRE' ||
+            typeof data.url !== 'string') return data?.url;
+    try {
+        const url = new URL(data.url);
+        const host = url.hostname.toLowerCase();
+        const isMlHost = ['mercadolibre.com.ar', 'mercadolibre.com',
+            'mercadolivre.com.br'].some(domain =>
+            host === domain || host.endsWith('.' + domain));
+        const identifiesPublication =
+            /\/up\/MLAU\d{6,}(?:\/|$)/i.test(url.pathname) ||
+            /\/(?:[^/]+\/)?p\/MLA\d{6,}\/?$/i.test(url.pathname) ||
+            /(?:^|\/)MLA-?\d{6,}(?=[\/-]|$)/i.test(url.pathname);
+        if (url.protocol === 'https:' && isMlHost && identifiesPublication) {
+            return url.origin + url.pathname;
+        }
+    } catch {
+        // Rechazar URLs inválidas en las verificaciones habituales.
+    }
+    return data.url;
 }
 
 function importPayload(data) {
@@ -66,10 +234,23 @@ function importPayload(data) {
         currency: data.currency,
         seller: data.seller,
         externalId: data.externalId,
+        selectedOfferId: data.selectedOfferId ?? null,
         description: data.description,
-        url: data.url,
+        url: canonicalImportUrl(data),
         sellerProfileUrl: data.sellerProfileUrl ?? null,
         sellerBadge: data.sellerBadge ?? null,
+        temuSellerRating: data.temuSellerRating ?? null,
+        temuSellerReviewCount: data.temuSellerReviewCount ?? null,
+        temuProductRating: data.temuProductRating ?? null,
+        temuProductReviewCount: data.temuProductReviewCount ?? null,
+        mlProductRating: data.mlProductRating ?? null,
+        mlProductReviewCount: data.mlProductReviewCount ?? null,
+        mlProductRatingUnavailable: data.mlProductRatingUnavailable === true ? true : null,
+        temuStoreTenureText: data.temuStoreTenureText ?? null,
+        temuProductSoldText: data.temuProductSoldText ?? null,
+        temuStoreSoldText: data.temuStoreSoldText ?? null,
+        temuStoreId: data.temuStoreId ?? null,
+        temuSellerSectionObserved: data.temuSellerSectionObserved ?? null,
         sellerSalesText: data.sellerSalesText ?? null,
         sellerReputationLevel: data.sellerReputationLevel ?? null,
         sellerId: data.sellerId ?? null,
@@ -82,6 +263,9 @@ function identityKey(data) {
 }
 
 async function lookupSavedPublication(data) {
+    // Reimportar observaciones recientes de ML y Temu aunque exista un
+    // mapeo local: la reputación y las opiniones pueden haber cambiado.
+    if (data.marketplace === 'TEMU' || data.marketplace === 'MERCADO_LIBRE') return null;
     const key = `marketlens:publication:${identityKey(data)}`;
     const cachedId = (await ext.storage.local.get(key))[key];
     if (!Number.isSafeInteger(cachedId) || cachedId <= 0) return null;
@@ -127,7 +311,7 @@ async function ensurePublication(data, update) {
         const reference = await authenticatedRequest(
             `/extension/imports/${imported.id}/reference`, {method: 'POST'}
         );
-        if (!['LISTING', 'USER_PRODUCT', 'CATALOG_PRODUCT'].includes(reference?.referenceType)) {
+        if (!['LISTING', 'USER_PRODUCT', 'CATALOG_PRODUCT', 'PRODUCT'].includes(reference?.referenceType)) {
             throw new Error('La API devolvió una referencia externa no reconocida.');
         }
         if (reference.referenceType === 'CATALOG_PRODUCT') {
@@ -200,9 +384,19 @@ async function analyze(pageKey, data) {
             const evaluation = await authenticatedRequest(
                 `/publications/${publicationId}/evaluations`, {method: 'POST'}
             );
+            // La ausencia del resumen no invalida la evaluación ya completada.
+            let communityReports = null;
+            try {
+                communityReports = await authenticatedRequest(
+                    `/publications/${publicationId}/reports/summary`
+                );
+            } catch {
+                // API del resumen no disponible: omitir el módulo de reportes.
+            }
             await writeAnalysisState(pageKey, {
                 status: 'success', publicationId, reused, sellerRefreshWarning,
                 evaluation: evaluation?.evaluation ?? evaluation,
+                communityReports,
                 message: 'Evaluación completada.'
             });
             return {ok: true, publicationId};
@@ -229,11 +423,37 @@ async function submitReport(data, reason, description) {
     const report = await authenticatedRequest(`/publications/${publicationId}/reports`, {
         method: 'POST', body: {reason, description}
     });
-    return {publicationId, reportId: report?.id ?? null};
+    let communityReports = null;
+    try {
+        communityReports = await authenticatedRequest(
+            `/publications/${publicationId}/reports/summary`
+        );
+    } catch {
+        // Reporte registrado. Un fallo de la consulta agregada no lo invalida.
+    }
+    return {publicationId, reportId: report?.id ?? null, communityReports};
 }
 
 ext.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || typeof message !== 'object') return false;
+    if (message.type === 'AUTH_LOGIN') {
+        loginPersistently(message.username, message.password)
+            .then(sendResponse)
+            .catch(error => sendResponse({ok: false, error: normalizeError(error)}));
+        return true;
+    }
+    if (message.type === 'AUTH_ACCESS') {
+        accessSession(message.force === true)
+            .then(session => sendResponse({ok: true, token: session.token}))
+            .catch(error => sendResponse({ok: false, error: normalizeError(error)}));
+        return true;
+    }
+    if (message.type === 'AUTH_LOGOUT') {
+        logoutPersistently()
+            .then(sendResponse)
+            .catch(error => sendResponse({ok: false, error: normalizeError(error)}));
+        return true;
+    }
     if (message.type === 'ANALYZE_PUBLICATION') {
         // Acknowledge immediately; work continues outside the popup lifetime.
         if (typeof message.pageKey !== 'string' || message.pageKey.length > 5000) {

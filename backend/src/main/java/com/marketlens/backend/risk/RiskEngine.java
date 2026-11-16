@@ -8,6 +8,12 @@ import com.marketlens.backend.entity.RiskLevel;
 import com.marketlens.backend.service.RiskCoverageCalculator;
 import com.marketlens.backend.service.SellerActivityEvidence;
 import com.marketlens.backend.service.PriceRiskScoring;
+import com.marketlens.backend.service.TemuSellerRiskScoring;
+import com.marketlens.backend.service.TemuProductReviewEvidence;
+import com.marketlens.backend.service.MercadoLibreProductReviewEvidence;
+import com.marketlens.backend.service.MercadoLibreSellerEvidence;
+import com.marketlens.backend.service.CommunityReportRiskScoring;
+import com.marketlens.backend.service.TemuCommercialEvidence;
 
 import org.springframework.stereotype.Component;
 
@@ -40,6 +46,16 @@ public class RiskEngine {
             Integer priceRiskPoints,
             BigDecimal referenceMedian,
             int referenceCount) {
+        return evaluate(publication, priceRiskPoints, referenceMedian, referenceCount, 0);
+    }
+
+    /** Los reportes comunitarios agregan señal sin modificar cobertura ni veredictos anteriores. */
+    public RiskEvaluation evaluate(
+            Publication publication,
+            Integer priceRiskPoints,
+            BigDecimal referenceMedian,
+            int referenceCount,
+            int uniqueRecentReporters) {
 
         RiskEvaluation evaluation = new RiskEvaluation();
 
@@ -72,6 +88,110 @@ public class RiskEngine {
         score += evaluatePriceAnomaly(
                 publication, evaluation, priceRiskPoints,
                 referenceMedian, referenceCount);
+
+        // Una única regla Temu evita duplicar señales de historial/valoración.
+        TemuSellerRiskScoring.Signal temuSignal =
+                TemuSellerRiskScoring.evaluate(publication, LocalDateTime.now());
+        if (temuSignal != null) {
+            addFactor(evaluation, temuSignal.code(),
+                    temuSignal.description(), temuSignal.points());
+            score += temuSignal.points();
+        }
+
+        // Opiniones observadas del PRODUCTO: independientes de la tienda
+        // y no interpretadas como ventas. Una puntuación buena no resta riesgo.
+        TemuProductReviewEvidence.Signal productSignal =
+                TemuProductReviewEvidence.evaluate(publication, LocalDateTime.now());
+        if (productSignal != null) {
+            addFactor(evaluation, productSignal.code(),
+                    productSignal.description(), productSignal.points());
+            score += productSignal.points();
+        }
+
+        // Opiniones del producto de Mercado Libre: penalizar por separado
+        // calificaciones desfavorables y muestras pequeñas, sin confundir
+        // reseñas del catálogo con la reputación de su vendedor.
+        for (MercadoLibreProductReviewEvidence.Signal mlSignal :
+                MercadoLibreProductReviewEvidence.evaluateSignals(publication, LocalDateTime.now())) {
+            addFactor(evaluation, mlSignal.code(), mlSignal.description(), mlSignal.points());
+            score += mlSignal.points();
+        }
+        // Reputación observada (sin OAuth): puntuar una sola vez si NO
+        // existe un nivel verificado. Nunca sumarla duplicada.
+        MercadoLibreSellerEvidence.Signal mlSellerSignal =
+                MercadoLibreSellerEvidence.evaluateObserved(publication, LocalDateTime.now());
+        if (mlSellerSignal != null) {
+            addFactor(evaluation, mlSellerSignal.code(),
+                    mlSellerSignal.description(), mlSellerSignal.points());
+            score += mlSellerSignal.points();
+        }
+
+        // Antigüedad aproximada y ventas mostradas de la TIENDA,
+        // independientes de las ventas observadas del PRODUCTO.
+        // Nunca interpretarlas como transacciones verificadas; no cambian la cobertura.
+        TemuCommercialEvidence.Signal tenureSignal =
+                TemuCommercialEvidence.evaluateStoreAge(publication, LocalDateTime.now());
+        if (tenureSignal != null) {
+            addFactor(evaluation, tenureSignal.code(),
+                    tenureSignal.description(), tenureSignal.points());
+            score += tenureSignal.points();
+        }
+        TemuCommercialEvidence.Signal storeSalesSignal =
+                TemuCommercialEvidence.evaluateStoreSales(publication, LocalDateTime.now());
+        if (storeSalesSignal != null) {
+            addFactor(evaluation, storeSalesSignal.code(),
+                    storeSalesSignal.description(), storeSalesSignal.points());
+            score += storeSalesSignal.points();
+        }
+        TemuCommercialEvidence.Signal productSalesSignal =
+                TemuCommercialEvidence.evaluateProductSales(publication, LocalDateTime.now());
+        // Si la TIENDA ya recibió una penalización por pocas ventas,
+        // no sumar otra por pocas ventas del producto actual.
+        if (productSalesSignal != null && storeSalesSignal != null
+                && storeSalesSignal.points() > 0 && productSalesSignal.points() > 0) {
+            productSalesSignal = new TemuCommercialEvidence.Signal(
+                    "TEMU_PRODUCT_SALES_OBSERVED",
+                    productSalesSignal.description()
+                    + " No se suma otra penalización por la actividad del mismo vendedor.",
+                    0);
+        }
+        if (productSalesSignal != null) {
+            addFactor(evaluation, productSalesSignal.code(),
+                    productSalesSignal.description(), productSalesSignal.points());
+            score += productSalesSignal.points();
+        }
+
+        // Valor observado junto al nombre de la tienda; no usar aggregateRating
+        // del PRODUCTO. El peso estadístico requiere más validación.
+        if (publication.getMarketplace() == Marketplace.TEMU
+                && publication.getSeller() != null
+                && publication.getTemuSellerRating() != null) {
+            addFactor(evaluation, "TEMU_SELLER_RATING_OBSERVED",
+                    "La tienda aparece con una calificación de "
+                    + publication.getTemuSellerRating().toPlainString()
+                    + "/5 en Temu. Es una señal observada, no una verificación de MarketLens.",
+                    0);
+        }
+
+        // Distintivo observado: dato contextual, NO reputación contrastada.
+        // No otorga cobertura adicional ni reduce automáticamente el puntaje.
+        if (publication.getMarketplace() == Marketplace.TEMU
+                && "TEMU_STAR_SELLER".equals(publication.getSellerBadge())) {
+            addFactor(evaluation, "TEMU_STAR_SELLER_OBSERVED",
+                    "La página de Temu mostraba la etiqueta Star Seller para la tienda. "
+                    + "MarketLens no ha verificado sus criterios ni que garantice una compra segura.",
+                    0);
+        }
+
+        // Reportes comunitarios: un solo factor, hasta +8 puntos, sin
+        // duplicar denuncias de un mismo usuario ni inferir fraude.
+        CommunityReportRiskScoring.Signal communitySignal =
+                CommunityReportRiskScoring.evaluate(uniqueRecentReporters);
+        if (communitySignal != null) {
+            addFactor(evaluation, communitySignal.code(),
+                    communitySignal.description(), communitySignal.points());
+            score += communitySignal.points();
+        }
 
         score = Math.min(score, 100);
 
@@ -117,7 +237,17 @@ public class RiskEngine {
                 return 15;
             }
 
-            // Niveles 3, 4 y 5: sin penalización por esta regla.
+            // El nivel 3 refleja una reputación intermedia: menor señal
+            // de riesgo que 1–2, pero no debería ser neutral.
+            if (reputationLevel == 3
+                    && publication.getMarketplace() == Marketplace.MERCADO_LIBRE) {
+                addFactor(evaluation, "MODERATE_SELLER_REPUTATION",
+                        "El vendedor presenta una reputación intermedia (3/5).",
+                        MercadoLibreSellerEvidence.INTERMEDIATE_REPUTATION_POINTS);
+                return MercadoLibreSellerEvidence.INTERMEDIATE_REPUTATION_POINTS;
+            }
+
+            // Niveles buenos 4 y 5: sin penalización.
             if (reputationLevel >= 3 && reputationLevel <= 5) {
                 return 0;
             }
@@ -226,7 +356,9 @@ public class RiskEngine {
 
         // Si hay reputación verificable, no calificar el historial como
         // "no verificable" por el mero hecho de que falte una cifra de ventas.
-        if (hasReputationLevel || hasLegacyReputation) {
+        if (hasReputationLevel || hasLegacyReputation
+                || MercadoLibreSellerEvidence.hasObservedReputation(
+                    publication, LocalDateTime.now())) {
             return 0;
         }
 
@@ -434,12 +566,54 @@ public class RiskEngine {
             return RiskLevel.INDETERMINATE;
         }
 
-        // Exigir al menos 2/3 de cobertura para emitir
+        // Exigir al menos 2/3 de la cobertura aplicable para emitir
         // una clasificación de riesgo bajo.
         if (availableFactors * 3 < totalFactors * 2) {
             return RiskLevel.INDETERMINATE;
         }
 
+        // Temu: la cobertura 3/3 es disponibilidad, no necesariamente calidad.
+        // Una reputación de tienda respaldada por ID y >=10 reseñas sigue
+        // permitiendo LOW con cobertura suficiente, como anteriormente.
+        // En cobertura COMPLETA, un puntaje 0 también puede clasificarse
+        // como LOW cuando tanto la tienda como el producto tienen señales
+        // positivas actuales (el producto requiere >=10 opiniones).
+        Publication publication = evaluation.getPublication();
+        // Las opiniones compartidas del catálogo no permiten calificar LOW
+        // cuando falta por completo evidencia del vendedor en Mercado Libre.
+        if (publication != null && publication.getMarketplace() == Marketplace.MERCADO_LIBRE
+                && !RiskCoverageCalculator.hasSellerEvidence(publication, LocalDateTime.now())) {
+            return RiskLevel.INDETERMINATE;
+        }
+        if (publication != null && publication.getMarketplace() == Marketplace.TEMU) {
+            LocalDateTime now = LocalDateTime.now();
+            if (!TemuSellerRiskScoring.hasSupportedReputation(publication, now)
+                    && !hasCompletePositiveTemuEvidence(publication, evaluation, score, now)) {
+                return RiskLevel.INDETERMINATE;
+            }
+        }
+
         return RiskLevel.LOW;
+    }
+
+    private boolean hasCompletePositiveTemuEvidence(
+            Publication publication,
+            RiskEvaluation evaluation,
+            int score,
+            LocalDateTime now) {
+        // Esta ruta NO habilita LOW para calificaciones sin muestra, poco
+        // favorables, observaciones vencidas o cobertura apenas parcial.
+        if (score != 0
+                || evaluation.getAvailableFactors() == null
+                || evaluation.getTotalFactors() == null
+                || !evaluation.getAvailableFactors().equals(evaluation.getTotalFactors())
+                || !TemuSellerRiskScoring.hasObservedReputation(publication, now)
+                || !TemuProductReviewEvidence.hasObservedEvidence(publication, now)) {
+            return false;
+        }
+
+        return publication.getTemuSellerRating().compareTo(new BigDecimal("4.0")) >= 0
+                && publication.getTemuProductRating().compareTo(new BigDecimal("4.0")) >= 0
+                && publication.getTemuProductReviewCount() >= 10;
     }
 }

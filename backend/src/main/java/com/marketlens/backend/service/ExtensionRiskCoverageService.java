@@ -52,28 +52,36 @@ public class ExtensionRiskCoverageService {
                 boolean hasReputation = reputationLevel != null &&
                                 reputationLevel >= 1 &&
                                 reputationLevel <= 5;
+                // La cobertura refleja DISPONIBILIDAD del dato, no el grado
+                // de confianza. El ID de tienda y la cantidad de valoraciones
+                // se utilizan por separado para medir su respaldo.
+                if ("TEMU".equals(imported.getMarketplace())
+                        && imported.getSellerName() != null
+                        && !imported.getSellerName().isBlank()
+                        && Boolean.TRUE.equals(imported.getTemuSellerSectionObserved())
+                        && TemuSellerRiskScoring.isValidSellerRating(imported.getTemuSellerRating())) {
+                    hasReputation = true;
+                }
 
-                // 3. Antigüedad de la cuenta.
-                // Para Facebook utilizamos el año público de incorporación.
-                // Este dato indica disponibilidad de información,
-                // no una antigüedad exacta en días.
-                Integer facebookJoinYear = imported.getFacebookJoinYear();
-
-                boolean hasAccountAge = facebookJoinYear != null;
-
-                List<RiskCoverageFactorResponse> factors = List.of(
-                                new RiskCoverageFactorResponse(
-                                                "DESCRIPTION",
-                                                "Descripción de la publicación",
-                                                hasDescription),
-                                new RiskCoverageFactorResponse(
-                                                "SELLER_REPUTATION",
-                                                "Reputación del vendedor",
-                                                hasReputation),
-                                new RiskCoverageFactorResponse(
-                                                "SELLER_ACCOUNT_AGE",
-                                                "Antigüedad de la cuenta",
-                                                hasAccountAge));
+                // La antigüedad deja de ser una dimensión obligatoria.
+                // Sólo Temu dispone por ahora de extracción de opiniones del producto.
+                List<RiskCoverageFactorResponse> factors = new java.util.ArrayList<>();
+                factors.add(new RiskCoverageFactorResponse(
+                        "DESCRIPTION", "Información del producto", hasDescription));
+                factors.add(new RiskCoverageFactorResponse(
+                        "SELLER_REPUTATION", "Reputación del vendedor", hasReputation));
+                if ("TEMU".equals(imported.getMarketplace())
+                        || "MERCADO_LIBRE".equals(imported.getMarketplace())) {
+                        boolean reviews = "TEMU".equals(imported.getMarketplace())
+                                ? TemuProductReviewEvidence.hasMetrics(
+                                    imported.getTemuProductRating(),
+                                    imported.getTemuProductReviewCount())
+                                : MercadoLibreProductReviewEvidence.hasMetrics(
+                                    imported.getMlProductRating(),
+                                    imported.getMlProductReviewCount());
+                        factors.add(new RiskCoverageFactorResponse(
+                                "PRODUCT_REVIEWS", "Calificación y opiniones del producto", reviews));
+                }
 
                 int availableFactors = (int) factors.stream()
                                 .filter(RiskCoverageFactorResponse::available)

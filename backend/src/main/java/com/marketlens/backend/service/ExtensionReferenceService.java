@@ -108,8 +108,13 @@ public class ExtensionReferenceService {
                     "Identificador externo inválido.");
         }
 
-        // 2. Validaciones específicas de Facebook Marketplace.
-        if ("FACEBOOK_MARKETPLACE".equals(marketplace)) {
+        // Un goods_id identifica un producto Temu, no a su vendedor.
+        if ("TEMU".equals(marketplace)) {
+            if (!"PRODUCT".equals(type) || !id.matches("\\d{6,30}")) {
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                        "Tipo o identificador Temu inválido.");
+            }
+        } else if ("FACEBOOK_MARKETPLACE".equals(marketplace)) {
 
             // Facebook utiliza referencias LISTING con ID numérico.
             if (!"LISTING".equals(type)) {

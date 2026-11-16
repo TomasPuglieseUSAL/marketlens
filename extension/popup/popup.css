@@ -13,9 +13,11 @@
   --accent-soft: #fff0e3;
   --accent-line: #ffc297;
   --accent-on: #ffffff;
+  --accent-gradient-top: #f98228;
+  --accent-gradient-bottom: #b94300;
 
   /* Fondo editable independientemente del resto de la interfaz */
-  --app-background: linear-gradient(148deg, #ffffff 0%, #f6f7f8 43%, #e8ebef 100%);
+  --app-background: linear-gradient(to bottom, #ffffff 0%, #f6f7f8 43%, #e8ebef 100%);
   --grid-line: rgba(91, 104, 119, .055);
   --background-glow: rgba(255, 136, 54, .095);
 
@@ -43,6 +45,8 @@
   --error: #a22d37;
   --error-bg: #fff1f1;
   --error-border: #f1c7c8;
+  --report-accent: #a1363d;
+  --report-surface: #fff4f4;
 
   --shadow-card: 0 3px 14px rgba(29, 36, 43, .055);
   --shadow-action: 0 5px 15px rgba(185, 67, 0, .15);
@@ -57,7 +61,9 @@
   --accent-soft: #352419;
   --accent-line: #875035;
   --accent-on: #1e1713;
-  --app-background: linear-gradient(148deg, #1c2026 0%, #141820 55%, #0c1016 100%);
+  --accent-gradient-top: #ffad70;
+  --accent-gradient-bottom: #ec7422;
+  --app-background: linear-gradient(to bottom, #1c2026 0%, #141820 55%, #0c1016 100%);
   --grid-line: rgba(255, 255, 255, .035);
   --background-glow: rgba(255, 123, 40, .065);
   --surface: rgba(30, 35, 43, .96);
@@ -79,6 +85,8 @@
   --error: #ff9ca4;
   --error-bg: #422329;
   --error-border: #74434b;
+  --report-accent: #ff9ca4;
+  --report-surface: #38262c;
   --shadow-card: 0 4px 16px rgba(0, 0, 0, .19);
   --shadow-action: 0 5px 15px rgba(0, 0, 0, .2);
   --focus-ring: rgba(255, 129, 46, .4);
@@ -90,10 +98,16 @@ html { width: 374px; min-width: 374px; min-height: 100%; }
 body {
   width: 374px;
   min-width: 374px;
-  max-height: 620px;
+  /* El navegador controla el marco del popup y no garantiza que su
+     redimensionamiento sea animable. Altura estable entre todas las pantallas. */
+  height: 540px;
+  max-height: 540px;
   margin: 0;
   overflow-x: hidden;
-  overflow-y: auto;
+  /* Scrollbar siempre presente para que el área útil y el header no
+     cambien de ancho al abrir o cerrar el reporte. */
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
   color: var(--text-primary);
   font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
   font-size: 13px;
@@ -112,23 +126,35 @@ body {
   background-attachment: fixed, local, local, fixed;
 }
 
-.popup { padding: 17px 15px 13px; }
+.popup {
+  min-height: 540px;
+  padding: 17px 15px 13px;
+  display: flex;
+  flex-direction: column;
+  /* El contenido puede superar la altura estable y desplazarse en el body.
+     No recortar el área sticky ni introducir un segundo scroll. */
+}
 
-/* Marca: motivo geometrico y acento tecnico */
+/* Encabezado persistente: queda dentro del mismo scroll de la extensión
+   sin ocultar el inicio del contenido ni perderse al bajar. */
 .brand {
   display: flex;
   align-items: center;
   gap: 11px;
-  margin-bottom: 15px;
-  padding-bottom: 13px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin: -17px -15px 15px;
+  padding: 17px 15px 13px;
   border-bottom: 1px solid var(--surface-border-strong);
-  position: relative;
+  background: var(--surface);
+  box-shadow: 0 3px 12px rgba(29, 36, 43, .06);
 }
 .brand::after {
   content: "";
   position: absolute;
   bottom: -2px;
-  left: 0;
+  left: 15px;
   height: 3px;
   width: 65px;
   background: var(--accent);
@@ -140,7 +166,7 @@ body {
   display: grid;
   place-items: center;
   color: var(--accent-on);
-  background: linear-gradient(140deg, var(--accent), var(--accent-strong));
+  background: linear-gradient(to bottom, var(--accent-gradient-top), var(--accent-gradient-bottom));
   clip-path: polygon(0 0, 84% 0, 100% 16%, 100% 100%, 16% 100%, 0 84%);
   font-size: 25px;
   line-height: 1;
@@ -239,7 +265,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   width: 100%;
   margin-top: 12px;
   border-radius: 7px;
-  background: linear-gradient(110deg, var(--accent-strong) 0%, var(--accent) 100%);
+  background: linear-gradient(to bottom, var(--accent-gradient-top) 0%, var(--accent-gradient-bottom) 100%);
   font-size: 15px;
   letter-spacing: .1px;
   box-shadow: var(--shadow-action);
@@ -274,6 +300,25 @@ form button { margin-top: 11px; }
   padding: 13px 6px;
 }
 .loading-state strong { font-size: 14px; }
+
+/* Pantalla de carga: centrar el conjunto dentro del área útil debajo
+   del encabezado fijo, sin aumentar la altura exterior de la extensión. */
+.popup.is-analyzing #authenticated-content {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+.popup.is-analyzing .analysis-card {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+.popup.is-analyzing #loading-section:not([hidden]) {
+  flex: 1 1 auto;
+  min-height: 230px;
+  justify-content: center;
+  padding-block: 20px;
+}
 .spinner {
   display: inline-block;
   width: 32px;
@@ -284,7 +329,59 @@ form button { margin-top: 11px; }
   animation: ml-spin .75s linear infinite;
 }
 @keyframes ml-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+.analysis-loading-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  margin-bottom: 4px;
+}
+.analysis-loading-mark .spinner {
+  position: absolute;
+  width: 52px;
+  height: 52px;
+  border-width: 3px;
+  animation-duration: 1s;
+}
+.analysis-loading-center {
+  color: var(--accent-strong);
+  font-size: 25px;
+  line-height: 1;
+  animation: ml-loading-breathe 1.2s ease-in-out infinite;
+}
+.analysis-loading-track {
+  width: min(200px, 80%);
+  height: 4px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: var(--surface-border);
+  margin-top: 5px;
+}
+.analysis-loading-track > span {
+  display: block;
+  width: 32%;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+  animation: ml-loading-slide 1.2s ease-in-out infinite alternate;
+}
+.loading-note { font-size: 11px; }
+@keyframes ml-loading-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(325%); }
+}
+@keyframes ml-loading-breathe {
+  0%, 100% { opacity: .55; transform: scale(.9); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner, .analysis-loading-center, .analysis-loading-track > span {
+    animation: none;
+  }
+  .analysis-loading-center { opacity: 1; transform: none; }
+  .analysis-loading-track > span { width: 100%; transform: none; }
+}
 
 /* Resultado: la severidad se comunica por color propio, no por el naranja de marca */
 .result-card, .correction-card, .error-card {
@@ -294,7 +391,11 @@ form button { margin-top: 11px; }
   border-radius: 8px;
   background: var(--surface-raised);
 }
-.result-card { border-top: 2px solid var(--surface-border-strong); }
+.result-card {
+  border-top: 2px solid var(--surface-border-strong);
+  /* Mantener el título del resultado por debajo del encabezado fijo al enfocar. */
+  scroll-margin-top: 86px;
+}
 .result-header { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 11px; }
 .result-header h3 { font-size: 16px; }
 .result-header p { margin: 4px 0 0; font-size: 11.5px; line-height: 1.45; }
@@ -321,8 +422,57 @@ form button { margin-top: 11px; }
 .stat { display: flex; flex-direction: column; gap: 4px; padding: 10px 11px; background: var(--surface-muted); border: 1px solid var(--surface-border); border-radius: 6px; }
 .stat span { color: var(--text-secondary); font-size: 11px; }
 .stat strong { font-size: 21px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.factor-list { margin: 10px 0; padding-left: 18px; font-size: 11.5px; color: var(--text-secondary); }
-.factor-list li { margin: 5px 0; overflow-wrap: anywhere; }
+.factor-list {
+  margin: 12px 0;
+  padding-left: 19px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+.factor-list li {
+  margin: 9px 0;
+  overflow-wrap: anywhere;
+}
+.factor-list li::marker { color: var(--accent-strong); }
+
+/* Resumen agregado, visible al finalizar el análisis. No presenta
+   denuncias no verificadas como hechos confirmados. */
+.community-report-summary {
+  margin: 13px 0;
+  padding: 12px;
+  border: 1px solid var(--surface-border-strong);
+  border-left: 3px solid var(--report-accent);
+  border-radius: 8px;
+  background: var(--report-surface);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.community-report-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.community-report-heading strong { color: var(--text-primary); }
+.community-report-heading span { color: var(--text-secondary); font-weight: 700; }
+.community-report-summary p { margin: 7px 0; overflow-wrap: anywhere; }
+.community-report-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  list-style: none;
+  gap: 5px;
+  padding: 0;
+  margin: 8px 0;
+}
+.community-report-reasons li {
+  padding: 4px 7px;
+  border: 1px solid var(--surface-border-strong);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  font-size: 10.5px;
+}
+#community-report-disclaimer { margin-bottom: 0; }
 .result-card button { margin-top: 8px; }
 
 /* Errores y correcciones manuales */
@@ -331,10 +481,13 @@ form button { margin-top: 11px; }
 .error-card .outline { width: 100%; }
 .correction-card { background: var(--surface-muted); }
 .correction-card h3 { margin-bottom: 6px; }
+.correction-actions { display: flex; gap: 8px; margin-top: 11px; }
+.correction-actions > button { flex: 1; min-width: 0; }
+#correction-status:not(:empty) { color: var(--error); margin-top: 10px; }
 #fb-join-row { width: 100%; }
 
 footer {
-  margin-top: 5px;
+  margin-top: auto;
   padding: 7px 0 0;
   color: var(--text-tertiary);
   font-size: 10px;
@@ -374,4 +527,216 @@ footer {
   font-size: 20px;
   font-weight: 500;
   line-height: 1;
+}
+
+/* Despedida visual antes de sustituir la sesión por el formulario de login.
+   Las credenciales se eliminan inmediatamente; solamente espera la interfaz. */
+@keyframes ml-auth-leave {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-8px); }
+}
+.auth-exiting {
+  pointer-events: none;
+  animation: ml-auth-leave .18s ease-in both !important;
+}
+#login-form:not([hidden]) {
+  animation: ml-panel-enter .22s ease-out both;
+}
+
+/* Transiciones breves al entrar en un estado. La salida es inmediata para
+   evitar paneles superpuestos o acciones sobre un formulario anterior. */
+@keyframes ml-panel-enter {
+  from { opacity: 0; transform: translateY(7px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+#auth-card:not([hidden]),
+#analysis-overview:not([hidden]),
+#temu-price-panel:not([hidden]),
+#loading-section:not([hidden]),
+#result-section:not([hidden]),
+#error-section:not([hidden]),
+#facebook-correction:not([hidden]),
+#report-details:not([hidden]) {
+  animation: ml-panel-enter .22s ease-out both;
+}
+
+/* El reporte solo ocupa espacio después de abrirlo: acción discretamente roja. */
+.report-section { margin-top: 12px; }
+.report-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 13px;
+  border-radius: 9px;
+  border: 1px solid var(--error-border);
+  background: var(--report-surface);
+  color: var(--report-accent);
+  box-shadow: var(--shadow-card);
+  font-weight: 750;
+  text-align: left;
+}
+.report-toggle:hover:not(:disabled),
+.report-toggle[aria-expanded="true"] {
+  border-color: var(--report-accent);
+  background: var(--error-bg);
+}
+.report-toggle-icon { font-size: 19px; line-height: 1; }
+.report-toggle-label { flex: 1; font-size: 12.5px; }
+.report-chevron {
+  display: block;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform-origin: center;
+  transition: transform .18s ease;
+}
+.report-toggle[aria-expanded="true"] .report-chevron { transform: rotate(180deg); }
+.report-card {
+  margin: 7px 0 0;
+  border-color: var(--error-border);
+  scroll-margin-top: 90px;
+}
+/* Animación de salida del reporte: se mantiene visible durante el regreso
+   del scroll y luego se contrae mientras pierde opacidad. */
+@keyframes ml-report-leave {
+  from {
+    opacity: 1;
+    max-height: var(--report-open-height, 700px);
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: 0;
+    border-top-width: 0;
+    border-bottom-width: 0;
+    transform: translateY(-7px);
+  }
+}
+#report-details.is-closing {
+  overflow: hidden;
+  pointer-events: none;
+  animation: ml-report-leave .3s cubic-bezier(.4, 0, .2, 1) forwards !important;
+}
+.report-card h2 { font-size: 13px; }
+
+/* Confirmación fuera del formulario, visible luego del cierre animado.
+   Colores semánticos adaptados a los modos claro y oscuro. */
+.report-success {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 12px;
+  margin: 8px 0 4px;
+  border: 1px solid var(--risk-low);
+  border-radius: 8px;
+  color: var(--risk-low);
+  background: var(--risk-low-bg);
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  animation: ml-report-success-enter .34s cubic-bezier(.2, .7, .2, 1) both;
+}
+.report-success-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--risk-low);
+  color: var(--risk-low-bg);
+  font-weight: 800;
+}
+@keyframes ml-report-success-enter {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Confirmación de precios en un paso independiente, anterior al formulario. */
+.temu-price-panel {
+  margin: 12px 0 0;
+  padding: 15px 13px;
+  border: 1.5px solid var(--accent-line);
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+.step-eyebrow {
+  margin: 0 0 5px;
+  color: var(--accent-strong);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+}
+.temu-price-panel h3 {
+  color: var(--text-primary);
+  font-size: 17px;
+  line-height: 1.25;
+  font-weight: 800;
+}
+.price-guidance {
+  margin: 10px 0;
+  color: var(--text-primary);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.price-guidance strong { font-weight: 800; }
+.price-guidance-secondary { font-size: 12px; color: var(--text-secondary); }
+.temu-price-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0 14px;
+}
+.temu-price-option {
+  margin: 0;
+  min-height: 48px;
+  padding: 9px 7px;
+  border: 1px solid var(--surface-border-strong);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.temu-price-option:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--surface-muted);
+}
+.temu-price-option[aria-pressed="true"] {
+  border-color: var(--accent-strong);
+  color: var(--accent-strong);
+  background: var(--surface-raised);
+  box-shadow: inset 0 0 0 1px var(--accent-strong);
+}
+.temu-price-panel label { font-size: 12px; }
+#temu-confirm-price { font-size: 15px; font-weight: 700; }
+.form-error:not(:empty) { margin: 9px 0; color: var(--error); font-weight: 700; }
+.form-error:empty { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  #auth-card:not([hidden]),
+  #analysis-overview:not([hidden]),
+  #temu-price-panel:not([hidden]),
+  #loading-section:not([hidden]),
+  #result-section:not([hidden]),
+  #error-section:not([hidden]),
+  #facebook-correction:not([hidden]),
+  #report-details:not([hidden]) { animation: none; }
+  .report-chevron { transition: none; }
+  .report-success:not([hidden]) { animation: none; }
+  #report-details.is-closing { animation: none !important; }
+  .auth-exiting, #login-form:not([hidden]) { animation: none !important; }
 }
