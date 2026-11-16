@@ -201,6 +201,31 @@ function requireExtractedData(data) {
     return data;
 }
 
+// Mantener el identificador de publicación y la URL de catálogo, pero
+// no persistir parámetros publicitarios ni fragmentos de Mercado Libre.
+// Para Temu y Facebook la query puede determinar el producto o la variante.
+function canonicalImportUrl(data) {
+    if (data?.marketplace !== 'MERCADO_LIBRE' ||
+            typeof data.url !== 'string') return data?.url;
+    try {
+        const url = new URL(data.url);
+        const host = url.hostname.toLowerCase();
+        const isMlHost = ['mercadolibre.com.ar', 'mercadolibre.com',
+            'mercadolivre.com.br'].some(domain =>
+            host === domain || host.endsWith('.' + domain));
+        const identifiesPublication =
+            /\/up\/MLAU\d{6,}(?:\/|$)/i.test(url.pathname) ||
+            /\/(?:[^/]+\/)?p\/MLA\d{6,}\/??$/i.test(url.pathname) ||
+            /(?:^|\/)MLA-?\d{6,}(?=[\/-]|$)/i.test(url.pathname);
+        if (url.protocol === 'https:' && isMlHost && identifiesPublication) {
+            return url.origin + url.pathname;
+        }
+    } catch {
+        // Rechazar URLs inválidas en las verificaciones habituales.
+    }
+    return data.url;
+}
+
 function importPayload(data) {
     return {
         marketplace: data.marketplace,
@@ -211,7 +236,7 @@ function importPayload(data) {
         externalId: data.externalId,
         selectedOfferId: data.selectedOfferId ?? null,
         description: data.description,
-        url: data.url,
+        url: canonicalImportUrl(data),
         sellerProfileUrl: data.sellerProfileUrl ?? null,
         sellerBadge: data.sellerBadge ?? null,
         temuSellerRating: data.temuSellerRating ?? null,
