@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 
 import {
   evaluatePublication,
@@ -48,10 +48,86 @@ function visibleFactorDescription(factor: RiskFactor): string {
   return factor.description
 }
 
+
+function EvaluationCard({
+  evaluation,
+  latest,
+}: {
+  evaluation: RiskEvaluation
+  latest: boolean
+}) {
+  return (
+            <article
+              key={evaluation.id}
+              className="detail-card evaluation-card"
+            >
+              <div className="evaluation-header">
+                <div>
+                  <h4>
+                    {latest
+                      ? 'Evaluación más reciente'
+                      : `Evaluación #${evaluation.id}`}
+                  </h4>
+
+                  <small>
+                    {new Date(evaluation.evaluatedAt).toLocaleString()}
+                  </small>
+                </div>
+
+                <span
+                  className={`risk-badge risk-${evaluation.level.toLowerCase()}`}
+                >
+                  {riskLabels[evaluation.level]}
+                </span>
+              </div>
+
+              <div className="risk-score">
+                <strong>{evaluation.score}</strong>
+                <span>/ 100</span>
+              </div>
+
+              {evaluation.totalFactors != null && evaluation.availableFactors != null && (
+                <p>
+                  <strong>Cobertura: {evaluation.availableFactors}/{evaluation.totalFactors}</strong>
+                  {' '}— Datos disponibles, no garantía de seguridad.
+                </p>
+              )}
+              {evaluation.coverageFactors && (
+                <ul className="risk-factors">
+                  {evaluation.coverageFactors.map((factor) => (
+                    <li key={factor.code}>
+                      <span>{factor.available ? '✓' : '—'} {factor.name}</span>
+                      <small>{factor.available ? 'Disponible' : 'Sin información suficiente'}</small>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <h4>Factores del análisis</h4>
+
+              {evaluation.factors.length === 0 ? (
+                <p>No se detectaron factores de riesgo.</p>
+              ) : (
+                <ul className="risk-factors">
+                  {evaluation.factors.map((factor) => (
+                    <li key={factor.id}>
+                      <strong>{visibleFactorDescription(factor)}</strong>
+                      {factor.scoreContribution > 0
+                        ? <span>+{factor.scoreContribution}</span>
+                        : <small>Informativo</small>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
+  )
+}
+
 export default function RiskEvaluationPanel({
   token,
   publicationId,
 }: RiskEvaluationPanelProps) {
+  const historyId = useId()
   const [evaluations, setEvaluations] = useState<RiskEvaluation[]>([])
   const [showHistory, setShowHistory] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -133,9 +209,12 @@ export default function RiskEvaluationPanel({
         </button>
 
         <button
+          type="button"
           onClick={handleLoadHistory}
           disabled={loading}
           className="secondary-button"
+          aria-expanded={showHistory}
+          aria-controls={historyId}
         >
           {showHistory ? 'Ocultar historial' : 'Consultar historial'}
         </button>
@@ -145,78 +224,34 @@ export default function RiskEvaluationPanel({
       {error && <p className="error">{error}</p>}
 
       {evaluations.length > 0 && (
-        <div
-          className={`evaluation-history${showHistory ? ' evaluation-history--scrollable' : ''}`}
-          role={showHistory ? 'region' : undefined}
-          aria-label={showHistory ? 'Historial de evaluaciones' : undefined}
-          tabIndex={showHistory ? 0 : undefined}
-        >
-          {(showHistory ? evaluations : evaluations.slice(0, 1)).map((evaluation, index) => (
-            <article
-              key={evaluation.id}
-              className="detail-card evaluation-card"
-            >
-              <div className="evaluation-header">
-                <div>
-                  <h4>
-                    {index === 0
-                      ? 'Evaluación más reciente'
-                      : `Evaluación #${evaluation.id}`}
-                  </h4>
+        <>
+          <div className="evaluation-history evaluation-latest">
+            <EvaluationCard evaluation={evaluations[0]} latest />
+          </div>
 
-                  <small>
-                    {new Date(evaluation.evaluatedAt).toLocaleString()}
-                  </small>
-                </div>
-
-                <span
-                  className={`risk-badge risk-${evaluation.level.toLowerCase()}`}
-                >
-                  {riskLabels[evaluation.level]}
-                </span>
+          <div
+            id={historyId}
+            className={`history-reveal${showHistory ? ' is-open' : ''}`}
+            aria-hidden={!showHistory}
+            inert={!showHistory}
+          >
+            <div className="history-reveal-inner">
+              <div
+                className="evaluation-history evaluation-history--scrollable"
+                role="region"
+                aria-label="Evaluaciones anteriores"
+                tabIndex={showHistory ? 0 : -1}
+              >
+                <h4>Evaluaciones anteriores ({Math.max(0, evaluations.length - 1)})</h4>
+                {evaluations.length > 1
+                  ? evaluations.slice(1).map((evaluation) => (
+                    <EvaluationCard key={evaluation.id} evaluation={evaluation} latest={false} />
+                  ))
+                  : <p>Aún no hay evaluaciones anteriores.</p>}
               </div>
-
-              <div className="risk-score">
-                <strong>{evaluation.score}</strong>
-                <span>/ 100</span>
-              </div>
-
-              {evaluation.totalFactors != null && evaluation.availableFactors != null && (
-                <p>
-                  <strong>Cobertura: {evaluation.availableFactors}/{evaluation.totalFactors}</strong>
-                  {' '}— Datos disponibles, no garantía de seguridad.
-                </p>
-              )}
-              {evaluation.coverageFactors && (
-                <ul className="risk-factors">
-                  {evaluation.coverageFactors.map((factor) => (
-                    <li key={factor.code}>
-                      <span>{factor.available ? '✓' : '—'} {factor.name}</span>
-                      <small>{factor.available ? 'Disponible' : 'Sin información suficiente'}</small>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              <h4>Factores del análisis</h4>
-
-              {evaluation.factors.length === 0 ? (
-                <p>No se detectaron factores de riesgo.</p>
-              ) : (
-                <ul className="risk-factors">
-                  {evaluation.factors.map((factor) => (
-                    <li key={factor.id}>
-                      <strong>{visibleFactorDescription(factor)}</strong>
-                      {factor.scoreContribution > 0
-                        ? <span>+{factor.scoreContribution}</span>
-                        : <small>Informativo</small>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </article>
-          ))}
-        </div>
+            </div>
+          </div>
+        </>
       )}
     </section>
   )
