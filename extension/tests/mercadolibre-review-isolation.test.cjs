@@ -268,3 +268,138 @@ test('Micron desde resultado patrocinado conserva el MLAU pero quita los tracker
     assert.equal(result.url, canonical);
     assert.equal(result.externalId, 'MLAU5694773445');
 });
+
+const refurbUrl = 'https://www.mercadolibre.com.ar/samsung-galaxy-a33-5g-128-gb-awesome-black-6-gb-ram-excelente-reacondicionado/p/MLA2000136014';
+
+// Estructura específica del HTML del Galaxy A33: el precio principal está
+// fuera del formulario, y las otras dos calidades son otras fichas de catálogo.
+function extractRefurbishedCatalog({
+    selectedCatalogId = 'MLA2000136014',
+    selectedGradeCount = 1,
+    checkoutIds = ['MLA2270730739'],
+    mainPriceCount = 1,
+    parentUrl = '/p/MLA2000136014'
+} = {}) {
+    const price = {
+        getAttribute: name => name === 'aria-label' ? '319999 pesos' : null,
+        querySelector(selector) {
+            if (selector.includes('meta[itemprop="price"]')) {
+                return {getAttribute: () => '319999'};
+            }
+            if (selector.includes('andes-money-amount__fraction')) {
+                return {textContent: '319.999'};
+            }
+            return null;
+        },
+        closest: () => null
+    };
+    const secondaryPrice = {
+        querySelector: () => null,
+        closest: () => null
+    };
+    const grades = [
+        ...Array.from({length: selectedGradeCount}, () => ({
+            classList: {contains: value => value.endsWith('--SELECTED')},
+            getAttribute: name => name === 'href'
+                ? '/samsung-galaxy-a33-5g-128-gb-awesome-black-6-gb-ram-excelente-reacondicionado/p/' +
+                    selectedCatalogId + '?picker=true'
+                : null
+        })),
+        {
+            classList: {contains: () => false},
+            getAttribute: () => '/samsung-galaxy-a33-bueno/p/MLA2000136012'
+        },
+        {
+            classList: {contains: () => false},
+            getAttribute: () => '/samsung-galaxy-a33-aceptable/p/MLA2000136016'
+        }
+    ];
+    const form = {
+        querySelector(selector) {
+            if (selector.includes('name="parent_url"')) return {value: parentUrl};
+            return null;
+        },
+        querySelectorAll(selector) {
+            if (selector.includes('offer-list-item')) return [];
+            if (selector.includes('name="item_id"')) {
+                return checkoutIds.map(value => ({value}));
+            }
+            if (selector.includes('.ui-pdp-seller-summary__link')) {
+                return [{textContent: 'OUTLETIT383'}];
+            }
+            return [];
+        }
+    };
+    const heading = {textContent:
+        'Samsung Galaxy A33 5g 128 Gb Awesome Black 6 Gb Ram - Excelente (Reacondicionado)'};
+    const document = {
+        readyState: 'complete',
+        body: {innerText: 'Vendido por OUTLETIT383'},
+        querySelector(selector) {
+            if (selector === '#buybox-form') return form;
+            if (selector === 'h1.ui-pdp-title') return heading;
+            if (selector.includes('.ui-pdp-price__second-line')) return price;
+            return null;
+        },
+        querySelectorAll(selector) {
+            if (selector === '.ui-pdp-outside_variations__thumbnails__item') {
+                return grades;
+            }
+            if (selector === '.ui-pdp-price__second-line .andes-money-amount') {
+                return [
+                    ...Array.from({length: mainPriceCount}, () => price),
+                    secondaryPrice
+                ];
+            }
+            if (selector === 'script[type="application/ld+json"]') {
+                return [{textContent: JSON.stringify({
+                    '@type': 'Product',
+                    name: heading.textContent,
+                    url: refurbUrl,
+                    productID: 'MLA2000136014',
+                    itemCondition: 'https://schema.org/RefurbishedCondition',
+                    offers: {price: 319999, priceCurrency: 'ARS'},
+                    aggregateRating: {ratingValue: 4.4, reviewCount: 36}
+                })}];
+            }
+            return [];
+        }
+    };
+    return compile({location: new URL(refurbUrl)}, document, URL)();
+}
+
+test('Galaxy A33 Excelente: importa única oferta aunque precio esté fuera del buybox', () => {
+    const result = extractRefurbishedCatalog();
+    assert.equal(result.found, true);
+    assert.equal(result.externalId, 'MLA2270730739');
+    assert.equal(result.selectedOfferId, 'MLA2270730739');
+    assert.equal(result.seller, 'OUTLETIT383');
+    assert.equal(result.price, '319.999');
+    assert.equal(result.currency, 'ARS');
+    assert.equal(result.url, refurbUrl);
+    assert.equal(result.mlProductRating, 4.4);
+    assert.equal(result.mlProductReviewCount, 36);
+});
+
+test('Galaxy A33: no importa si está seleccionada una variante distinta', () => {
+    const wrongVariant = extractRefurbishedCatalog({selectedCatalogId: 'MLA2000136012'});
+    assert.equal(wrongVariant.found, false);
+});
+
+test('Galaxy A33: selector de estado sin elección única es ambiguo', () => {
+    assert.equal(extractRefurbishedCatalog({selectedGradeCount: 0}).found, false);
+    assert.equal(extractRefurbishedCatalog({selectedGradeCount: 2}).found, false);
+});
+
+test('Galaxy A33: dos precios principales o dos item_id no son corroboración', () => {
+    assert.equal(extractRefurbishedCatalog({mainPriceCount: 2}).found, false);
+    assert.equal(extractRefurbishedCatalog({
+        checkoutIds: ['MLA2270730739', 'MLA2270730740']
+    }).found, false);
+});
+
+test('Galaxy A33: se rechaza parent_url de otra ficha de catálogo', () => {
+    assert.equal(extractRefurbishedCatalog({
+        parentUrl: '/p/MLA2000136016'
+    }).found, false);
+});
