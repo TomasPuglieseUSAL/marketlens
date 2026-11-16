@@ -120,4 +120,99 @@ class MercadoLibreProductReviewEvidenceTest {
         assertTrue(preview.factors().stream().anyMatch(f ->
                 "PRODUCT_REVIEWS".equals(f.code()) && f.available()));
     }
+
+    private Publication withProductReviews(String rating, Integer reviews, int daysOld) {
+        Publication publication = listing();
+        publication.setMlProductRating(rating == null ? null : new BigDecimal(rating));
+        publication.setMlProductReviewCount(reviews);
+        publication.setMlProductObservedAt(LocalDateTime.now().minusDays(daysOld));
+        return publication;
+    }
+
+    private void assertProductFactor(RiskEvaluation result, String code, int expectedPoints) {
+        assertTrue(result.getFactors().stream().anyMatch(f ->
+                code.equals(f.getCode()) && f.getScoreContribution() == expectedPoints),
+                "Se esperaba el factor " + code + " con +" + expectedPoints);
+    }
+
+    @Test void fiveStarsAndTwoOpinionsOnlyAddFourPointsForSmallSample() {
+        Publication publication = withProductReviews("5.0", 2, 1);
+        RiskEvaluation result = new RiskEngine(new RiskCoverageCalculator()).evaluate(publication);
+        assertEquals(4, result.getScore());
+        assertEquals(2, result.getAvailableFactors());
+        assertEquals(3, result.getTotalFactors());
+        assertProductFactor(result, "ML_PRODUCT_REVIEWS_OBSERVED", 0);
+        assertProductFactor(result, "ML_FEW_PRODUCT_REVIEWS", 4);
+        assertEquals(2, result.getFactors().size());
+    }
+
+    @Test void countThresholdsDoNotInventReviewsOrPenalizeLargerSamples() {
+        for (int[] example : new int[][] {{1, 4}, {4, 4}, {5, 2}, {9, 2}, {10, 0}, {286, 0}}) {
+            Publication publication = withProductReviews("4.7", example[0], 1);
+            RiskEvaluation result = new RiskEngine(new RiskCoverageCalculator()).evaluate(publication);
+            assertEquals(example[1], result.getScore(), "Recuento " + example[0]);
+            assertEquals(3, result.getTotalFactors());
+            if (example[1] > 0) assertProductFactor(result, "ML_FEW_PRODUCT_REVIEWS", example[1]);
+            else assertTrue(result.getFactors().stream().noneMatch(f ->
+                    "ML_FEW_PRODUCT_REVIEWS".equals(f.getCode())));
+        }
+    }
+
+    @Test void lowRatingIsDiscountedWithFewReviewsAndAddsUpToSamplePenalty() {
+        RiskEvaluation small = new RiskEngine(new RiskCoverageCalculator())
+                .evaluate(withProductReviews("2.4", 2, 1));
+        assertEquals(9, small.getScore());
+        assertProductFactor(small, "ML_LOW_PRODUCT_RATING", 5);
+        assertProductFactor(small, "ML_FEW_PRODUCT_REVIEWS", 4);
+
+        RiskEvaluation enough = new RiskEngine(new RiskCoverageCalculator())
+                .evaluate(withProductReviews("2.4", 10, 1));
+        assertEquals(15, enough.getScore());
+        assertProductFactor(enough, "ML_LOW_PRODUCT_RATING", 15);
+        assertEquals(1, enough.getFactors().size());
+    }
+
+    @Test void intermediateRatingUsesSmallerWeightsForSmallSamples() {
+        RiskEvaluation small = new RiskEngine(new RiskCoverageCalculator())
+                .evaluate(withProductReviews("3.5", 9, 1));
+        assertEquals(5, small.getScore());
+        assertProductFactor(small, "ML_MODERATE_PRODUCT_RATING", 3);
+        assertProductFactor(small, "ML_FEW_PRODUCT_REVIEWS", 2);
+
+        RiskEvaluation enough = new RiskEngine(new RiskCoverageCalculator())
+                .evaluate(withProductReviews("3.5", 10, 1));
+        assertEquals(6, enough.getScore());
+        assertProductFactor(enough, "ML_MODERATE_PRODUCT_RATING", 6);
+        assertEquals(1, enough.getFactors().size());
+    }
+
+    @Test void exactRatingThresholdsHaveNoOverlap() {
+        RiskEvaluation below = new RiskEngine(new RiskCoverageCalculator())
+                .evaluate(withProductReviews("2.9", 10, 1));
+        RiskEvaluation equalToThree = new RiskEngine(new RiskCoverageCalculator())
+                .evaluate(withProductReviews("3.0", 10, 1));
+        RiskEvaluation equalToFour = new RiskEngine(new RiskCoverageCalculator())
+                .evaluate(withProductReviews("4.0", 10, 1));
+        assertEquals(15, below.getScore());
+        assertEquals(6, equalToThree.getScore());
+        assertEquals(0, equalToFour.getScore());
+    }
+
+    @Test void missingExpiredOrOtherMarketplaceMetricsDoNotAddPoints() {
+        RiskEngine engine = new RiskEngine(new RiskCoverageCalculator());
+
+        Publication missing = withProductReviews(null, null, 1);
+        assertEquals(0, engine.evaluate(missing).getScore());
+        assertEquals(1, engine.evaluate(missing).getAvailableFactors());
+
+        Publication expired = withProductReviews("2.0", 2, 31);
+        assertEquals(0, engine.evaluate(expired).getScore());
+        assertEquals(1, engine.evaluate(expired).getAvailableFactors());
+
+        Publication temu = withProductReviews("2.0", 2, 1);
+        temu.setMarketplace(Marketplace.TEMU);
+        assertTrue(MercadoLibreProductReviewEvidence.evaluateSignals(
+                temu, LocalDateTime.now()).isEmpty());
+    }
+
 }
