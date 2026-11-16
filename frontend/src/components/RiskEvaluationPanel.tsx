@@ -212,11 +212,12 @@ export default function RiskEvaluationPanel({
           type="button"
           onClick={handleLoadHistory}
           disabled={loading}
-          className="secondary-button"
+          className="secondary-button history-toggle"
           aria-expanded={showHistory}
           aria-controls={historyId}
         >
           {showHistory ? 'Ocultar historial' : 'Consultar historial'}
+          <span className="disclosure-chevron" aria-hidden="true">⌄</span>
         </button>
       </div>
 
