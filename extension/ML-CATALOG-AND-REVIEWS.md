@@ -22,6 +22,15 @@ exige un único enlace de oferta MLA/MLAU, vendedor y precio en el mismo bloque.
 Si no hay información consistente, debe rechazar la asociación e indicar
 que se abra la oferta individual.
 
+La sección de reputación `.ui-seller-data` puede aparecer **fuera del
+formulario de ofertas**, pero dentro del mismo panel lateral
+`.ui-pdp--sticky-wrapper-right`. Después de identificar la fila seleccionada,
+MarketLens acepta su termómetro de reputación únicamente si el nombre de la
+tienda coincide y un enlace del panel tiene `item_id` igual al MLA elegido.
+Esto permite tomar, por ejemplo, la reputación observada **5/5 de PCREGISTRADA**
+en la oferta `MLA1995498078`, sin confundirla con la de otras opciones.
+Si falta esa corroboración, se deja la reputación como desconocida.
+
 No se atribuyen automáticamente al vendedor seleccionado los datos de
 reputación, ventas e insignias del vendedor destacado del catálogo.
 
