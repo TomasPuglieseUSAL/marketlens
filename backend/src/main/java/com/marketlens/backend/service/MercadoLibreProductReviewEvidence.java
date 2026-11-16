@@ -5,17 +5,22 @@ import com.marketlens.backend.entity.Publication;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Calificaciones del PRODUCTO Mercado Libre, potencialmente compartidas
- * entre varios vendedores. No equivalen a la reputación del vendedor
- * ni certifican compras o autenticidad. Por ahora no alteran el puntaje.
+ * Las opiniones del PRODUCTO Mercado Libre pueden ser compartidas entre
+ * varios vendedores. No equivalen a reputación comercial ni a ventas
+ * verificadas. Umbrales exploratorios pendientes de validación empírica.
  */
 public final class MercadoLibreProductReviewEvidence {
 
     public record Signal(String code, String description, int points) { }
 
     private static final int MAX_AGE_DAYS = 30;
+    private static final int MIN_REVIEWS_FOR_FULL_RATING_WEIGHT = 10;
+    private static final BigDecimal LOW_RATING_LIMIT = new BigDecimal("3.0");
+    private static final BigDecimal MODERATE_RATING_LIMIT = new BigDecimal("4.0");
 
     private MercadoLibreProductReviewEvidence() { }
 
@@ -35,12 +40,53 @@ public final class MercadoLibreProductReviewEvidence {
                 && !observedAt.isBefore(now.minusDays(MAX_AGE_DAYS));
     }
 
+    /**
+     * La calificación y el tamaño de muestra son dos señales separadas:
+     * una media baja basada en 2 reseñas pesa menos que la basada en 100.
+     * No inferir cero reseñas cuando faltan ambas métricas.
+     */
+    public static List<Signal> evaluateSignals(Publication publication, LocalDateTime now) {
+        if (!hasObservedEvidence(publication, now)) return List.of();
+
+        BigDecimal rating = publication.getMlProductRating();
+        int reviews = publication.getMlProductReviewCount();
+        boolean sufficientSample = reviews >= MIN_REVIEWS_FOR_FULL_RATING_WEIGHT;
+        String context = "El producto muestra " + rating.toPlainString()
+                + "/5 con " + reviews + " opiniones en Mercado Libre. "
+                + "Son valoraciones del producto, no de la fiabilidad del vendedor.";
+
+        List<Signal> signals = new ArrayList<>(2);
+        if (rating.compareTo(LOW_RATING_LIMIT) < 0) {
+            signals.add(new Signal("ML_LOW_PRODUCT_RATING",
+                    context + (sufficientSample
+                            ? " La calificación observada es baja."
+                            : " La calificación observada es baja, pero la muestra reducida limita su peso."),
+                    sufficientSample ? 15 : 5));
+        } else if (rating.compareTo(MODERATE_RATING_LIMIT) < 0) {
+            signals.add(new Signal("ML_MODERATE_PRODUCT_RATING",
+                    context + (sufficientSample
+                            ? " La calificación observada es intermedia."
+                            : " La calificación observada es intermedia, con pocos testimonios."),
+                    sufficientSample ? 6 : 3));
+        } else {
+            signals.add(new Signal("ML_PRODUCT_REVIEWS_OBSERVED", context, 0));
+        }
+
+        // Se señala la incertidumbre estadística, no un fraude. No duplicar
+        // este ajuste con las penalizaciones por calificación: son dos causas.
+        if (reviews < MIN_REVIEWS_FOR_FULL_RATING_WEIGHT) {
+            int points = reviews <= 4 ? 4 : 2;
+            signals.add(new Signal("ML_FEW_PRODUCT_REVIEWS",
+                    context + " La muestra de opiniones es reducida y no permite "
+                    + "determinar por sí sola la fiabilidad del producto.",
+                    points));
+        }
+        return List.copyOf(signals);
+    }
+
+    /** Compatibilidad con consumidores que solo necesitan la señal de rating. */
     public static Signal evaluate(Publication publication, LocalDateTime now) {
-        if (!hasObservedEvidence(publication, now)) return null;
-        return new Signal("ML_PRODUCT_REVIEWS_OBSERVED",
-                "El producto muestra " + publication.getMlProductRating().toPlainString()
-                + "/5 con " + publication.getMlProductReviewCount()
-                + " opiniones en Mercado Libre. Son valoraciones del producto, "
-                + "no de la fiabilidad del vendedor.", 0);
+        List<Signal> signals = evaluateSignals(publication, now);
+        return signals.isEmpty() ? null : signals.get(0);
     }
 }
