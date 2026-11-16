@@ -517,6 +517,44 @@ function conciseFactorLabel(factor) {
     const firstSentence = full.match(/^(.+?[.!?])(?:\s|$)/)?.[1];
     return full.length > 115 && firstSentence ? firstSentence : full;
 }
+const communityReasonLabels = {
+    SUSPICIOUS_PRICE: 'Precio sospechoso',
+    SUSPICIOUS_SELLER: 'Vendedor sospechoso',
+    SUSPICIOUS_DESCRIPTION: 'Descripción sospechosa',
+    PAYMENT_OUTSIDE_PLATFORM: 'Pago fuera de la plataforma',
+    POSSIBLE_IMPERSONATION: 'Posible suplantación',
+    OTHER: 'Otro motivo'
+};
+function renderCommunityReportSummary(summary) {
+    const panel = $('community-report-summary');
+    const reporters = summary?.uniqueReporterCount;
+    if (!Number.isSafeInteger(reporters) || reporters <= 0) {
+        panel.hidden = true;
+        return;
+    }
+    panel.hidden = false;
+    $('community-report-users').textContent =
+        reporters + (reporters === 1 ? ' usuario' : ' usuarios');
+    const total = Number.isSafeInteger(summary.recentReportCount)
+        ? summary.recentReportCount : reporters;
+    const windowDays = Number.isSafeInteger(summary.windowDays)
+        ? summary.windowDays : 90;
+    $('community-report-count').textContent =
+        total + (total === 1 ? ' reporte' : ' reportes')
+        + ' en ' + windowDays + ' días.'
+        + (summary.riskPoints > 0
+            ? ' Factor comunitario: +' + summary.riskPoints + ' puntos.'
+            : ' Sin penalización automática.');
+    const reasons = $('community-report-reasons');
+    reasons.replaceChildren();
+    for (const entry of (Array.isArray(summary.reasons) ? summary.reasons : []).slice(0, 3)) {
+        const label = communityReasonLabels[String(entry?.reason ?? '')];
+        if (!label || !Number.isSafeInteger(entry.count) || entry.count <= 0) continue;
+        const li = document.createElement('li');
+        li.textContent = label + ' (' + entry.count + ')';
+        reasons.appendChild(li);
+    }
+}
 function renderRisk(value) {
     const evaluation = value.evaluation || {};
     lastPublicationId = value.publicationId || null;
@@ -564,6 +602,7 @@ function renderRisk(value) {
         $('result-factors').appendChild(li);
     }
     $('result-factors').hidden = $('result-factors').children.length === 0;
+    renderCommunityReportSummary(value.communityReports);
     $('open-publication-button').disabled = !Number.isSafeInteger(lastPublicationId);
 }
 function pageStateKey(key = pageKey) { return `marketlens:analysis:${key}`; }
@@ -1857,8 +1896,25 @@ async function sendReport(data) {
             description: $('report-description').value.trim()
         });
         if (!reply?.ok) throw new Error(reply?.error || 'No se pudo registrar el reporte.');
+        const currentlyAnalyzedId = lastPublicationId;
         lastPublicationId = reply.publicationId;
-        $('report-status').textContent = `Reporte registrado correctamente para la publicación #${reply.publicationId}.`;
+        $('report-status').textContent =
+            'Reporte registrado para la publicación #' + reply.publicationId
+            + '. El puntaje de un análisis previo se mantiene hasta volver a analizar.';
+        // No cambiar el puntaje histórico. Sí reflejar el recuento actual.
+        if (reply.communityReports && currentlyAnalyzedId === reply.publicationId
+                && !$('result-section').hidden) {
+            renderCommunityReportSummary(reply.communityReports);
+            if (pageKey) {
+                const key = pageStateKey();
+                const cached = (await ext.storage.local.get(key))[key];
+                if (cached?.status === 'success' && cached.publicationId === reply.publicationId) {
+                    await ext.storage.local.set({[key]: {
+                        ...cached, communityReports: reply.communityReports
+                    }});
+                }
+            }
+        }
         $('report-description').value = '';
         $('report-reason').value = '';
     } catch (error) {
