@@ -36,7 +36,10 @@ public final class MercadoLibreProductReviewEvidence {
                 || !hasMetrics(publication.getMlProductRating(), publication.getMlProductReviewCount())) {
             return false;
         }
-        LocalDateTime observedAt = publication.getMlProductObservedAt();
+        return fresh(publication.getMlProductObservedAt(), now);
+    }
+
+    private static boolean fresh(LocalDateTime observedAt, LocalDateTime now) {
         return observedAt != null && !observedAt.isAfter(now)
                 && !observedAt.isBefore(now.minusDays(MAX_AGE_DAYS));
     }
@@ -47,6 +50,16 @@ public final class MercadoLibreProductReviewEvidence {
      * No inferir cero reseñas cuando faltan ambas métricas.
      */
     public static List<Signal> evaluateSignals(Publication publication, LocalDateTime now) {
+        // Solo la ausencia observada y vigente genera +2 puntos. Nunca
+        // convertir una extracción fallida o un dato null en penalización.
+        if (publication != null && publication.getMarketplace() == Marketplace.MERCADO_LIBRE
+                && Boolean.TRUE.equals(publication.getMlProductRatingUnavailable())
+                && !hasMetrics(publication.getMlProductRating(), publication.getMlProductReviewCount())
+                && fresh(publication.getMlProductObservedAt(), now)) {
+            return List.of(new Signal("ML_PRODUCT_RATING_UNAVAILABLE",
+                    "No se mostró una calificación pública del producto en la última observación.",
+                    2));
+        }
         if (!hasObservedEvidence(publication, now)) return List.of();
 
         BigDecimal rating = publication.getMlProductRating();

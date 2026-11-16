@@ -429,12 +429,21 @@ public class ExtensionProcessingService {
         static void applyMercadoLibreObservedEvidence(
                         Publication publication, ExtensionImport imported) {
                 if (publication.getMarketplace() != Marketplace.MERCADO_LIBRE) return;
-                if (MercadoLibreProductReviewEvidence.hasMetrics(
+                if (Boolean.TRUE.equals(imported.getMlProductRatingUnavailable())) {
+                        // Corregir las métricas antiguas si una observación nueva
+                        // confirma que la ficha principal no tiene calificación.
+                        publication.setMlProductRating(null);
+                        publication.setMlProductReviewCount(null);
+                        publication.setMlProductRatingUnavailable(true);
+                        publication.setMlProductObservedAt(java.time.LocalDateTime.now());
+                } else if (MercadoLibreProductReviewEvidence.hasMetrics(
                         imported.getMlProductRating(), imported.getMlProductReviewCount())) {
                         publication.setMlProductRating(imported.getMlProductRating());
                         publication.setMlProductReviewCount(imported.getMlProductReviewCount());
+                        publication.setMlProductRatingUnavailable(false);
                         publication.setMlProductObservedAt(java.time.LocalDateTime.now());
                 }
+                // Si la extracción fue inconclusa, no reemplazar datos antiguos.
                 Integer observedLevel = imported.getSellerReputationLevel();
                 if (publication.getSeller() != null
                         && observedLevel != null && observedLevel >= 1 && observedLevel <= 5) {

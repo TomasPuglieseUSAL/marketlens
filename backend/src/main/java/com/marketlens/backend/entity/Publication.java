@@ -67,6 +67,10 @@ public class Publication {
     @Column(name = "ml_product_review_count")
     private Integer mlProductReviewCount;
 
+    // Solo TRUE señala que se inspeccionó la ficha principal y no mostró rating.
+    @Column(name = "ml_product_rating_unavailable")
+    private Boolean mlProductRatingUnavailable;
+
     @Column(name = "ml_product_observed_at")
     private LocalDateTime mlProductObservedAt;
 
@@ -227,6 +231,10 @@ public class Publication {
     public BigDecimal getMlProductRating() { return mlProductRating; }
     public void setMlProductRating(BigDecimal value) { this.mlProductRating = value; }
     public Integer getMlProductReviewCount() { return mlProductReviewCount; }
+    public Boolean getMlProductRatingUnavailable() { return mlProductRatingUnavailable; }
+    public void setMlProductRatingUnavailable(Boolean unavailable) {
+        this.mlProductRatingUnavailable = unavailable;
+    }
     public void setMlProductReviewCount(Integer value) { this.mlProductReviewCount = value; }
     public LocalDateTime getMlProductObservedAt() { return mlProductObservedAt; }
     public void setMlProductObservedAt(LocalDateTime value) { this.mlProductObservedAt = value; }

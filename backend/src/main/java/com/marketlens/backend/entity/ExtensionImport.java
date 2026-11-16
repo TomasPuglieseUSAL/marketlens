@@ -80,6 +80,10 @@ public class ExtensionImport {
     @Column(name = "ml_product_review_count")
     private Integer mlProductReviewCount;
 
+    // Solo TRUE señala que se inspeccionó la ficha principal y no mostró rating.
+    @Column(name = "ml_product_rating_unavailable")
+    private Boolean mlProductRatingUnavailable;
+
     // Opiniones del PRODUCTO, independientes de las valoraciones de la tienda.
     @Column(name = "temu_product_rating", precision = 2, scale = 1)
     private BigDecimal temuProductRating;
@@ -243,6 +247,10 @@ public class ExtensionImport {
     public Integer getTemuSellerReviewCount() { return temuSellerReviewCount; }
     public BigDecimal getMlProductRating() { return mlProductRating; }
     public Integer getMlProductReviewCount() { return mlProductReviewCount; }
+    public Boolean getMlProductRatingUnavailable() { return mlProductRatingUnavailable; }
+    public void setMlProductRatingUnavailable(Boolean unavailable) {
+        this.mlProductRatingUnavailable = unavailable;
+    }
     public void setMlProductReviews(BigDecimal rating, Integer count) {
         this.mlProductRating = rating;
         this.mlProductReviewCount = count;

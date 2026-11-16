@@ -207,7 +207,21 @@ public class ExtensionImportService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Las opiniones del producto Mercado Libre no son válidas.");
         }
+        // TRUE no significa cero opiniones: solo ausencia de calificación
+        // pública observada en el producto principal.
+        Boolean ratingUnavailable = request.mlProductRatingUnavailable();
+        if (ratingUnavailable != null && !"MERCADO_LIBRE".equals(request.marketplace())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El indicador de calificación no corresponde a este marketplace.");
+        }
+        if (Boolean.TRUE.equals(ratingUnavailable)
+                && (mlRating != null || mlReviews != null)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La ausencia observada contradice las métricas proporcionadas.");
+        }
         imported.setMlProductReviews(mlRating, mlReviews);
+        imported.setMlProductRatingUnavailable(
+                Boolean.TRUE.equals(ratingUnavailable) ? true : null);
         // Datos comerciales observados en regiones separadas del DOM:
         // antigüedad de la TIENDA y ventas del PRODUCTO.
         String tenure = request.temuStoreTenureText();
