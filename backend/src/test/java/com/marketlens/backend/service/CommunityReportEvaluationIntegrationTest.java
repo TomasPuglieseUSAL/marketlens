@@ -21,6 +21,7 @@ class CommunityReportEvaluationIntegrationTest {
     @Test void newEvaluationIncludesCurrentCommunityEvidenceWithoutChangingCoverage() {
         Publication publication = new Publication();
         publication.setMarketplace(Marketplace.MERCADO_LIBRE);
+        publication.setDescription("Descripción observada del producto.");
 
         PublicationRepository publications = mock(PublicationRepository.class);
         RiskEvaluationRepository evaluations = mock(RiskEvaluationRepository.class);
