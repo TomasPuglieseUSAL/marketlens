@@ -63,6 +63,21 @@ negro. El enlace de venta asociada sí vincula la oferta con
 `MLA2000102466`, y permite importar sin atribuirle las reseñas
 de la variante anterior.
 
+**Catálogo de oferta única con vendedor mostrado como botón:** Mercado Libre
+puede presentar al vendedor dentro de `#buybox-form` en
+`.ui-pdp-seller-summary__label-text-no-action`, en lugar de usar el enlace
+`.ui-pdp-seller-summary__link`. Se permite cualquiera de esas formas,
+pero se exige **un solo vendedor** dentro del formulario actual, además
+de un único `item_id`, `parent_url` corroborado y precio principal
+coincidente. Los vendedores de recomendaciones no se aceptan como
+identidad de la oferta.
+
+Caso de regresión: Galaxy A13 64 GB Negro «Nuevo con caja abierta»,
+catálogo `MLA2015816941`, oferta `MLA2629481668`, vendedor
+`LOTARINO`, precio `250000 ARS` y sin selectores de variantes.
+Como su condición no es «usado», **no debería emplearse como referencia
+automática del Galaxy A13 usado** de $2.000 sin equivalencia comercial.
+
 **Catálogos reacondicionados con selector de estado:** las opciones
 «Excelente», «Bueno» y «Aceptable» pueden referirse a **fichas de
 catálogo distintas**. Si aparece
