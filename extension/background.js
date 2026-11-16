@@ -215,7 +215,7 @@ function canonicalImportUrl(data) {
             host === domain || host.endsWith('.' + domain));
         const identifiesPublication =
             /\/up\/MLAU\d{6,}(?:\/|$)/i.test(url.pathname) ||
-            /\/(?:[^/]+\/)?p\/MLA\d{6,}\/??$/i.test(url.pathname) ||
+            /\/(?:[^/]+\/)?p\/MLA\d{6,}\/?$/i.test(url.pathname) ||
             /(?:^|\/)MLA-?\d{6,}(?=[\/-]|$)/i.test(url.pathname);
         if (url.protocol === 'https:' && isMlHost && identifiesPublication) {
             return url.origin + url.pathname;
