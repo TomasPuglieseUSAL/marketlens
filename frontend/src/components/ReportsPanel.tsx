@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 
 import {
   createReport,
@@ -33,6 +33,8 @@ export default function ReportsPanel({
 
   const [reports, setReports] = useState<Report[]>([])
   const [historyLoaded, setHistoryLoaded] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const contentId = useId()
 
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
@@ -98,9 +100,25 @@ export default function ReportsPanel({
     <section className="reports-panel">
       <h3>Reportes colaborativos</h3>
 
-      <details className="reports-disclosure">
-        <summary>Registrar o consultar reportes</summary>
-        <div className="reports-panel-content">
+      <div className="reports-disclosure">
+        <button
+          type="button"
+          className="reports-toggle"
+          onClick={() => setExpanded((current) => !current)}
+          aria-expanded={expanded}
+          aria-controls={contentId}
+        >
+          Registrar o consultar reportes
+          <span className="disclosure-chevron" aria-hidden="true">⌄</span>
+        </button>
+        <div
+          id={contentId}
+          className={`history-reveal reports-reveal${expanded ? ' is-open' : ''}`}
+          aria-hidden={!expanded}
+          inert={!expanded}
+        >
+          <div className="history-reveal-inner">
+            <div className="reports-panel-content">
       <p>
         Publicación seleccionada: <strong>#{publicationId}</strong>
       </p>
@@ -181,7 +199,13 @@ export default function ReportsPanel({
         </p>
       )}
 
-      {historyLoaded && (
+      <div
+        className={`history-reveal reports-history-reveal${historyLoaded ? ' is-open' : ''}`}
+        aria-hidden={!historyLoaded}
+        inert={!historyLoaded}
+      >
+        <div className="history-reveal-inner">
+          {historyLoaded && (
         <div className="reports-history">
           <h4>Reportes registrados ({reports.length})</h4>
 
@@ -219,9 +243,13 @@ export default function ReportsPanel({
             </div>
           )}
         </div>
-      )}
+          )}
         </div>
-      </details>
+      </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
   )
 }
