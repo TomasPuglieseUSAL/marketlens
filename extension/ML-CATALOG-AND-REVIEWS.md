@@ -71,35 +71,30 @@ compartido entre varios vendedores. Se registran con una fecha de observación
 y vencen para la evaluación a los **30 días**. No se sustituye un recuento
 de reseñas por ventas, ni se infieren números exactos desde `1.2K+`.
 
-### Aislamiento de reseñas y ausencia de puntuación visible (V30)
+### Aislamiento de reseñas y calificaciones no disponibles (V30)
 
-- El extractor ignora las tarjetas de recomendaciones (incluidos carruseles
-  patrocinados como «Con 4 estrellas o más»). Nunca considera sus puntuaciones
-  como calificaciones del producto que se está analizando.
-- Un `Product` en JSON-LD solo sirve como referencia si coincide con la URL
-  de la ficha principal o con su título de manera estricta. El primer
-  `Product` del documento ya no se acepta automáticamente.
-- **Aunque el JSON-LD coincida con el producto**, la calificación solo cuenta
-  para la cobertura si aparece un módulo visible de reseñas de la ficha
-  principal. Los valores estructurados sin representación visible no se
-  consideran calificaciones corroboradas en pantalla. En la ficha Kingston
-  `MLAU2874874181` el JSON-LD incluye `ratingValue: 4.9` y
-  `reviewCount: 1552`, pero el HTML analizado carece del módulo de reseñas
-  del producto: la cobertura de opiniones permanece incompleta.
-- Cuando la ficha principal está cargada, se observa la sección de preguntas
-  y respuestas y no hay módulo de reseñas ni puntuación visible atribuible
-  al producto, se conserva `mlProductRatingUnavailable=true`, incluso si
-  existen reseñas solamente en JSON-LD. **No equivale a afirmar que el
-  artículo tenga cero reseñas**: informa falta de evidencia visible.
-- Si la sección no se cargó, es ambigua o solo hay una métrica parcial, se
-  conserva estado desconocido (null), sin penalización adicional.
-- Una ausencia visible observada recientemente suma **+2 puntos**, no otorga
-  la tercera dimensión de cobertura y vence a los 30 días. No es una acusación
-  de reseñas inexistentes o de fraude. Una revisión posterior con puntuación
-  visible y válida sustituye ese estado.
-- Cuando una nueva inspección concluyente informa ausencia de puntuación,
-  se eliminan de la publicación los valores antiguos potencialmente
-  mal atribuidos. No se reescribe el historial de evaluaciones.
+- Las tarjetas recomendadas (incluidos los carruseles patrocinados) no
+  aportan calificaciones al producto analizado. También se comprueba que
+  cualquier `Product` en JSON-LD pertenezca a la URL o título principal,
+  y no se acepta automáticamente el primer objeto del documento.
+- **La visibilidad en pantalla NO es requisito.** Un `aggregateRating`
+  con calificación y `reviewCount` válido del JSON-LD del producto
+  correcto sí cuenta para la cobertura y el análisis, aunque la sección
+  visual de reseñas no exista.
+- Ejemplo real: Kingston `MLAU2874874181`, cuyo JSON-LD declara
+  `ratingValue: 4.9` y `reviewCount: 1552`. Se aceptan ambos valores
+  aunque no haya módulo visual de reseñas. No se deben confundir con el
+  4,9 de productos promocionados.
+- `mlProductRatingUnavailable=true` solo se registra si la página está
+  cargada, se observan las preguntas, **y no hay calificación/recuento
+  válidos ni en el producto estructurado ni en sus módulos de reseñas**.
+  Esto indica ausencia de evidencia disponible, no cero reseñas.
+- Si existe información parcial o la extracción fue inconclusa, se
+  mantiene el estado desconocido (null), sin puntos. La ausencia
+  confirmada suma **+2 puntos**, no completa cobertura y vence a 30 días.
+  Una nueva observación válida reemplaza la ausencia anterior.
+- Si una inspección concluyente registra ausencia, puede limpiar datos
+  antiguos mal atribuidos; las evaluaciones históricas no se reescriben.
 
 Migración: `V30__ml_public_rating_visibility.sql`.
 
