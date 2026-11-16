@@ -40,6 +40,29 @@ precio `349999 ARS`. El HTML contiene dos grupos seleccionados (Black y
 Excelente), ambos del mismo catálogo; su JSON-LD declara 4,5 estrellas
 y 59 reseñas. Son **dos atributos de una oferta**, no dos ofertas.
 
+**Variante recién cambiada con metadatos desactualizados:** al pasar
+entre combinaciones de color, almacenamiento y condición, Mercado Libre
+puede conservar un `parent_url` oculto o JSON-LD de la variante anterior,
+aunque los selectores y el precio principal ya hayan cambiado. En este
+caso NO se utiliza el JSON-LD de otro catálogo para obtener reseñas.
+
+Para resolver la identidad individual con seguridad, la extensión permite
+que `parent_url` difiera de la ruta actual **únicamente** si existe un
+enlace independiente `a.ui-pdp-syi__link` («Vender uno igual») que
+corrobore simultáneamente `itemId` del checkout y `productId` del
+catálogo actual, y además se validan todos los grupos seleccionados,
+el vendedor y el precio. Se rechaza si el enlace no existe, no coincide
+o está duplicado. Esto mantiene la protección contra la mezcla accidental
+de ofertas de distintas variantes.
+
+Ejemplo comprobado: Galaxy A13 64 GB Celeste Aceptable,
+catálogo `MLA2000102466`, oferta `MLA2282119419`, vendedor
+`SANTIJULIANN_`, precio `239995 ARS`. Su formulario conserva
+`parent_url=/p/MLA2000090922` y su JSON-LD describe el Galaxy A13
+negro. El enlace de venta asociada sí vincula la oferta con
+`MLA2000102466`, y permite importar sin atribuirle las reseñas
+de la variante anterior.
+
 **Catálogos reacondicionados con selector de estado:** las opciones
 «Excelente», «Bueno» y «Aceptable» pueden referirse a **fichas de
 catálogo distintas**. Si aparece
