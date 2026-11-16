@@ -1,10 +1,12 @@
-import { useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useState, type FormEvent } from 'react'
 import AnimatedCollapse from './AnimatedCollapse'
 import DisclosureChevron from './DisclosureChevron'
 
 import {
   createReport,
   getPublicationReports,
+  getCommunityReportSummary,
+  type CommunityReportSummary,
   type Report,
   type ReportReason,
 } from '../api/client'
@@ -27,6 +29,7 @@ export default function ReportsPanel({ token, publicationId }: ReportsPanelProps
   const [reason, setReason] = useState<ReportReason>('SUSPICIOUS_PRICE')
   const [description, setDescription] = useState('')
   const [reports, setReports] = useState<Report[]>([])
+  const [communitySummary, setCommunitySummary] = useState<CommunityReportSummary | null>(null)
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [expanded, setExpanded] = useState(false)
 
@@ -36,6 +39,14 @@ export default function ReportsPanel({ token, publicationId }: ReportsPanelProps
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    void getCommunityReportSummary(token, publicationId)
+      .then((result) => { if (active) setCommunitySummary(result) })
+      .catch(() => { if (active) setCommunitySummary(null) })
+    return () => { active = false }
+  }, [token, publicationId])
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -53,6 +64,13 @@ export default function ReportsPanel({ token, publicationId }: ReportsPanelProps
       setHistoryLoaded(true)
       setDescription('')
       setMessage('Reporte registrado correctamente.')
+      // El resumen se actualiza sin recargar la publicación. El puntaje de
+      // evaluaciones ya guardadas conserva su fotografía histórica.
+      try {
+        setCommunitySummary(await getCommunityReportSummary(token, publicationId))
+      } catch {
+        // La denuncia ya fue guardada; una falla del resumen no la invalida.
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error inesperado')
     } finally {
@@ -83,6 +101,30 @@ export default function ReportsPanel({ token, publicationId }: ReportsPanelProps
   return (
     <section className="reports-panel">
       <h3>Reportes colaborativos</h3>
+
+      {communitySummary && communitySummary.uniqueReporterCount > 0 && (
+        <aside className="community-summary" aria-label="Resumen de reportes comunitarios">
+          <div className="community-summary-heading">
+            <strong>Reportes recientes de la comunidad</strong>
+            <span>{communitySummary.uniqueReporterCount} {communitySummary.uniqueReporterCount === 1 ? 'usuario' : 'usuarios'}</span>
+          </div>
+          <p>
+            {communitySummary.recentReportCount} {communitySummary.recentReportCount === 1 ? 'reporte' : 'reportes'}
+            {' '}en los últimos {communitySummary.windowDays} días.
+            {communitySummary.riskPoints > 0
+              ? ` Factor comunitario: +${communitySummary.riskPoints} puntos en un nuevo análisis.`
+              : ' Sin penalización automática por ahora.'}
+          </p>
+          <div className="community-summary-reasons">
+            {communitySummary.reasons.slice(0, 3).map((entry) => (
+              <span key={entry.reason}>
+                {reportReasons[entry.reason]} ({entry.count})
+              </span>
+            ))}
+          </div>
+          <small>Reportes no verificados; los puntajes anteriores no cambian.</small>
+        </aside>
+      )}
 
       <div className="reports-disclosure">
         <button
