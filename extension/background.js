@@ -413,7 +413,7 @@ ext.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return true;
     }
     if (message.type === 'AUTH_ACCESS') {
-        accessSession()
+        accessSession(message.force === true)
             .then(session => sendResponse({ok: true, token: session.token}))
             .catch(error => sendResponse({ok: false, error: normalizeError(error)}));
         return true;
