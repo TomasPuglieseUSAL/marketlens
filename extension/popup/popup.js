@@ -872,7 +872,8 @@ function extractMercadoLibre() {
                     // Si el parent_url corresponde a otra ficha, un link
                     // independiente explícito permite resolver la oferta
                     // actual. Sin corroboración, mantener el rechazo.
-                    catalogLinkedToOffer = confirmations.length === 1;
+                    catalogLinkedToOffer = links.length === 1 &&
+                        confirmations.length === 1;
                 }
 
                 const sellers = [...form.querySelectorAll(
