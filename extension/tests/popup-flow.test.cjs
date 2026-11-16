@@ -1024,3 +1024,37 @@ test('degradados de la extensión van de arriba abajo, de claro a oscuro', () =>
         'No deben quedar degradados diagonales del popup');
     assert.match(css, /background-attachment:\s*fixed,\s*local,\s*local,\s*fixed/);
 });
+
+
+test('sin reportes comunitarios el análisis no muestra una advertencia vacía', () => {
+    const p = popup();
+    p.run("renderCommunityReportSummary({recentReportCount:0,uniqueReporterCount:0,riskPoints:0,reasons:[],windowDays:90})");
+    assert.equal(p.element('community-report-summary').hidden, true);
+});
+
+test('el resumen comunitario presenta usuarios distintos, puntaje y motivos agregados', () => {
+    const p = popup();
+    p.run("renderCommunityReportSummary({recentReportCount:5,uniqueReporterCount:4,riskPoints:8,windowDays:90,reasons:[{reason:'SUSPICIOUS_PRICE',count:3},{reason:'OTHER',count:1}]})");
+    assert.equal(p.element('community-report-summary').hidden, false);
+    assert.equal(p.element('community-report-users').textContent, '4 usuarios');
+    assert.match(p.element('community-report-count').textContent, /5 reportes en 90 días/);
+    assert.match(p.element('community-report-count').textContent, /\+8 puntos/);
+    assert.equal(p.element('community-report-reasons').children.length, 2);
+    assert.equal(p.element('community-report-reasons').children[0].textContent, 'Precio sospechoso (3)');
+});
+
+test('un reporte de la comunidad queda como informativo, no como fraude confirmado', () => {
+    const p = popup();
+    p.run("renderCommunityReportSummary({recentReportCount:2,uniqueReporterCount:1,riskPoints:0,windowDays:90,reasons:[{reason:'PAYMENT_OUTSIDE_PLATFORM',count:1}]})");
+    assert.equal(p.element('community-report-users').textContent, '1 usuario');
+    assert.match(p.element('community-report-count').textContent, /Sin penalización automática/);
+    assert.equal(p.element('community-report-reasons').children[0].textContent, 'Pago fuera de la plataforma (1)');
+    assert.match(fs.readFileSync(path.join(__dirname, '../popup/popup.html'), 'utf8'), /Reportes de usuarios, aún no verificados/);
+});
+
+test('el coordinador incluye reporte comunitario en el resultado de análisis y en la confirmación', () => {
+    const background = fs.readFileSync(path.join(__dirname, '../background.js'), 'utf8');
+    assert.match(background, /\/reports\/summary/);
+    assert.match(background, /status: 'success'[\s\S]*communityReports/);
+    assert.match(background, /return \{publicationId, reportId: report\?\.id \?\? null, communityReports\}/);
+});
