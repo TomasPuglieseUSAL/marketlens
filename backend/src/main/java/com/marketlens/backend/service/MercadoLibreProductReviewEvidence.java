@@ -51,34 +51,31 @@ public final class MercadoLibreProductReviewEvidence {
         BigDecimal rating = publication.getMlProductRating();
         int reviews = publication.getMlProductReviewCount();
         boolean sufficientSample = reviews >= MIN_REVIEWS_FOR_FULL_RATING_WEIGHT;
-        String context = "El producto muestra " + rating.toPlainString()
-                + "/5 con " + reviews + " opiniones en Mercado Libre. "
-                + "Son valoraciones del producto, no de la fiabilidad del vendedor.";
+        // Descripciones breves y específicas por factor: no repetir la
+        // calificación y el recuento en ambas señales.
+        String ratingText = rating.stripTrailingZeros().toPlainString()
+                .replace('.', ',') + "/5";
 
         List<Signal> signals = new ArrayList<>(2);
         if (rating.compareTo(LOW_RATING_LIMIT) < 0) {
             signals.add(new Signal("ML_LOW_PRODUCT_RATING",
-                    context + (sufficientSample
-                            ? " La calificación observada es baja."
-                            : " La calificación observada es baja, pero la muestra reducida limita su peso."),
+                    "Calificación baja del producto: " + ratingText + ".",
                     sufficientSample ? 15 : 5));
         } else if (rating.compareTo(MODERATE_RATING_LIMIT) < 0) {
             signals.add(new Signal("ML_MODERATE_PRODUCT_RATING",
-                    context + (sufficientSample
-                            ? " La calificación observada es intermedia."
-                            : " La calificación observada es intermedia, con pocos testimonios."),
+                    "Calificación intermedia del producto: " + ratingText + ".",
                     sufficientSample ? 6 : 3));
         } else {
-            signals.add(new Signal("ML_PRODUCT_REVIEWS_OBSERVED", context, 0));
+            signals.add(new Signal("ML_PRODUCT_REVIEWS_OBSERVED",
+                    "Calificación del producto: " + ratingText + ".", 0));
         }
 
-        // Se señala la incertidumbre estadística, no un fraude. No duplicar
-        // este ajuste con las penalizaciones por calificación: son dos causas.
+        // La cantidad limitada de opiniones es una señal independiente
+        // de la media de estrellas, sin repetirla en esta descripción.
         if (reviews < MIN_REVIEWS_FOR_FULL_RATING_WEIGHT) {
             int points = reviews <= 4 ? 4 : 2;
             signals.add(new Signal("ML_FEW_PRODUCT_REVIEWS",
-                    context + " La muestra de opiniones es reducida y no permite "
-                    + "determinar por sí sola la fiabilidad del producto.",
+                    "Cantidad de opiniones reducida: " + reviews + ".",
                     points));
         }
         return List.copyOf(signals);
