@@ -36,7 +36,7 @@ export default function PublicationDescription({ description }: PublicationDescr
       {content ? (
         <>
           <div
-            className={`description-viewport${collapsible && expanded ? ' is-expanded' : ''}`}
+            className={`description-viewport${collapsible ? ' is-collapsible' : ''}${collapsible && expanded ? ' is-expanded' : ''}`}
             style={collapsible && expanded ? { maxHeight: `${expandedHeight}px` } : undefined}
           >
             <p ref={textRef}>{content}</p>
