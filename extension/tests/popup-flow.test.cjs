@@ -869,8 +869,9 @@ test('catálogo: una oferta visible enlazada aporta su ID, vendedor y precio sin
     assert.equal(result.price, '175.500');
     assert.equal(result.seller, 'KINGSTON_STORE');
     assert.equal(result.url, 'https://articulo.mercadolibre.com.ar/MLA-123456789-ssd-kingston');
-    assert.equal(result.mlProductRating, 4.7);
-    assert.equal(result.mlProductReviewCount, 286);
+    // El JSON-LD, sin módulo de calificaciones visible, no completa 3/3.
+    assert.equal(result.mlProductRating, null);
+    assert.equal(result.mlProductReviewCount, null);
     assert.equal(result.sellerReputationLevel, null);
 });
 
