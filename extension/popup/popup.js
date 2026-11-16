@@ -803,6 +803,68 @@ function extractMercadoLibre() {
                     source: selected
                 };
             }
+
+            // Catálogo con una única oferta visible y SIN lista de opciones.
+            // Mercado Libre deja la oferta MLA del checkout en el buybox,
+            // incluso si la URL identifica un producto de catálogo MLA.
+            // Corroborar ID, procedencia, vendedor y precio principal;
+            // no confundir este caso con una selección ambigua.
+            if (!form.querySelector('.ui-pdp-buy-box-offers')) {
+                const catalogId = window.location.pathname.match(
+                    /\/p\/(MLA\d{6,})\/?$/i
+                )?.[1]?.toUpperCase();
+                const parentId = form.querySelector(
+                    'input[type="hidden"][name="parent_url"]'
+                )?.value?.match(/^\/p\/(MLA\d{6,})\/?$/i)?.[1]?.toUpperCase();
+                const checkoutItems = [...form.querySelectorAll(
+                    'input[type="hidden"][name="item_id"]'
+                )];
+                const offerId = checkoutItems.length === 1
+                    ? checkoutItems[0].value?.toUpperCase() : null;
+                const sellers = [...form.querySelectorAll(
+                    '.ui-pdp-seller-summary__header__title ' +
+                    '.ui-pdp-seller-summary__link'
+                )];
+                const sellerName = sellers.length === 1
+                    ? sellers[0].textContent?.replace(/\s+/g, ' ').trim() : null;
+                const mainPrices = [...document.querySelectorAll(
+                    '.ui-pdp-price__second-line .andes-money-amount'
+                )];
+                const amount = mainPrices.length === 1 ? mainPrices[0] : null;
+                const fraction = amount?.querySelector(
+                    '.andes-money-amount__fraction'
+                )?.textContent?.trim();
+                const cents = amount?.querySelector(
+                    '.andes-money-amount__cents'
+                )?.textContent?.trim();
+                const structuredPrice = amount?.querySelector(
+                    'meta[itemprop="price"]'
+                )?.getAttribute('content');
+                const observedPrice = fraction
+                    ? Number(fraction.replace(/\./g, '') + (cents ? '.' + cents : ''))
+                    : NaN;
+                const metadataPrice = structuredPrice != null
+                    ? Number(structuredPrice) : NaN;
+                const isARS = /\bpesos\b/i.test(
+                    amount?.getAttribute('aria-label') ?? ''
+                );
+                if (catalogId && catalogId === parentId &&
+                        /^MLA[1-9]\d{5,}$/i.test(offerId || '') &&
+                        offerId !== catalogId && sellerName &&
+                        Number.isFinite(observedPrice) && observedPrice > 0 &&
+                        Number.isFinite(metadataPrice) &&
+                        Math.abs(observedPrice - metadataPrice) < 0.011 && isARS) {
+                    return {
+                        externalId: offerId,
+                        selectedOfferId: offerId,
+                        url: window.location.href.split('#')[0],
+                        seller: sellerName,
+                        price: cents ? fraction + ',' + cents : fraction,
+                        currency: 'ARS',
+                        source: form
+                    };
+                }
+            }
         }
 
         // Estructuras alternativas anteriores: únicamente identificamos
@@ -1210,25 +1272,28 @@ function extractMercadoLibre() {
         '#reviews_capability_v3'
     );
     const visibleMainReviewModule = [...mainReviewModules]
-        .some(node => !belongsToRecommendations(node));
+        .some(node => !belongsToRecommendations(node) &&
+            !node.hidden && node.getAttribute?.('aria-hidden') !== 'true' &&
+            (!node.getClientRects || node.getClientRects().length > 0));
     const hasQuestions = Boolean(document.querySelector(
         '.ui-pdp-questions, .ui-pdp-questions__container, ' +
         '#questions, #questions-section, [data-testid="questions"]'
     ));
-    const structuredRatingPresent = productRating != null
-        && (productRating.ratingValue != null || productRating.reviewCount != null);
-    const mlProductRatingUnavailable = (
-        (mlProductRating === null || mlProductReviewCount === null)
-        && !visibleMainReviewModule && !structuredRatingPresent
-        && document.readyState === 'complete'
-        && Boolean(document.querySelector('h1.ui-pdp-title'))
-        && hasQuestions
-    ) ? true : null;
-
-    if (mlProductRating === null || mlProductReviewCount === null) {
+    // Los datos JSON-LD pueden existir aunque las calificaciones no sean
+    // visibles (caso MLAU2874874181: 4,9 / 1552 en metadata, sin módulo).
+    // No presentarlos como reseñas corroboradas en la ficha: no permiten
+    // completar cobertura 3/3 ni invalidar una observación de no visibilidad.
+    if (!visibleMainReviewModule ||
+            mlProductRating === null || mlProductReviewCount === null) {
         mlProductRating = null;
         mlProductReviewCount = null;
     }
+    const mlProductRatingUnavailable = (
+        !visibleMainReviewModule &&
+        document.readyState === 'complete' &&
+        Boolean(document.querySelector('h1.ui-pdp-title')) &&
+        hasQuestions
+    ) ? true : null;
 
     const offers = Array.isArray(product?.offers)
         ? product.offers[0]
