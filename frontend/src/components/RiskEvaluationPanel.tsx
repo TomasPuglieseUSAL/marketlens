@@ -1,5 +1,6 @@
 import { useId, useState } from 'react'
 import AnimatedCollapse from './AnimatedCollapse'
+import DisclosureChevron from './DisclosureChevron'
 
 import {
   evaluatePublication,
@@ -218,7 +219,7 @@ export default function RiskEvaluationPanel({
           aria-controls={historyId}
         >
           {showHistory ? 'Ocultar historial' : 'Consultar historial'}
-          <span className="disclosure-chevron" aria-hidden="true">⌄</span>
+          <DisclosureChevron />
         </button>
       </div>
 
