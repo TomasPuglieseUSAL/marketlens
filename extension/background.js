@@ -44,14 +44,16 @@ async function loginPersistently(username, password) {
 }
 async function revokeRemote(refreshToken) {
     try {
-        await fetch(`${API_BASE}/auth/logout`, {
+        const response = await fetch(`${API_BASE}/auth/logout`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             credentials: 'omit',
             body: JSON.stringify({refreshToken})
         });
+        return response.ok;
     } catch {
-        // La credencial local se borra igualmente; el token remoto caducará.
+        // El cierre local sigue siendo posible sin conectividad.
+        return false;
     }
 }
 async function logoutPersistently() {
@@ -59,8 +61,9 @@ async function logoutPersistently() {
     try {
         const current = (await ext.storage.local.get(AUTH_KEY))[AUTH_KEY];
         await ext.storage.local.remove(AUTH_KEY);
-        if (current?.refreshToken) await revokeRemote(current.refreshToken);
-        return {ok: true};
+        const remoteRevoked = current?.refreshToken
+            ? await revokeRemote(current.refreshToken) : true;
+        return {ok: true, remoteRevoked};
     } finally {
         logoutPending = false;
     }
