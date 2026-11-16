@@ -266,7 +266,9 @@ async function handleLogout() {
         await ext.storage.session.remove(AUTH_KEY).catch(() => {});
         await visualExit;
         $('login-password').value = '';
-        showLoggedOut('Sesión cerrada.');
+        showLoggedOut(reply.remoteRevoked === false
+            ? 'Sesión cerrada localmente. No se pudo confirmar la revocación en el servidor.'
+            : 'Sesión cerrada.');
     } catch (error) {
         // No afirmar que se cerró la sesión cuando falló la revocación.
         await visualExit;
