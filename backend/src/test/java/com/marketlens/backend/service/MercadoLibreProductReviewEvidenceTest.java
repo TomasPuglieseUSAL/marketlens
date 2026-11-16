@@ -215,6 +215,68 @@ class MercadoLibreProductReviewEvidenceTest {
                 temu, LocalDateTime.now()).isEmpty());
     }
 
+    @Test void confirmedMissingRatingAddsOnlyTwoPointsWithoutIncreasingCoverage() {
+        Publication publication = listing();
+        publication.setMlSellerReputationObserved(5);
+        publication.setMlSellerReputationObservedAt(LocalDateTime.now());
+        publication.setMlProductRatingUnavailable(true);
+        publication.setMlProductObservedAt(LocalDateTime.now());
+
+        RiskEvaluation evaluation = new RiskEngine(new RiskCoverageCalculator())
+                .evaluate(publication);
+
+        assertEquals(2, evaluation.getScore());
+        assertEquals(2, evaluation.getAvailableFactors());
+        assertEquals(3, evaluation.getTotalFactors());
+        assertProductFactor(evaluation, "ML_PRODUCT_RATING_UNAVAILABLE", 2);
+        assertFalse(MercadoLibreProductReviewEvidence.hasObservedEvidence(
+                publication, LocalDateTime.now()));
+    }
+
+    @Test void unknownOrOldMissingRatingMustRemainNeutral() {
+        Publication publication = listing();
+        publication.setMlProductObservedAt(LocalDateTime.now());
+        publication.setMlProductRatingUnavailable(null);
+        assertEquals(0, new RiskEngine(new RiskCoverageCalculator())
+                .evaluate(publication).getScore());
+
+        publication.setMlProductRatingUnavailable(true);
+        publication.setMlProductObservedAt(LocalDateTime.now().minusDays(31));
+        assertEquals(0, new RiskEngine(new RiskCoverageCalculator())
+                .evaluate(publication).getScore());
+    }
+
+    @Test void newConfirmedAbsenceReplacesPreviouslyMisattributedFourPointNine() {
+        Publication publication = listing();
+        publication.setMlProductRating(new BigDecimal("4.9"));
+        publication.setMlProductReviewCount(226);
+        publication.setMlProductObservedAt(LocalDateTime.now().minusDays(1));
+
+        ExtensionImport newObservation = new ExtensionImport("MERCADO_LIBRE",
+                "SSD Kingston NV3", "140000", "ARS", "Tienda de prueba",
+                "MLAU2874874181", "SSD NVMe de 1 TB",
+                "https://www.mercadolibre.com.ar/ssd/up/MLAU2874874181", "demo");
+        newObservation.setMlProductRatingUnavailable(true);
+
+        ExtensionProcessingService.applyMercadoLibreObservedEvidence(
+                publication, newObservation);
+
+        assertNull(publication.getMlProductRating());
+        assertNull(publication.getMlProductReviewCount());
+        assertTrue(publication.getMlProductRatingUnavailable());
+        assertProductFactor(new RiskEngine(new RiskCoverageCalculator())
+                .evaluate(publication), "ML_PRODUCT_RATING_UNAVAILABLE", 2);
+
+        // Las observaciones positivas posteriores pueden reemplazar el estado.
+        newObservation.setMlProductRatingUnavailable(null);
+        newObservation.setMlProductReviews(new BigDecimal("4.6"), 16);
+        ExtensionProcessingService.applyMercadoLibreObservedEvidence(
+                publication, newObservation);
+        assertEquals(new BigDecimal("4.6"), publication.getMlProductRating());
+        assertEquals(16, publication.getMlProductReviewCount());
+        assertFalse(publication.getMlProductRatingUnavailable());
+    }
+
     @Test void reviewDescriptionsAreConciseAndDoNotRepeatOtherSignals() {
         var fiveStars = new RiskEngine(new RiskCoverageCalculator())
                 .evaluate(withProductReviews("5.0", 2, 1));
