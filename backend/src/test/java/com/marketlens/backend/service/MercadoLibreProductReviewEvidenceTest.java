@@ -215,4 +215,32 @@ class MercadoLibreProductReviewEvidenceTest {
                 temu, LocalDateTime.now()).isEmpty());
     }
 
+    @Test void reviewDescriptionsAreConciseAndDoNotRepeatOtherSignals() {
+        var fiveStars = new RiskEngine(new RiskCoverageCalculator())
+                .evaluate(withProductReviews("5.0", 2, 1));
+        assertEquals("Calificación del producto: 5,0/5.",
+                fiveStars.getFactors().stream()
+                        .filter(f -> "ML_PRODUCT_REVIEWS_OBSERVED".equals(f.getCode()))
+                        .findFirst().orElseThrow().getDescription());
+        assertEquals("Cantidad de opiniones reducida: 2.",
+                fiveStars.getFactors().stream()
+                        .filter(f -> "ML_FEW_PRODUCT_REVIEWS".equals(f.getCode()))
+                        .findFirst().orElseThrow().getDescription());
+
+        var lowStars = new RiskEngine(new RiskCoverageCalculator())
+                .evaluate(withProductReviews("2.4", 2, 1));
+        assertEquals("Calificación baja del producto: 2,4/5.",
+                lowStars.getFactors().stream()
+                        .filter(f -> "ML_LOW_PRODUCT_RATING".equals(f.getCode()))
+                        .findFirst().orElseThrow().getDescription());
+        assertEquals("Cantidad de opiniones reducida: 2.",
+                lowStars.getFactors().stream()
+                        .filter(f -> "ML_FEW_PRODUCT_REVIEWS".equals(f.getCode()))
+                        .findFirst().orElseThrow().getDescription());
+
+        assertTrue(fiveStars.getFactors().stream().allMatch(f ->
+                !f.getDescription().contains("fiabilidad del vendedor")
+                        && !f.getDescription().contains("por sí sola")));
+    }
+
 }
