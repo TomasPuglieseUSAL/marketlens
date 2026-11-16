@@ -4,6 +4,7 @@ import {
   evaluatePublication,
   getPublicationEvaluations,
   type RiskEvaluation,
+  type RiskFactor,
   type RiskLevel,
 } from '../api/client'
 
@@ -17,6 +18,34 @@ const riskLabels: Record<RiskLevel, string> = {
   MEDIUM: 'Medio',
   HIGH: 'Alto',
   INDETERMINATE: 'Indeterminado',
+}
+
+// Las evaluaciones históricas conservaron descripciones largas en la base.
+// Mostrar sus factores de reseñas con el mismo formato breve que las nuevas,
+// sin cambiar los datos ni el puntaje persistidos.
+function visibleFactorDescription(factor: RiskFactor): string {
+  const code = factor.code
+  if (code === 'ML_PRODUCT_REVIEWS_OBSERVED'
+      || code === 'ML_LOW_PRODUCT_RATING'
+      || code === 'ML_MODERATE_PRODUCT_RATING') {
+    const match = factor.description.match(/\b([0-5](?:[.,]\d+)?)\s*\/\s*5\b/)
+    if (match) {
+      const rating = match[1].replace('.', ',')
+      const title = code === 'ML_LOW_PRODUCT_RATING'
+        ? 'Calificación baja del producto'
+        : code === 'ML_MODERATE_PRODUCT_RATING'
+          ? 'Calificación intermedia del producto'
+          : 'Calificación del producto'
+      return `${title}: ${rating}/5.`
+    }
+  }
+  if (code === 'ML_FEW_PRODUCT_REVIEWS') {
+    if (factor.description.startsWith('Cantidad de opiniones reducida:'))
+      return factor.description
+    const match = factor.description.match(/\b(\d[\d.,]*)\s+opiniones\b/i)
+    if (match) return `Cantidad de opiniones reducida: ${match[1]}.`
+  }
+  return factor.description
 }
 
 export default function RiskEvaluationPanel({
@@ -150,7 +179,7 @@ export default function RiskEvaluationPanel({
                 </ul>
               )}
 
-              <h4>Factores detectados</h4>
+              <h4>Factores del análisis</h4>
 
               {evaluation.factors.length === 0 ? (
                 <p>No se detectaron factores de riesgo.</p>
@@ -158,12 +187,10 @@ export default function RiskEvaluationPanel({
                 <ul className="risk-factors">
                   {evaluation.factors.map((factor) => (
                     <li key={factor.id}>
-                      <div>
-                        <strong>{factor.description}</strong>
-                        <small>{factor.code}</small>
-                      </div>
-
-                      <span>+{factor.scoreContribution}</span>
+                      <strong>{visibleFactorDescription(factor)}</strong>
+                      {factor.scoreContribution > 0
+                        ? <span>+{factor.scoreContribution}</span>
+                        : <small>Informativo</small>}
                     </li>
                   ))}
                 </ul>
