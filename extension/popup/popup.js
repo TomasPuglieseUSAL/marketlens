@@ -941,43 +941,83 @@ function extractMercadoLibre() {
         return null;
     }
 
-    function findProduct(data) {
-        if (!data || typeof data !== 'object') return null;
+    // El documento incluye carruseles promocionados con reseñas de OTROS
+    // productos. Ni sus tarjetas ni su JSON-LD sirven como evidencia.
+    function belongsToRecommendations(element) {
+        return Boolean(element?.closest?.(
+            '.ui-recommendations-carousel-wrapper-ref, ' +
+            '.ui-recommendations-carousel-snapped, .poly-card, ' +
+            '.poly-component__reviews, [data-testid="recommendations"]'
+        ));
+    }
+    function normalizeProductName(value) {
+        return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    }
+    function isCurrentProduct(data) {
+        const rawUrl = data?.url || data?.['@id'];
+        if (typeof rawUrl === 'string' && rawUrl.trim()) {
+            try {
+                const structured = new URL(rawUrl, window.location.href);
+                const currentPath = window.location.pathname.replace(/\/$/, '');
+                const structuredPath = structured.pathname.replace(/\/$/, '');
+                if (structured.host === window.location.host
+                        && structuredPath === currentPath) return true;
+                // Si el JSON-LD identifica expresamente otra ficha, nunca
+                // reutilizar su rating aunque el nombre sea muy parecido.
+                if (/\/(?:up\/MLAU\d+|p\/MLA\d+|MLA-?\d{6,})/i.test(structuredPath)) {
+                    return false;
+                }
+            } catch {
+                return false;
+            }
+        }
 
+        // Sin URL utilizable, exigir correspondencia estricta con el h1.
+        const heading = normalizeProductName(
+            document.querySelector('h1.ui-pdp-title')?.textContent);
+        const name = normalizeProductName(data?.name);
+        if (!heading || !name) return false;
+        if (heading === name) return true;
+        const headTokens = new Set(heading.split(' '));
+        const nameTokens = new Set(name.split(' '));
+        const digits = tokens => [...tokens].filter(t => /\d/.test(t)).sort().join('|');
+        if (digits(headTokens) !== digits(nameTokens)) return false;
+        const shorter = headTokens.size < nameTokens.size ? headTokens : nameTokens;
+        if (shorter.size < 5) return false;
+        const shared = [...shorter].filter(t =>
+            (shorter === headTokens ? nameTokens : headTokens).has(t)).length;
+        return shared / shorter.size >= 0.9;
+    }
+    function findCurrentProduct(data) {
+        if (!data || typeof data !== 'object') return null;
         if (Array.isArray(data)) {
-            for (const item of data) {
-                const found = findProduct(item);
-                if (found) return found;
+            for (const entry of data) {
+                const product = findCurrentProduct(entry);
+                if (product) return product;
             }
             return null;
         }
-
-        const types = Array.isArray(data['@type'])
-            ? data['@type']
-            : [data['@type']];
-
-        if (types.some((type) =>
-            typeof type === 'string' &&
-            (type === 'Product' || type.endsWith('/Product'))
-        )) {
+        const types = Array.isArray(data['@type']) ? data['@type'] : [data['@type']];
+        if (types.some(t => typeof t === 'string'
+                && (t === 'Product' || t.endsWith('/Product')))
+                && isCurrentProduct(data)) {
             return data;
         }
-
-        return findProduct(data['@graph']);
+        return findCurrentProduct(data['@graph']);
     }
 
-    // Intentar recuperar los datos estructurados JSON-LD.
+    // Inspeccionar todos los bloques JSON-LD, pero seleccionar únicamente
+    // el Product asociado a la URL o al título de la ficha principal.
     let product = null;
-
     for (const script of document.querySelectorAll(
         'script[type="application/ld+json"]'
     )) {
         try {
-            product = findProduct(JSON.parse(script.textContent));
-
+            product = findCurrentProduct(JSON.parse(script.textContent));
             if (product) break;
         } catch {
-            // Ignorar bloques que no contengan JSON válido.
+            // Ignorar JSON-LD inválido.
         }
     }
 
@@ -1078,6 +1118,7 @@ function extractMercadoLibre() {
             '.ui-pdp-review__rating__summary, [data-testid="product-reviews"]'
         );
         for (const block of reviewBlocks) {
+            if (belongsToRecommendations(block)) continue;
             const text = block.innerText || block.textContent || '';
             const countMatch = text.match(/(\d{1,3}(?:[.,]\d{3})+|\d+)\s+(?:opiniones|reseñas)\b/i);
             const averageText = block.querySelector?.(
@@ -1104,6 +1145,7 @@ function extractMercadoLibre() {
             '#reviews_capability_v3'
         );
         for (const section of reviewSections) {
+            if (belongsToRecommendations(section)) continue;
             const average = parseMlRating(section.querySelector?.(
                 '.ui-review-capability__rating__average'
             )?.textContent?.trim());
@@ -1143,6 +1185,32 @@ function extractMercadoLibre() {
             }
         }
     }
+    // AUSENCIA OBSERVADA != RESEÑAS DESCONOCIDAS.
+    // Solo considerarla cuando la página principal ya cargó, el módulo
+    // de preguntas/respuestas está disponible y no hay componente de
+    // calificación atribuible al producto actual. El carrusel NO cuenta.
+    const mainReviewModules = document.querySelectorAll(
+        '.ui-pdp-review__rating, .ui-pdp-reviews__rating, ' +
+        '.ui-pdp-review__rating__summary, [data-testid="product-reviews"], ' +
+        '[data-testid="reviews-desktop"], [data-testid="reviews-mobile"], ' +
+        '#reviews_capability_v3'
+    );
+    const visibleMainReviewModule = [...mainReviewModules]
+        .some(node => !belongsToRecommendations(node));
+    const hasQuestions = Boolean(document.querySelector(
+        '.ui-pdp-questions, .ui-pdp-questions__container, ' +
+        '#questions, #questions-section, [data-testid="questions"]'
+    ));
+    const structuredRatingPresent = productRating != null
+        && (productRating.ratingValue != null || productRating.reviewCount != null);
+    const mlProductRatingUnavailable = (
+        (mlProductRating === null || mlProductReviewCount === null)
+        && !visibleMainReviewModule && !structuredRatingPresent
+        && document.readyState === 'complete'
+        && Boolean(document.querySelector('h1.ui-pdp-title'))
+        && hasQuestions
+    ) ? true : null;
+
     if (mlProductRating === null || mlProductReviewCount === null) {
         mlProductRating = null;
         mlProductReviewCount = null;
@@ -1495,7 +1563,8 @@ function extractMercadoLibre() {
         sellerId: catalogOffer ? null : sellerId,
         selectedOfferId: catalogOffer?.selectedOfferId ?? null,
         mlProductRating,
-        mlProductReviewCount
+        mlProductReviewCount,
+        mlProductRatingUnavailable
     };
 }
 
