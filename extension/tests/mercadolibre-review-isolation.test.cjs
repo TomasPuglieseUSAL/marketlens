@@ -544,3 +544,162 @@ test('Galaxy A13: el formulario debe apuntar al catálogo abierto', () => {
         parentUrl: '/p/MLA2000013001'
     }).found, false);
 });
+
+
+const galaxyA13LightBlueUrl =
+    'https://www.mercadolibre.com.ar/samsung-galaxy-a13-64gb-celeste-4gb-ram-aceptable-reacondicionado/p/MLA2000102466';
+
+// Fixture fiel al HTML del Galaxy A13 Celeste: hay tres selectores
+// independientes, pero el formulario conserva parent_url de la variante
+// negra. El vínculo "Vender uno igual" confirma itemId/productId actuales.
+function extractGalaxyA13LightBlue({
+    confirmation = true,
+    confirmationCatalog = 'MLA2000102466',
+    confirmationItem = 'MLA2282119419',
+    selectedStorageId = 'MLA2000102466',
+    duplicateConfirmation = false,
+    parentUrl = '/p/MLA2000090922',
+    checkoutIds = ['MLA2282119419']
+} = {}) {
+    const catalog = 'MLA2000102466';
+    const chosen = id => ({
+        classList: {contains: name => name.endsWith('--SELECTED')},
+        getAttribute: field => field === 'href'
+            ? '/samsung-galaxy-a13-64gb-celeste-4gb-ram-aceptable-reacondicionado/p/' +
+                id + '?product_trigger_id=MLA2000102466&picker=true'
+            : null
+    });
+    const other = id => ({
+        classList: {contains: () => false},
+        getAttribute: () => '/celular-samsung-galaxy-a13-negro-128gb/p/' + id
+    });
+    const groups = [
+        [chosen(selectedStorageId), other('MLA2000090922')],
+        [other('MLA2000090922'), other('MLA2000013001'), chosen(catalog)],
+        [other('MLA2000090922'), other('MLA2000013001'), chosen(catalog)]
+    ];
+    const gradeGroup = elements => ({
+        querySelectorAll: selector =>
+            selector.includes('__thumbnails__item') ? elements : []
+    });
+    const price = {
+        getAttribute: key => key === 'aria-label' ? '239995 pesos' : null,
+        closest: () => null,
+        querySelector(selector) {
+            if (selector.includes('meta[itemprop="price"]'))
+                return {getAttribute: () => '239995'};
+            if (selector.includes('__fraction'))
+                return {textContent: '239.995'};
+            return null;
+        }
+    };
+    const withoutMeta = {querySelector: () => null, closest: () => null};
+    const form = {
+        querySelector(selector) {
+            return selector.includes('name="parent_url"')
+                ? {value: parentUrl} : null;
+        },
+        querySelectorAll(selector) {
+            if (selector.includes('name="item_id"')) {
+                return checkoutIds.map(value => ({value}));
+            }
+            if (selector.includes('.ui-pdp-seller-summary__link')) {
+                return [{textContent: 'SANTIJULIANN_'}];
+            }
+            return [];
+        }
+    };
+    const confirmationHref =
+        'https://www.mercadolibre.com.ar/syi/core/list/equals?itemId=' +
+        confirmationItem + '&productId=' + confirmationCatalog;
+    const proof = {
+        getAttribute: key => key === 'href' ? confirmationHref : null,
+        closest: () => null
+    };
+    const heading = {textContent:
+        'Samsung Galaxy A13 64GB Celeste 4GB RAM - Aceptable (Reacondicionado)'};
+    const document = {
+        readyState: 'complete',
+        body: {innerText: 'Vendido por SANTIJULIANN_'},
+        querySelector(selector) {
+            if (selector === '#buybox-form') return form;
+            if (selector === 'h1.ui-pdp-title') return heading;
+            if (selector.includes('.ui-pdp-price__second-line')) return price;
+            return null;
+        },
+        querySelectorAll(selector) {
+            if (selector === '.ui-pdp-outside_variations__thumbnails') {
+                return groups.map(gradeGroup);
+            }
+            if (selector === '.ui-pdp-outside_variations__thumbnails__item') {
+                return groups.flat();
+            }
+            if (selector === 'a.ui-pdp-syi__link[href]') {
+                return !confirmation ? [] : duplicateConfirmation
+                    ? [proof, proof] : [proof];
+            }
+            if (selector === '.ui-pdp-price__second-line .andes-money-amount') {
+                return [price, withoutMeta];
+            }
+            if (selector === 'script[type="application/ld+json"]') {
+                // Reproduce metadata que sigue describiendo la variante
+                // negra, aunque el DOM principal es el celeste.
+                return [{textContent: JSON.stringify({
+                    '@type': 'Product',
+                    name: 'Celular Samsung Galaxy A13 Negro 128gb - Excelente (Reacondicionado)',
+                    productID: 'MLA2000090922',
+                    offers: {
+                        price: 349999,
+                        url: 'https://www.mercadolibre.com.ar/p/MLA2000090922',
+                        priceCurrency: 'ARS'
+                    },
+                    aggregateRating: {ratingValue: 4.5, reviewCount: 59}
+                })}];
+            }
+            return [];
+        }
+    };
+    return compile({location: new URL(galaxyA13LightBlueUrl)}, document, URL)();
+}
+
+test('Galaxy A13 Celeste: importa oferta con tres selectores y parent_url desactualizado', () => {
+    const result = extractGalaxyA13LightBlue();
+    assert.equal(result.found, true);
+    assert.equal(result.externalId, 'MLA2282119419');
+    assert.equal(result.selectedOfferId, 'MLA2282119419');
+    assert.equal(result.url, galaxyA13LightBlueUrl);
+    assert.equal(result.seller, 'SANTIJULIANN_');
+    assert.equal(result.price, '239.995');
+    assert.equal(result.currency, 'ARS');
+    // No tomar las reseñas de la otra variante que está en JSON-LD.
+    assert.equal(result.mlProductRating, null);
+    assert.equal(result.mlProductReviewCount, null);
+});
+
+test('Galaxy A13 Celeste: sin corroboración independiente, se rechaza parent_url viejo', () => {
+    assert.equal(extractGalaxyA13LightBlue({confirmation: false}).found, false);
+});
+
+test('Galaxy A13 Celeste: enlace con otro productId o itemId no valida la oferta', () => {
+    assert.equal(extractGalaxyA13LightBlue({
+        confirmationCatalog: 'MLA2000090922'
+    }).found, false);
+    assert.equal(extractGalaxyA13LightBlue({
+        confirmationItem: 'MLA2282119420'
+    }).found, false);
+});
+
+test('Galaxy A13 Celeste: dos enlaces de corroboración o dos item_id son ambiguos', () => {
+    assert.equal(extractGalaxyA13LightBlue({
+        duplicateConfirmation: true
+    }).found, false);
+    assert.equal(extractGalaxyA13LightBlue({
+        checkoutIds: ['MLA2282119419', 'MLA2282119420']
+    }).found, false);
+});
+
+test('Galaxy A13 Celeste: almacenamiento seleccionado de otro catálogo se rechaza', () => {
+    assert.equal(extractGalaxyA13LightBlue({
+        selectedStorageId: 'MLA2000090922'
+    }).found, false);
+});
