@@ -101,7 +101,7 @@ export default function AnimatedCollapse({
       ref={outerRef}
       id={id}
       className={`animated-collapse${className ? ` ${className}` : ''}`}
-      style={{ height: previewLines ? '0px' : '0px', opacity: inaccessible ? 0 : 1 }}
+      style={{ height: '0px', opacity: inaccessible ? 0 : 1 }}
       aria-hidden={inaccessible}
       inert={inaccessible}
     >
