@@ -97,12 +97,13 @@ public class RiskEngine {
             score += productSignal.points();
         }
 
-        // Opiniones del catálogo de Mercado Libre: fuente distinta de la
-        // reputación de cada vendedor. Sólo contexto informativo (0 puntos).
-        MercadoLibreProductReviewEvidence.Signal mlSignal =
-                MercadoLibreProductReviewEvidence.evaluate(publication, LocalDateTime.now());
-        if (mlSignal != null) {
+        // Opiniones del producto de Mercado Libre: penalizar por separado
+        // calificaciones desfavorables y muestras pequeñas, sin confundir
+        // reseñas del catálogo con la reputación de su vendedor.
+        for (MercadoLibreProductReviewEvidence.Signal mlSignal :
+                MercadoLibreProductReviewEvidence.evaluateSignals(publication, LocalDateTime.now())) {
             addFactor(evaluation, mlSignal.code(), mlSignal.description(), mlSignal.points());
+            score += mlSignal.points();
         }
         // Reputación observada (sin OAuth): puntuar una sola vez si NO
         // existe un nivel verificado. Nunca sumarla duplicada.
