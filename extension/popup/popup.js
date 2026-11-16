@@ -1261,35 +1261,32 @@ function extractMercadoLibre() {
             }
         }
     }
-    // AUSENCIA OBSERVADA != RESEÑAS DESCONOCIDAS.
-    // Solo considerarla cuando la página principal ya cargó, el módulo
-    // de preguntas/respuestas está disponible y no hay componente de
-    // calificación atribuible al producto actual. El carrusel NO cuenta.
+    // Las puntuaciones que Mercado Libre incluye en JSON-LD son válidas
+    // aun sin módulo de opiniones visible, siempre que correspondan a
+    // ESTA ficha (ver findCurrentProduct), no a recomendaciones.
+    // La ausencia de datos estructurados y visibles, en cambio, puede
+    // informar una señal leve si la página terminó de cargar.
     const mainReviewModules = document.querySelectorAll(
         '.ui-pdp-review__rating, .ui-pdp-reviews__rating, ' +
         '.ui-pdp-review__rating__summary, [data-testid="product-reviews"], ' +
         '[data-testid="reviews-desktop"], [data-testid="reviews-mobile"], ' +
         '#reviews_capability_v3'
     );
-    const visibleMainReviewModule = [...mainReviewModules]
-        .some(node => !belongsToRecommendations(node) &&
-            !node.hidden && node.getAttribute?.('aria-hidden') !== 'true' &&
-            (!node.getClientRects || node.getClientRects().length > 0));
+    const mainReviewModulePresent = [...mainReviewModules]
+        .some(node => !belongsToRecommendations(node));
     const hasQuestions = Boolean(document.querySelector(
         '.ui-pdp-questions, .ui-pdp-questions__container, ' +
         '#questions, #questions-section, [data-testid="questions"]'
     ));
-    // Los datos JSON-LD pueden existir aunque las calificaciones no sean
-    // visibles (caso MLAU2874874181: 4,9 / 1552 en metadata, sin módulo).
-    // No presentarlos como reseñas corroboradas en la ficha: no permiten
-    // completar cobertura 3/3 ni invalidar una observación de no visibilidad.
-    if (!visibleMainReviewModule ||
-            mlProductRating === null || mlProductReviewCount === null) {
+    const structuredRatingPresent = productRating != null
+        && (productRating.ratingValue != null || productRating.reviewCount != null);
+    if (mlProductRating === null || mlProductReviewCount === null) {
         mlProductRating = null;
         mlProductReviewCount = null;
     }
     const mlProductRatingUnavailable = (
-        !visibleMainReviewModule &&
+        mlProductRating === null && mlProductReviewCount === null &&
+        !mainReviewModulePresent && !structuredRatingPresent &&
         document.readyState === 'complete' &&
         Boolean(document.querySelector('h1.ui-pdp-title')) &&
         hasQuestions
