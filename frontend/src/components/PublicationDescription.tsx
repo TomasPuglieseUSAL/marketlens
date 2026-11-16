@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import AnimatedCollapse from './AnimatedCollapse'
+import DisclosureChevron from './DisclosureChevron'
 
 interface PublicationDescriptionProps {
   description: string | null
@@ -28,7 +29,7 @@ export default function PublicationDescription({ description }: PublicationDescr
               onClick={() => setExpanded((current) => !current)}
             >
               {expanded ? 'Ver menos' : 'Leer descripción completa'}
-              <span className="disclosure-chevron" aria-hidden="true">⌄</span>
+              <DisclosureChevron />
             </button>
           )}
         </>
