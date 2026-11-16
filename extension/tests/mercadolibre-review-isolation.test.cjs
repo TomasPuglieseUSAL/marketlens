@@ -703,3 +703,131 @@ test('Galaxy A13 Celeste: almacenamiento seleccionado de otro catálogo se recha
         selectedStorageId: 'MLA2000090922'
     }).found, false);
 });
+
+
+const openBoxUrl = 'https://www.mercadolibre.com.ar/samsung-galaxy-a13-64gb-negro-4gb-ram-nuevo-con-caja-abierta/p/MLA2015816941';
+
+// Replica la estructura del HTML adjunto: la oferta está en #buybox-form,
+// pero el vendedor LOTARINO es un span dentro de un botón, no un enlace.
+function extractOpenBoxCatalog({
+    sellerMode = 'button',
+    checkoutIds = ['MLA2629481668'],
+    parentUrl = '/p/MLA2015816941',
+    structuredPrice = '250000'
+} = {}) {
+    const form = {
+        querySelector(selector) {
+            if (selector.includes('name="parent_url"')) {
+                return {value: parentUrl};
+            }
+            return null;
+        },
+        querySelectorAll(selector) {
+            if (selector.includes('name="item_id"')) {
+                return checkoutIds.map(value => ({value}));
+            }
+            if (selector.includes('.ui-pdp-seller-summary__header__title')) {
+                const nodes = [];
+                if ((sellerMode === 'link' || sellerMode === 'both') &&
+                        selector.includes('.ui-pdp-seller-summary__link')) {
+                    nodes.push({textContent: 'LOTARINO'});
+                }
+                if ((sellerMode === 'button' || sellerMode === 'both') &&
+                        selector.includes('.ui-pdp-seller-summary__label-text-no-action')) {
+                    nodes.push({textContent: 'LOTARINO'});
+                }
+                return nodes;
+            }
+            return [];
+        }
+    };
+    const mainPrice = {
+        getAttribute: name => name === 'aria-label' ? '250000 pesos' : null,
+        closest: () => null,
+        querySelector(selector) {
+            if (selector.includes('meta[itemprop="price"]')) {
+                return {getAttribute: () => structuredPrice};
+            }
+            if (selector.includes('andes-money-amount__fraction')) {
+                return {textContent: '250.000'};
+            }
+            return null;
+        }
+    };
+    const heading = {textContent:
+        'Samsung Galaxy A13 64GB Negro 4GB RAM (Nuevo con caja abierta)'};
+    const doc = {
+        readyState: 'complete',
+        body: {innerText: 'Vendido por LOTARINO. 4 ventas'},
+        querySelector(selector) {
+            if (selector === '#buybox-form') return form;
+            if (selector === 'h1.ui-pdp-title') return heading;
+            if (selector.includes('.ui-pdp-price__second-line')) return mainPrice;
+            return null;
+        },
+        querySelectorAll(selector) {
+            if (selector === '.ui-pdp-price__second-line .andes-money-amount') {
+                return [mainPrice];
+            }
+            if (selector === 'script[type="application/ld+json"]') {
+                return [{textContent: JSON.stringify({
+                    '@type': 'Product',
+                    name: heading.textContent,
+                    productID: 'MLA2015816941',
+                    sku: 'MLA2015816941',
+                    offers: {
+                        price: 250000,
+                        priceCurrency: 'ARS',
+                        url: openBoxUrl
+                    },
+                    aggregateRating: {
+                        ratingValue: 4.7,
+                        ratingCount: 2867,
+                        reviewCount: 977
+                    }
+                })}];
+            }
+            return [];
+        }
+    };
+    return compile({location: new URL(openBoxUrl)}, doc, URL)();
+}
+
+test('Galaxy A13 caja abierta: importa oferta única con vendedor en botón', () => {
+    const data = extractOpenBoxCatalog();
+    assert.equal(data.found, true);
+    assert.equal(data.externalId, 'MLA2629481668');
+    assert.equal(data.selectedOfferId, 'MLA2629481668');
+    assert.equal(data.seller, 'LOTARINO');
+    assert.equal(data.url, openBoxUrl);
+    assert.equal(data.price, '250.000');
+    assert.equal(data.currency, 'ARS');
+    assert.equal(data.mlProductRating, 4.7);
+    assert.equal(data.mlProductReviewCount, 977);
+});
+
+test('Galaxy A13 caja abierta: sigue funcionando el vendedor como enlace', () => {
+    const data = extractOpenBoxCatalog({sellerMode: 'link'});
+    assert.equal(data.found, true);
+    assert.equal(data.seller, 'LOTARINO');
+});
+
+test('Galaxy A13 caja abierta: vendedores ausentes o duplicados se rechazan', () => {
+    assert.equal(extractOpenBoxCatalog({sellerMode: 'none'}).found, false);
+    assert.equal(extractOpenBoxCatalog({sellerMode: 'both'}).found, false);
+});
+
+test('Galaxy A13 caja abierta: oferta y catálogo deben tener IDs inequívocos', () => {
+    assert.equal(extractOpenBoxCatalog({
+        checkoutIds: ['MLA2629481668', 'MLA2629481669']
+    }).found, false);
+    assert.equal(extractOpenBoxCatalog({
+        parentUrl: '/p/MLA2000090922'
+    }).found, false);
+});
+
+test('Galaxy A13 caja abierta: precio estructurado contradictorio se rechaza', () => {
+    assert.equal(extractOpenBoxCatalog({
+        structuredPrice: '149000'
+    }).found, false);
+});
