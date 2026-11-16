@@ -131,6 +131,9 @@ export default function RiskEvaluationPanel({
 }: RiskEvaluationPanelProps) {
   const historyId = useId()
   const [evaluations, setEvaluations] = useState<RiskEvaluation[]>([])
+  // Solo una evaluación creada en ESTA instancia permanece fuera del historial.
+  // Consultar evaluaciones guardadas no cambia esta referencia.
+  const [createdEvaluationId, setCreatedEvaluationId] = useState<number | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -151,8 +154,11 @@ export default function RiskEvaluationPanel({
 
       // El detalle de cobertura corresponde a la evaluación recién creada;
       // el historial anterior no guarda snapshots de cada dimensión.
-      setEvaluations(history.map((item) => item.id === created.id
-        ? {...item, coverageFactors: created.coverageFactors} : item))
+      setEvaluations([
+        { ...created, coverageFactors: created.coverageFactors },
+        ...history.filter((item) => item.id !== created.id),
+      ])
+      setCreatedEvaluationId(created.id)
       setShowHistory(false)
       setMessage('Evaluación realizada correctamente.')
     } catch (err) {
@@ -197,6 +203,13 @@ export default function RiskEvaluationPanel({
     }
   }
 
+  const createdEvaluation = createdEvaluationId === null
+    ? null
+    : evaluations.find((item) => item.id === createdEvaluationId) ?? null
+  const historicalEvaluations = createdEvaluation
+    ? evaluations.filter((item) => item.id !== createdEvaluation.id)
+    : evaluations
+
   return (
     <section className="risk-panel">
       <h3>Evaluaciones de riesgo</h3>
@@ -226,9 +239,9 @@ export default function RiskEvaluationPanel({
       {message && <p className="success-message">{message}</p>}
       {error && <p className="error">{error}</p>}
 
-      {evaluations.length > 0 && (
+      {createdEvaluation && (
         <div className="evaluation-history evaluation-latest">
-          <EvaluationCard evaluation={evaluations[0]} latest />
+          <EvaluationCard evaluation={createdEvaluation} latest />
         </div>
       )}
 
@@ -241,14 +254,14 @@ export default function RiskEvaluationPanel({
           aria-label="Evaluaciones anteriores"
           tabIndex={showHistory ? 0 : -1}
         >
-          <h4>Evaluaciones anteriores ({Math.max(0, evaluations.length - 1)})</h4>
-          {evaluations.length > 1
-            ? evaluations.slice(1).map((evaluation) => (
+          <h4>{createdEvaluation ? 'Evaluaciones anteriores' : 'Historial de evaluaciones'} ({historicalEvaluations.length})</h4>
+          {historicalEvaluations.length > 0
+            ? historicalEvaluations.map((evaluation) => (
               <EvaluationCard key={evaluation.id} evaluation={evaluation} latest={false} />
             ))
-            : <p>{evaluations.length === 0
-              ? 'No hay evaluaciones registradas.'
-              : 'Aún no hay evaluaciones anteriores.'}</p>}
+            : <p>{createdEvaluation
+              ? 'Aún no hay evaluaciones anteriores.'
+              : 'No hay evaluaciones registradas.'}</p>}
         </div>
       </AnimatedCollapse>
     </section>
