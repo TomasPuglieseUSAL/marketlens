@@ -26,6 +26,20 @@ formulario y el importe principal único coincide con sus metadatos de precio
 en ARS. Ejemplo verificado con HTML: catálogo SanDisk `MLA2085086111`,
 oferta `MLA4003237102`. Si faltan pruebas o aparecen varios IDs, rechazar.
 
+**Varios selectores simultáneos:** algunos catálogos de celulares, además de
+«Excelente/Bueno/Aceptable», presentan un selector de color independiente.
+No debe exigirse un único botón \`--SELECTED\` en toda la ficha: cada grupo
+\`.ui-pdp-outside_variations__thumbnails\` debe tener exactamente una
+selección y **todas** las selecciones deben enlazar al mismo catálogo
+\`/p/MLA...\` abierto. Se rechazan grupos ambiguos y combinaciones donde
+color y estado conducen a productos distintos.
+
+Ejemplo de regresión: Galaxy A13 Negro 128 GB Excelente, catálogo
+\`MLA2000090922\`, oferta \`MLA4004994290\`, vendedor \`DDOM INSUMOS\`,
+precio \`349999 ARS\`. El HTML contiene dos grupos seleccionados (Black y
+Excelente), ambos del mismo catálogo; su JSON-LD declara 4,5 estrellas
+y 59 reseñas. Son **dos atributos de una oferta**, no dos ofertas.
+
 **Catálogos reacondicionados con selector de estado:** las opciones
 «Excelente», «Bueno» y «Aceptable» pueden referirse a **fichas de
 catálogo distintas**. Si aparece
