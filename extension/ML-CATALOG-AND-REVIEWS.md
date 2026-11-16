@@ -70,9 +70,32 @@ La escala experimental de reputación de Mercado Libre ahora puntúa
 El nivel verificado tiene prioridad sobre el observado y no se duplican
 penalizaciones por una observación pública del mismo termómetro.
 Una buena puntuación del producto por sí sola nunca permite riesgo bajo
-cuando faltan señales del vendedor. En esta etapa las opiniones de Mercado
-Libre suman **0 puntos**: antes de aplicar penalizaciones hay que validar
-el comportamiento estadístico con un conjunto representativo.
+cuando faltan señales del vendedor.
+
+### Penalización exploratoria por opiniones del producto
+
+Mercado Libre utiliza señales **independientes y acumulables** para la media
+de estrellas y el tamaño de la muestra. Estos pesos todavía deben validarse
+con un conjunto representativo; una muestra pequeña refleja incertidumbre,
+no demuestra fraude.
+
+| Condición | Puntos |
+| --- | ---: |
+| 1–4 opiniones observadas | +4 |
+| 5–9 opiniones observadas | +2 |
+| 10 o más opiniones | +0 por tamaño de muestra |
+| Calificación < 3/5, con menos de 10 opiniones | +5 |
+| Calificación < 3/5, con 10 o más opiniones | +15 |
+| Calificación desde 3/5 hasta < 4/5, con menos de 10 opiniones | +3 |
+| Calificación desde 3/5 hasta < 4/5, con 10 o más opiniones | +6 |
+| Calificación >= 4/5 | +0 por calificación |
+
+Con 5,0/5 y 2 opiniones, el resultado es **+4 puntos únicamente por la muestra
+pequeña**. Con 2,4/5 y 2 opiniones, el resultado es **+9 puntos** (+5 por
+calificación desfavorable, +4 por muestra pequeña). Las calificaciones sin
+cantidad exacta de opiniones y las observaciones vencidas (más de 30 días)
+no generan puntos. Estos datos describen el PRODUCTO de catálogo, no la
+calidad comercial del vendedor.
 
 La evaluación nueva devuelve `coverageFactors` con código, nombre y
 disponibilidad de cada dimensión para explicar qué falta en 1/3, 2/3 o 3/3.
