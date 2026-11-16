@@ -97,6 +97,13 @@ cantidad exacta de opiniones y las observaciones vencidas (más de 30 días)
 no generan puntos. Estos datos describen el PRODUCTO de catálogo, no la
 calidad comercial del vendedor.
 
+Las descripciones de las señales de producto en Mercado Libre se mantienen
+breves e independientes: `Calificación del producto: 5,0/5.` y
+`Cantidad de opiniones reducida: 2.` El frontend omite los códigos internos
+y muestra las señales de cero puntos como informativas, sin `+0`.
+Para el historial antiguo adapta las descripciones largas solo al mostrarlas;
+no modifica las evaluaciones ya persistidas.
+
 La evaluación nueva devuelve `coverageFactors` con código, nombre y
 disponibilidad de cada dimensión para explicar qué falta en 1/3, 2/3 o 3/3.
 El detalle por factor de evaluaciones históricas no estaba persistido y
