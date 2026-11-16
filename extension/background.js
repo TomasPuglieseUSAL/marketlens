@@ -5,6 +5,126 @@ const API_BASE = 'http://localhost:8080/api';
 const AUTH_KEY = 'marketlensAuth';
 const activeAnalyses = new Map();
 const activeResolutions = new Map();
+const REFRESH_SKEW_MS = 60_000;
+let pendingRefresh = null;
+let logoutPending = false;
+
+// El coordinador es el único que rota y persiste credenciales de la extensión.
+function validAuthResponse(data) {
+    return typeof data?.token === 'string' && data.token.length > 0
+        && Number.isFinite(data.expiresIn) && data.expiresIn > 0
+        && typeof data.refreshToken === 'string' && data.refreshToken.length > 45;
+}
+async function loginPersistently(username, password) {
+    if (logoutPending) throw new Error('Se está cerrando la sesión.');
+    const response = await fetch(`${API_BASE}/auth/extension-login`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'omit',
+        body: JSON.stringify({username, password})
+    });
+    if (!response.ok) throw new Error('No se pudo iniciar sesión. Revisá las credenciales.');
+    const result = await response.json();
+    if (!validAuthResponse(result)) throw new Error('Respuesta de autenticación inválida.');
+    const previous = (await ext.storage.local.get(AUTH_KEY))[AUTH_KEY];
+    // Una sesión antigua solo se revoca después de guardar la nueva.
+    await ext.storage.local.set({
+        [AUTH_KEY]: {
+            token: result.token,
+            expiresAt: Date.now() + result.expiresIn * 1000,
+            refreshToken: result.refreshToken
+        },
+        'marketlensLastUsername': username
+    });
+    if (previous?.refreshToken && previous.refreshToken !== result.refreshToken) {
+        void revokeRemote(previous.refreshToken);
+    }
+    return {ok: true};
+}
+async function revokeRemote(refreshToken) {
+    try {
+        await fetch(`${API_BASE}/auth/logout`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            credentials: 'omit',
+            body: JSON.stringify({refreshToken})
+        });
+    } catch {
+        // La credencial local se borra igualmente; el token remoto caducará.
+    }
+}
+async function logoutPersistently() {
+    logoutPending = true;
+    try {
+        const current = (await ext.storage.local.get(AUTH_KEY))[AUTH_KEY];
+        await ext.storage.local.remove(AUTH_KEY);
+        if (current?.refreshToken) await revokeRemote(current.refreshToken);
+        return {ok: true};
+    } finally {
+        logoutPending = false;
+    }
+}
+async function renewSession(force = false) {
+    if (pendingRefresh) return pendingRefresh;
+    const job = (async () => {
+        if (logoutPending) throw new Error('Se está cerrando la sesión.');
+        const snapshot = (await ext.storage.local.get(AUTH_KEY))[AUTH_KEY];
+        if (!snapshot?.refreshToken) throw new Error('Iniciá sesión nuevamente.');
+        if (!force && snapshot.token && snapshot.expiresAt > Date.now() + REFRESH_SKEW_MS) {
+            return snapshot;
+        }
+
+        let response;
+        try {
+            response = await fetch(`${API_BASE}/auth/refresh`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                credentials: 'omit',
+                body: JSON.stringify({refreshToken: snapshot.refreshToken})
+            });
+        } catch {
+            throw new Error('No se pudo conectar al servidor. Reintentá cuando vuelva a estar disponible.');
+        }
+        if (response.status === 401 || response.status === 400) {
+            // No borrar una sesión nueva que pudo haberse escrito mientras tanto.
+            const current = (await ext.storage.local.get(AUTH_KEY))[AUTH_KEY];
+            if (current?.refreshToken === snapshot.refreshToken) {
+                await ext.storage.local.remove(AUTH_KEY);
+            }
+            throw new Error('La sesión persistente dejó de ser válida. Iniciá sesión nuevamente.');
+        }
+        if (!response.ok) throw new Error('No se pudo renovar la sesión por un error del servidor.');
+        const result = await response.json().catch(() => null);
+        if (!validAuthResponse(result)) throw new Error('Respuesta de renovación inválida.');
+        const current = (await ext.storage.local.get(AUTH_KEY))[AUTH_KEY];
+        if (logoutPending || current?.refreshToken !== snapshot.refreshToken) {
+            await revokeRemote(result.refreshToken);
+            throw new Error('La sesión cambió durante la renovación.');
+        }
+        const next = {
+            token: result.token,
+            expiresAt: Date.now() + result.expiresIn * 1000,
+            refreshToken: result.refreshToken
+        };
+        await ext.storage.local.set({[AUTH_KEY]: next});
+        return next;
+    })();
+    pendingRefresh = job;
+    try {
+        return await job;
+    } finally {
+        if (pendingRefresh === job) pendingRefresh = null;
+    }
+}
+async function accessSession(force = false) {
+    const current = (await ext.storage.local.get(AUTH_KEY))[AUTH_KEY];
+    if (logoutPending || !current) throw new Error('Iniciá sesión nuevamente.');
+    if (!force && current.token && current.expiresAt > Date.now() + REFRESH_SKEW_MS) {
+        return current;
+    }
+    return renewSession(force);
+}
+
 
 function taskStorageKey(pageKey) {
     return `marketlens:analysis:${pageKey}`;
@@ -15,38 +135,38 @@ function normalizeError(error) {
 }
 
 async function authenticatedRequest(path, options = {}) {
-    const stored = await ext.storage.local.get(AUTH_KEY);
-    const auth = stored[AUTH_KEY];
-    if (!auth?.token || !Number.isFinite(auth.expiresAt) || auth.expiresAt <= Date.now()) {
-        throw new Error('Iniciá sesión nuevamente para continuar.');
-    }
-
-    let response;
-    try {
-        response = await fetch(`${API_BASE}${path}`, {
-            method: options.method ?? 'GET',
-            headers: {
-                Authorization: `Bearer ${auth.token}`,
-                ...(options.body === undefined ? {} : {'Content-Type': 'application/json'})
-            },
-            credentials: 'omit',
-            ...(options.body === undefined ? {} : {body: JSON.stringify(options.body)})
-        });
-    } catch {
-        throw new Error('No se pudo conectar con el backend de MarketLens.');
-    }
-
+    let auth = await accessSession();
+    const send = async (session) => {
+        try {
+            return await fetch(`${API_BASE}${path}`, {
+                method: options.method ?? 'GET',
+                headers: {
+                    Authorization: `Bearer ${session.token}`,
+                    ...(options.body === undefined ? {} : {'Content-Type': 'application/json'})
+                },
+                credentials: 'omit',
+                ...(options.body === undefined ? {} : {body: JSON.stringify(options.body)})
+            });
+        } catch {
+            throw new Error('No se pudo conectar con el backend de MarketLens.');
+        }
+    };
+    let response = await send(auth);
     if (response.status === 401) {
-        await ext.storage.local.remove(AUTH_KEY);
-        throw new Error('Tu sesión expiró. Iniciá sesión nuevamente.');
+        // Una sola renovación y un único reintento después de 401.
+        // Si otra tarea ya renovó, aprovechar su token.
+        const now = (await ext.storage.local.get(AUTH_KEY))[AUTH_KEY];
+        auth = now?.token && now.token !== auth.token ? now : await accessSession(true);
+        response = await send(auth);
+    }
+    if (response.status === 401) {
+        throw new Error('El servidor rechazó la sesión. Iniciá sesión nuevamente.');
     }
 
     const result = await response.json().catch(() => null);
     if (!response.ok) {
         const raw = result?.message || result?.detail || result?.error;
         const detail = typeof raw === 'string' ? raw.slice(0, 350) : 'Error de respuesta';
-        // El endpoint y el método permiten identificar la etapa fallida.
-        // No se registra ni muestra el encabezado de autorización.
         const method = options.method ?? 'GET';
         throw new Error(`${method} ${path} → HTTP ${response.status}: ${detail}`);
     }
@@ -286,6 +406,24 @@ async function submitReport(data, reason, description) {
 
 ext.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || typeof message !== 'object') return false;
+    if (message.type === 'AUTH_LOGIN') {
+        loginPersistently(message.username, message.password)
+            .then(sendResponse)
+            .catch(error => sendResponse({ok: false, error: normalizeError(error)}));
+        return true;
+    }
+    if (message.type === 'AUTH_ACCESS') {
+        accessSession()
+            .then(session => sendResponse({ok: true, token: session.token}))
+            .catch(error => sendResponse({ok: false, error: normalizeError(error)}));
+        return true;
+    }
+    if (message.type === 'AUTH_LOGOUT') {
+        logoutPersistently()
+            .then(sendResponse)
+            .catch(error => sendResponse({ok: false, error: normalizeError(error)}));
+        return true;
+    }
     if (message.type === 'ANALYZE_PUBLICATION') {
         // Acknowledge immediately; work continues outside the popup lifetime.
         if (typeof message.pageKey !== 'string' || message.pageKey.length > 5000) {
