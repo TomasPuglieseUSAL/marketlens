@@ -13,9 +13,11 @@
   --accent-soft: #fff0e3;
   --accent-line: #ffc297;
   --accent-on: #ffffff;
+  --accent-gradient-top: #f98228;
+  --accent-gradient-bottom: #b94300;
 
   /* Fondo editable independientemente del resto de la interfaz */
-  --app-background: linear-gradient(148deg, #ffffff 0%, #f6f7f8 43%, #e8ebef 100%);
+  --app-background: linear-gradient(to bottom, #ffffff 0%, #f6f7f8 43%, #e8ebef 100%);
   --grid-line: rgba(91, 104, 119, .055);
   --background-glow: rgba(255, 136, 54, .095);
 
@@ -59,7 +61,9 @@
   --accent-soft: #352419;
   --accent-line: #875035;
   --accent-on: #1e1713;
-  --app-background: linear-gradient(148deg, #1c2026 0%, #141820 55%, #0c1016 100%);
+  --accent-gradient-top: #ffad70;
+  --accent-gradient-bottom: #ec7422;
+  --app-background: linear-gradient(to bottom, #1c2026 0%, #141820 55%, #0c1016 100%);
   --grid-line: rgba(255, 255, 255, .035);
   --background-glow: rgba(255, 123, 40, .065);
   --surface: rgba(30, 35, 43, .96);
@@ -162,7 +166,7 @@ body {
   display: grid;
   place-items: center;
   color: var(--accent-on);
-  background: linear-gradient(140deg, var(--accent), var(--accent-strong));
+  background: linear-gradient(to bottom, var(--accent-gradient-top), var(--accent-gradient-bottom));
   clip-path: polygon(0 0, 84% 0, 100% 16%, 100% 100%, 16% 100%, 0 84%);
   font-size: 25px;
   line-height: 1;
@@ -261,7 +265,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   width: 100%;
   margin-top: 12px;
   border-radius: 7px;
-  background: linear-gradient(110deg, var(--accent-strong) 0%, var(--accent) 100%);
+  background: linear-gradient(to bottom, var(--accent-gradient-top) 0%, var(--accent-gradient-bottom) 100%);
   font-size: 15px;
   letter-spacing: .1px;
   box-shadow: var(--shadow-action);
