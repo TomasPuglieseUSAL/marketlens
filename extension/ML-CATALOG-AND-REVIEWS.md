@@ -26,6 +26,31 @@ formulario y el importe principal único coincide con sus metadatos de precio
 en ARS. Ejemplo verificado con HTML: catálogo SanDisk `MLA2085086111`,
 oferta `MLA4003237102`. Si faltan pruebas o aparecen varios IDs, rechazar.
 
+**Catálogos reacondicionados con selector de estado:** las opciones
+«Excelente», «Bueno» y «Aceptable» pueden referirse a **fichas de
+catálogo distintas**. Si aparece
+`.ui-pdp-outside_variations__thumbnails__item`, la extensión exige una
+única variante `--SELECTED` cuya URL corresponda al catálogo abierto.
+Las variantes `--BLOCKED` no deben considerarse ofertas disponibles.
+La oferta concreta se identifica mediante el único `item_id` del
+`#buybox-form`, corroborado con `parent_url` y el vendedor dentro
+del formulario.
+
+En ciertas fichas, **el precio principal está fuera de
+`#buybox-form`**: se busca el único monto de
+`.ui-pdp-price__second-line` con `meta[itemprop="price"]` fuera de
+carruseles, y se compara el valor visible con el dato estructurado.
+Si aparecen dos montos principales, varios `item_id` o una variante
+seleccionada que corresponde a otro catálogo, se rechaza la importación.
+
+Ejemplo comprobado en HTML: Samsung Galaxy A33 reacondicionado, catálogo
+`MLA2000136014` («Excelente»), oferta `MLA2270730739`,
+vendedor `OUTLETIT383`, precio `319999 ARS`. «Bueno» y «Aceptable»
+son catálogos separados actualmente bloqueados. La condición del
+producto se conserva en el título de la publicación; todavía corresponde
+verificarla como atributo explícito antes de utilizar referencias en una
+comparación de precios entre equipos reacondicionados.
+
 En versiones antiguas del panel, la extensión mantiene una alternativa que
 exige un único enlace de oferta MLA/MLAU, vendedor y precio en el mismo bloque.
 Si no hay información consistente, debe rechazar la asociación e indicar
