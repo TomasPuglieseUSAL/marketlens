@@ -839,9 +839,53 @@ function extractMercadoLibre() {
                 )];
                 const sellerName = sellers.length === 1
                     ? sellers[0].textContent?.replace(/\s+/g, ' ').trim() : null;
+
+                // Catálogos reacondicionados: los estados Excelente/Bueno/
+                // Aceptable son variantes de catálogo, NO ofertas simultáneas.
+                // Si hay selector, exigir una variante --SELECTED que remita
+                // al mismo MLA de la ficha (otras pueden estar --BLOCKED).
+                const grades = [...document.querySelectorAll(
+                    '.ui-pdp-outside_variations__thumbnails__item'
+                )];
+                let selectedGradeMatches = true;
+                if (grades.length) {
+                    const selectedGrades = grades.filter(node =>
+                        node.classList?.contains(
+                            'ui-pdp-outside_variations__thumbnails__item--SELECTED')
+                    );
+                    selectedGradeMatches = false;
+                    if (selectedGrades.length === 1) {
+                        try {
+                            const selectedUrl = new URL(
+                                selectedGrades[0].getAttribute('href'),
+                                window.location.href
+                            );
+                            const selectedCatalogId = selectedUrl.pathname.match(
+                                /\/p\/(MLA\d{6,})\/?$/i
+                            )?.[1]?.toUpperCase();
+                            selectedGradeMatches =
+                                selectedUrl.hostname === window.location.hostname &&
+                                selectedCatalogId === catalogId;
+                        } catch {
+                            // No asumir que el estado marcado es el actual.
+                        }
+                    }
+                }
+
+                // En varias fichas de reacondicionados el precio principal
+                // está FUERA de #buybox-form. También hay montos accesorios
+                // (cuotas, tarjetas, recomendaciones). Identificar el ÚNICO
+                // precio principal con meta[itemprop="price"], y verificar
+                // que coincida con la cifra visible y esté fuera de carruseles.
                 const mainPrices = [...document.querySelectorAll(
                     '.ui-pdp-price__second-line .andes-money-amount'
-                )];
+                )].filter(node =>
+                    node.querySelector?.('meta[itemprop="price"]') &&
+                    !node.closest?.(
+                        '.poly-card, .ui-recommendations-carousel-wrapper-ref, ' +
+                        '.ui-pdp-buy-box-offers__offer-list-item'
+                    )
+                );
                 const amount = mainPrices.length === 1 ? mainPrices[0] : null;
                 const fraction = amount?.querySelector(
                     '.andes-money-amount__fraction'
@@ -861,6 +905,7 @@ function extractMercadoLibre() {
                     amount?.getAttribute('aria-label') ?? ''
                 );
                 if (catalogId && catalogId === parentId &&
+                        selectedGradeMatches &&
                         /^MLA[1-9]\d{5,}$/i.test(offerId || '') &&
                         offerId !== catalogId && sellerName &&
                         Number.isFinite(observedPrice) && observedPrice > 0 &&
