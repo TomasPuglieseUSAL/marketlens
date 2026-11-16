@@ -482,12 +482,17 @@ function conciseFactorLabel(factor) {
     const displayedSales = quoted?.[1].replace(/\s+sold\s*$/i, '').trim();
     const ratingLabel = rating ? rating[1].replace('.', ',') + '/5' : '';
 
-    if (code === 'ML_PRODUCT_REVIEWS_OBSERVED'
+    if (code === 'ML_FEW_PRODUCT_REVIEWS' && reviews)
+        return 'Muestra reducida: ' + reviews[1] + ' opiniones.';
+    if (code === 'ML_PRODUCT_REVIEWS_OBSERVED' || code === 'ML_LOW_PRODUCT_RATING'
+            || code === 'ML_MODERATE_PRODUCT_RATING'
             || code === 'TEMU_PRODUCT_REVIEWS_OBSERVED' || code === 'TEMU_LOW_PRODUCT_RATING'
             || code === 'TEMU_MODERATE_PRODUCT_RATING') {
         if (ratingLabel && reviews) {
-            const prefix = code === 'TEMU_LOW_PRODUCT_RATING' ? 'Calificación baja: '
-                : code === 'TEMU_MODERATE_PRODUCT_RATING' ? 'Calificación moderada: '
+            const prefix = code === 'TEMU_LOW_PRODUCT_RATING'
+                || code === 'ML_LOW_PRODUCT_RATING' ? 'Calificación baja: '
+                : code === 'TEMU_MODERATE_PRODUCT_RATING'
+                    || code === 'ML_MODERATE_PRODUCT_RATING' ? 'Calificación moderada: '
                 : 'Calificación: ';
             return prefix + ratingLabel + ' (' + reviews[1] + ' opiniones).';
         }
