@@ -14,6 +14,12 @@ public interface ReportRepository
         Long publicationId
     );
 
+    // Ventana acotada, incluyendo identidad del autor en una sola consulta
+    // para contar usuarios distintos sin filtrar reportes fuera del período.
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = "user")
+    List<Report> findByPublicationIdAndCreatedAtBetweenOrderByCreatedAtDesc(
+            Long publicationId, java.time.LocalDateTime from, java.time.LocalDateTime to);
+
     @Query("""
     SELECT COUNT(r)
     FROM Report r
