@@ -147,12 +147,15 @@ disponibilidad de cada dimensión para explicar qué falta en 1/3, 2/3 o 3/3.
 El detalle por factor de evaluaciones históricas no estaba persistido y
 por eso no se inventa retroactivamente.
 
-## URLs limpias y parámetros de seguimiento (V31 / extensión)
+## URLs limpias y parámetros de seguimiento (extensión)
 
 La extensión normaliza las URLs de las publicaciones de Mercado Libre
 antes de guardarlas e importarlas: conserva `https://host/ruta-del-producto`
 y descarta query strings y fragmentos, como `pdp_filters`,
-`searchVariation`, `is_advertising` y `tracking_id`.
+`searchVariation`, `is_advertising` y `tracking_id`. Estos parámetros
+pueden modificar la presentación u oferta observada: por eso la extensión
+extrae los datos de la ficha abierta antes de eliminar la query de la URL
+persistida.
 El ID de la publicación `MLAU...` o `MLA...` se obtiene de la ruta.
 Para una oferta seleccionada en una ficha `/p/MLA...`, el
 `selectedOfferId` se mantiene **como campo separado**, nunca se
