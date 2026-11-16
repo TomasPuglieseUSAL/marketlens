@@ -97,6 +97,20 @@ test('sí conserva el rating de JSON-LD cuando la URL corresponde a la ficha', (
     assert.equal(data.mlProductRatingUnavailable, null);
 });
 
+test('el producto principal admite otro slug SEO cuando conserva el mismo MLAU', () => {
+    const sameIdDifferentSlug =
+        'https://mercadolibre.com.ar/otro-titulo/up/MLAU2874874181';
+    const data = extract({mainProduct: {
+        '@type': 'Product',
+        name: publicationTitle,
+        url: sameIdDifferentSlug,
+        aggregateRating: {ratingValue: '4.6', reviewCount: '21'}
+    }});
+    assert.equal(data.mlProductRating, 4.6);
+    assert.equal(data.mlProductReviewCount, 21);
+    assert.equal(data.mlProductRatingUnavailable, null);
+});
+
 test('el fallback DOM ignora el carrusel pero puede usar una reseña principal', () => {
     const data = extract({legitimateReview: {
         text: '4,6 de 5 · 12 opiniones', rating: '4,6'
