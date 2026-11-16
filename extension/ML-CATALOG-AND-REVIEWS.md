@@ -47,7 +47,14 @@ Tres factores independientes:
    visible observado recientemente o actividad comercial observada válida.
 3. **Opiniones del producto:** calificación de 0–5 y cantidad exacta y positiva
    de opiniones reconocidas juntas (JSON-LD `Product.aggregateRating` o un
-   bloque explícito de reseñas del producto).
+   bloque explícito de reseñas del producto). La estructura nueva de Mercado
+   Libre `reviews_capability_v3` / `[data-testid="reviews-desktop"]` usa
+   `.ui-review-capability__rating__average` para la media y el texto accesible
+   `Calificación 5.0 de 5. 2 opiniones.` para el recuento. Si falta el texto
+   accesible, se puede usar el contador explícito `2 comentarios` del mismo
+   módulo, pero **no** convertir automáticamente `2 calificaciones` en dos
+   opiniones. No se toman estrellas de reseñas individuales ni reputación
+   de vendedor para completar esta dimensión.
 
 La tercera dimensión es *disponibilidad de información*, NO un certificado
 de autenticidad. Las opiniones de catálogo pueden pertenecer al producto
