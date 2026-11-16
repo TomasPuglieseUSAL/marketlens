@@ -262,6 +262,28 @@ export interface Report {
   publicationId?: number
 }
 
+export interface CommunityReportReason {
+  reason: ReportReason
+  count: number
+}
+
+export interface CommunityReportSummary {
+  publicationId: number
+  recentReportCount: number
+  uniqueReporterCount: number
+  riskPoints: number
+  windowDays: number
+  reasons: CommunityReportReason[]
+}
+
+export function getCommunityReportSummary(token: string, publicationId: number) {
+  return apiRequest<CommunityReportSummary>(
+    `/publications/${publicationId}/reports/summary`,
+    {},
+    token
+  )
+}
+
 export interface CreateReportRequest {
   reason: ReportReason
   description: string
