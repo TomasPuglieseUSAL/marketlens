@@ -952,17 +952,20 @@ button:disabled {
   line-height: 1.65;
 }
 
-.description-viewport {
-  overflow: visible;
-}
-
-.description-viewport.is-collapsible {
-  max-height: calc(4 * 1.65em);
+/* La altura se anima con Web Animations y se mide sobre el contenido
+   real. No usamos max-height ficticios ni grid-template-rows, que podían
+   terminar el despliegue de golpe en determinadas combinaciones de Firefox. */
+.animated-collapse {
   overflow: hidden;
-  transition: max-height 380ms cubic-bezier(.2, .7, .2, 1);
+  min-width: 0;
 }
 
-.description-viewport p {
+.animated-collapse-inner {
+  display: flow-root;
+  min-width: 0;
+}
+
+.publication-description .animated-collapse-inner p {
   margin: 0;
 }
 
@@ -1042,34 +1045,12 @@ button:disabled {
   background: var(--gradient-muted);
 }
 
-/* El contenido permanece montado durante la salida: grid anima tanto
-   la apertura como el cierre, sin temporizadores ni scroll exterior. */
-.history-reveal {
-  display: grid;
-  grid-template-rows: 0fr;
-  opacity: 0;
-  transform: translateY(-6px);
-  pointer-events: none;
-  transition: grid-template-rows 360ms cubic-bezier(.2, .7, .2, 1),
-    opacity 260ms ease,
-    transform 360ms cubic-bezier(.2, .7, .2, 1);
-}
-
-.history-reveal.is-open {
-  grid-template-rows: 1fr;
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-}
-
-.history-reveal-inner {
-  min-height: 0;
-  overflow: hidden;
-}
-
-.history-reveal .evaluation-history--scrollable,
-.history-reveal .reports-history-list {
-  overscroll-behavior: contain;
+/* Los historiales conservan su scroll independiente dentro del panel
+   exterior, cuyo alto y opacidad anima AnimatedCollapse. */
+.evaluation-history-reveal,
+.reports-reveal,
+.reports-history-reveal {
+  min-width: 0;
 }
 
 .evaluation-history--scrollable:focus-visible,
@@ -1349,8 +1330,6 @@ button:disabled {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .description-viewport.is-collapsible,
-  .history-reveal,
   .disclosure-chevron {
     transition: none !important;
     transform: none !important;
