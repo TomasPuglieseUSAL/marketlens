@@ -105,6 +105,17 @@ function detectMarketplace(url) {
         return 'OTHER';
     } catch { return 'OTHER'; }
 }
+// Solo ML es identificable sin query: otros marketplaces pueden necesitarla.
+function canonicalPageUrl(url, marketplace) {
+    try {
+        const parsed = new URL(url);
+        return marketplace === 'MERCADO_LIBRE'
+            ? parsed.origin + parsed.pathname
+            : parsed.href.split('#')[0];
+    } catch {
+        return String(url ?? '').split('#')[0];
+    }
+}
 function isMercadoLibreCatalogUrl(url) {
     try {
         return detectMarketplace(url) === 'MERCADO_LIBRE'
@@ -682,11 +693,12 @@ async function loadCurrentPage() {
         const tabs = await ext.tabs.query({active: true, currentWindow: true});
         const tab = tabs[0];
         if (!tab?.url || !Number.isInteger(tab.id)) throw new Error('No se pudo consultar la pestaña activa.');
-        const nextKey = `${tab.id}:${tab.url.split('#')[0]}`;
+        const nextMarketplace = detectMarketplace(tab.url);
+        const nextKey = `${tab.id}:${canonicalPageUrl(tab.url, nextMarketplace)}`;
         const changed = nextKey !== pageKey;
         activeTab = tab;
         pageKey = nextKey;
-        currentMarketplace = detectMarketplace(tab.url);
+        currentMarketplace = nextMarketplace;
         pageSupported = isSupportedPage(tab.url, currentMarketplace);
         $('marketplace').textContent = marketplaceLabels[currentMarketplace] ?? 'Otro';
         $('page-title').textContent = tab.title || 'Publicación sin título';
@@ -1098,7 +1110,20 @@ function extractMercadoLibre() {
     }
 
     // URL sin fragmento de navegación.
-    const pageUrl = catalogOffer?.url || window.location.href.split('#')[0];
+    // El contexto comercial (item_id seleccionado y vendedor del catálogo)
+    // viaja por campos específicos, no por los trackers del enlace.
+    const extractedPageUrl = catalogOffer?.url || window.location.href;
+    let pageUrl = extractedPageUrl.split('#')[0];
+    try {
+        const parsedPage = new URL(extractedPageUrl, window.location.href);
+        if (parsedPage.protocol === 'https:' &&
+                /(^|\.)(mercadolibre\.com(?:\.ar)?|mercadolivre\.com\.br)$/i
+                    .test(parsedPage.hostname)) {
+            pageUrl = parsedPage.origin + parsedPage.pathname;
+        }
+    } catch {
+        // Una URL no reconocible será rechazada por el backend.
+    }
 
     // Analizar solamente la ruta, sin parámetros.
     const pathname = window.location.pathname;
@@ -1985,7 +2010,7 @@ async function prepareData(action) {
             && isMercadoLibreCatalogUrl(activeTab?.url)
             && extractedData?.externalId) {
         // Dos ofertas del mismo catálogo no deben compartir estado de análisis.
-        pageKey = `${activeTab.id}:${activeTab.url.split('#')[0]}:offer:${extractedData.externalId}`;
+        pageKey = `${activeTab.id}:${canonicalPageUrl(activeTab.url, currentMarketplace)}:offer:${extractedData.externalId}`;
     }
     if (currentMarketplace === 'TEMU' && extractedData.currency !== 'ARS') {
         throw new Error('No se encontró información suficiente para confirmar que el precio de Temu está en ARS.');
