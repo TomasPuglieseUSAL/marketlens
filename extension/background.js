@@ -13,7 +13,8 @@ let logoutPending = false;
 function validAuthResponse(data) {
     return typeof data?.token === 'string' && data.token.length > 0
         && Number.isFinite(data.expiresIn) && data.expiresIn > 0
-        && typeof data.refreshToken === 'string' && data.refreshToken.length > 45;
+        && typeof data.refreshToken === 'string'
+        && /^[1-9][0-9]{0,18}\.[A-Za-z0-9_-]{43}$/.test(data.refreshToken);
 }
 async function loginPersistently(username, password) {
     if (logoutPending) throw new Error('Se está cerrando la sesión.');
