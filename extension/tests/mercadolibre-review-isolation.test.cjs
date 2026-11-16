@@ -403,3 +403,144 @@ test('Galaxy A33: se rechaza parent_url de otra ficha de catálogo', () => {
         parentUrl: '/p/MLA2000136016'
     }).found, false);
 });
+
+
+const galaxyA13Url = 'https://www.mercadolibre.com.ar/celular-samsung-galaxy-a13-negro-128gb-color-black-excelente-reacondicionado/p/MLA2000090922';
+
+// Estructura real observada: hay DOS grupos independientes de variaciones,
+// uno para Black/Blanco/Light blue y otro para Excelente/Bueno/Aceptable.
+// Ambos eligen la misma ficha de catálogo y la única oferta del checkout.
+function extractGalaxyA13({
+    colorId = 'MLA2000090922',
+    conditionId = 'MLA2000090922',
+    selectedColorCount = 1,
+    selectedConditionCount = 1,
+    checkoutIds = ['MLA4004994290'],
+    parentUrl = '/p/MLA2000090922',
+    selectedPriceCount = 1
+} = {}) {
+    const selected = id => ({
+        classList: {contains: cls => cls.endsWith('--SELECTED')},
+        getAttribute: name => name === 'href'
+            ? '/celular-samsung-galaxy-a13-negro-128gb-color-black-excelente-reacondicionado/p/' +
+                id + '?product_trigger_id=MLA2000090922&picker=true'
+            : null
+    });
+    const unselected = id => ({
+        classList: {contains: () => false},
+        getAttribute: () => '/samsung-galaxy-a13-bueno/p/' + id
+    });
+    const colorOptions = [
+        ...Array.from({length: selectedColorCount}, () => selected(colorId)),
+        unselected('MLA2000013001')
+    ];
+    const conditionOptions = [
+        ...Array.from({length: selectedConditionCount}, () => selected(conditionId)),
+        unselected('MLA2000102466')
+    ];
+    const group = items => ({
+        querySelectorAll: selector => selector.includes('__thumbnails__item')
+            ? items : []
+    });
+    const groups = [group(colorOptions), group(conditionOptions)];
+    const displayedPrice = {
+        getAttribute: key => key === 'aria-label' ? '349999 pesos' : null,
+        closest: () => null,
+        querySelector(selector) {
+            if (selector.includes('meta[itemprop="price"]'))
+                return {getAttribute: () => '349999'};
+            if (selector.includes('andes-money-amount__fraction'))
+                return {textContent: '349.999'};
+            return null;
+        }
+    };
+    // Precio de la miniatura "Excelente", no es otro precio principal.
+    const thumbnailPrice = {
+        closest: () => null,
+        querySelector: () => null
+    };
+    const form = {
+        querySelector(selector) {
+            return selector.includes('name="parent_url"')
+                ? {value: parentUrl} : null;
+        },
+        querySelectorAll(selector) {
+            if (selector.includes('name="item_id"')) {
+                return checkoutIds.map(value => ({value}));
+            }
+            if (selector.includes('.ui-pdp-seller-summary__link')) {
+                return [{textContent: 'DDOM INSUMOS'}];
+            }
+            return [];
+        }
+    };
+    const heading = {textContent:
+        'Celular Samsung Galaxy A13 Negro 128gb Color Black - Excelente (Reacondicionado)'};
+    const document = {
+        readyState: 'complete',
+        body: {innerText: 'Vendido por DDOM INSUMOS'},
+        querySelector(selector) {
+            if (selector === '#buybox-form') return form;
+            if (selector === 'h1.ui-pdp-title') return heading;
+            if (selector.includes('.ui-pdp-price__second-line')) return displayedPrice;
+            return null;
+        },
+        querySelectorAll(selector) {
+            if (selector === '.ui-pdp-outside_variations__thumbnails') return groups;
+            if (selector === '.ui-pdp-outside_variations__thumbnails__item')
+                return [...colorOptions, ...conditionOptions];
+            if (selector === '.ui-pdp-price__second-line .andes-money-amount')
+                return [...Array.from({length: selectedPriceCount},
+                    () => displayedPrice), thumbnailPrice];
+            if (selector === 'script[type="application/ld+json"]') {
+                return [{textContent: JSON.stringify({
+                    '@type': 'Product',
+                    name: heading.textContent,
+                    url: galaxyA13Url,
+                    productID: 'MLA2000090922',
+                    offers: {price: 349999, priceCurrency: 'ARS'},
+                    aggregateRating: {
+                        ratingValue: 4.5, ratingCount: 128, reviewCount: 59
+                    }
+                })}];
+            }
+            return [];
+        }
+    };
+    return compile({location: new URL(galaxyA13Url)}, document, URL)();
+}
+
+test('Galaxy A13: selecciona Black y Excelente simultáneamente en DOS grupos', () => {
+    const result = extractGalaxyA13();
+    assert.equal(result.found, true);
+    assert.equal(result.externalId, 'MLA4004994290');
+    assert.equal(result.selectedOfferId, 'MLA4004994290');
+    assert.equal(result.seller, 'DDOM INSUMOS');
+    assert.equal(result.price, '349.999');
+    assert.equal(result.currency, 'ARS');
+    assert.equal(result.url, galaxyA13Url);
+    assert.equal(result.mlProductRating, 4.5);
+    assert.equal(result.mlProductReviewCount, 59);
+});
+
+test('Galaxy A13: una variante seleccionada de otra ficha no se puede importar', () => {
+    assert.equal(extractGalaxyA13({conditionId: 'MLA2000013001'}).found, false);
+});
+
+test('Galaxy A13: dos selecciones dentro de un grupo o ninguna se rechazan', () => {
+    assert.equal(extractGalaxyA13({selectedConditionCount: 2}).found, false);
+    assert.equal(extractGalaxyA13({selectedColorCount: 0}).found, false);
+});
+
+test('Galaxy A13: no aceptar precios ni item_id ambiguos', () => {
+    assert.equal(extractGalaxyA13({selectedPriceCount: 2}).found, false);
+    assert.equal(extractGalaxyA13({
+        checkoutIds: ['MLA4004994290', 'MLA4004994291']
+    }).found, false);
+});
+
+test('Galaxy A13: el formulario debe apuntar al catálogo abierto', () => {
+    assert.equal(extractGalaxyA13({
+        parentUrl: '/p/MLA2000013001'
+    }).found, false);
+});
