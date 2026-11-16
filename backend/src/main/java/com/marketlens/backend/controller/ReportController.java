@@ -2,6 +2,8 @@ package com.marketlens.backend.controller;
 
 import com.marketlens.backend.dto.CreateReportRequest;
 import com.marketlens.backend.dto.ReportResponse;
+import com.marketlens.backend.dto.CommunityReportSummaryResponse;
+import com.marketlens.backend.service.CommunityReportService;
 import com.marketlens.backend.service.ReportService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -15,9 +17,16 @@ import java.util.List;
 public class ReportController {
 
     private final ReportService reportService;
+    private final CommunityReportService communityReportService;
 
-    public ReportController(ReportService reportService) {
+    public ReportController(ReportService reportService, CommunityReportService communityReportService) {
         this.reportService = reportService;
+        this.communityReportService = communityReportService;
+    }
+
+    @GetMapping("/summary")
+    public CommunityReportSummaryResponse getSummary(@PathVariable Long publicationId) {
+        return communityReportService.getSummary(publicationId);
     }
 
     @PostMapping
