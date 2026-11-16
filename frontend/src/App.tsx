@@ -96,47 +96,36 @@ function AnimatedRoutes({
   enabled: boolean
 }) {
   const location = useLocation()
-  const [visibleLocation, setVisibleLocation] = useState(location)
-  const [leaving, setLeaving] = useState(false)
+  const [committedLocation, setCommittedLocation] = useState(location)
 
-  useLayoutEffect(() => {
-    // Cambios en parametros de consulta: actualizar sin remount ni animacion.
-    if (visibleLocation.pathname === location.pathname) {
-      if (visibleLocation !== location) setVisibleLocation(location)
-      setLeaving(false)
-      return
-    }
+  // La ruta nueva se muestra inmediatamente cuando no hay transición
+  // (query string, redirecciones, autenticación o movimiento reducido).
+  // Solo conservamos la vista anterior mientras dura su animación de salida.
+  const shouldAnimate = enabled
+    && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    && committedLocation.pathname !== location.pathname
+    && isContentRoute(committedLocation.pathname)
+    && isContentRoute(location.pathname)
 
-    // No retrasar rutas de redireccion ni cambios de autenticacion.
-    // Sin animaciones cuando el usuario solicita movimiento reducido.
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const canAnimate = enabled
-      && !reducedMotion
-      && isContentRoute(visibleLocation.pathname)
-      && isContentRoute(location.pathname)
+  const renderedLocation = shouldAnimate ? committedLocation : location
 
-    if (!canAnimate) {
-      setVisibleLocation(location)
-      setLeaving(false)
-      return
-    }
-
-    setLeaving(true)
-    const timer = window.setTimeout(() => {
-      setVisibleLocation(location)
-      setLeaving(false)
-    }, PAGE_EXIT_MS)
-
-    // Si el usuario cambia de seccion otra vez, gana la ultima navegacion.
+  useEffect(() => {
+    // El callback del temporizador sincroniza la ruta confirmada sin
+    // setState síncrono dentro del efecto. Una nueva navegación cancela
+    // el temporizador anterior, de modo que prevalece siempre la última.
+    const timer = window.setTimeout(
+      () => setCommittedLocation(location),
+      shouldAnimate ? PAGE_EXIT_MS : 0
+    )
     return () => window.clearTimeout(timer)
-  }, [location, visibleLocation, enabled])
+  }, [location, shouldAnimate])
 
   return (
     <div
-      key={visibleLocation.pathname}
-      className={`page-transition${leaving ? ' page-transition--leaving' : ''}`}
+      key={renderedLocation.pathname}
+      className={`page-transition${shouldAnimate ? ' page-transition--leaving' : ''}`}
     >
-      <Routes location={visibleLocation}>{children}</Routes>
+      <Routes location={renderedLocation}>{children}</Routes>
     </div>
   )
 }
