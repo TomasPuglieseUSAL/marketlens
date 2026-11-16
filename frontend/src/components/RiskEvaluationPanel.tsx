@@ -53,6 +53,7 @@ export default function RiskEvaluationPanel({
   publicationId,
 }: RiskEvaluationPanelProps) {
   const [evaluations, setEvaluations] = useState<RiskEvaluation[]>([])
+  const [showHistory, setShowHistory] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -74,6 +75,7 @@ export default function RiskEvaluationPanel({
       // el historial anterior no guarda snapshots de cada dimensión.
       setEvaluations(history.map((item) => item.id === created.id
         ? {...item, coverageFactors: created.coverageFactors} : item))
+      setShowHistory(false)
       setMessage('Evaluación realizada correctamente.')
     } catch (err) {
       setError(
@@ -85,6 +87,10 @@ export default function RiskEvaluationPanel({
   }
 
   async function handleLoadHistory() {
+    if (showHistory) {
+      setShowHistory(false)
+      return
+    }
     setLoading(true)
     setError('')
     setMessage('')
@@ -96,6 +102,7 @@ export default function RiskEvaluationPanel({
       )
 
       setEvaluations(history)
+      setShowHistory(true)
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Error inesperado'
@@ -123,7 +130,7 @@ export default function RiskEvaluationPanel({
           disabled={loading}
           className="secondary-button"
         >
-          Consultar historial
+          {showHistory ? 'Ocultar historial' : 'Consultar historial'}
         </button>
       </div>
 
@@ -131,8 +138,13 @@ export default function RiskEvaluationPanel({
       {error && <p className="error">{error}</p>}
 
       {evaluations.length > 0 && (
-        <div className="evaluation-history">
-          {evaluations.map((evaluation, index) => (
+        <div
+          className={`evaluation-history${showHistory ? ' evaluation-history--scrollable' : ''}`}
+          role={showHistory ? 'region' : undefined}
+          aria-label={showHistory ? 'Historial de evaluaciones' : undefined}
+          tabIndex={showHistory ? 0 : undefined}
+        >
+          {(showHistory ? evaluations : evaluations.slice(0, 1)).map((evaluation, index) => (
             <article
               key={evaluation.id}
               className="detail-card evaluation-card"
