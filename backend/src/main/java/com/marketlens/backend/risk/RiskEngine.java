@@ -12,6 +12,7 @@ import com.marketlens.backend.service.TemuSellerRiskScoring;
 import com.marketlens.backend.service.TemuProductReviewEvidence;
 import com.marketlens.backend.service.MercadoLibreProductReviewEvidence;
 import com.marketlens.backend.service.MercadoLibreSellerEvidence;
+import com.marketlens.backend.service.CommunityReportRiskScoring;
 import com.marketlens.backend.service.TemuCommercialEvidence;
 
 import org.springframework.stereotype.Component;
@@ -45,6 +46,16 @@ public class RiskEngine {
             Integer priceRiskPoints,
             BigDecimal referenceMedian,
             int referenceCount) {
+        return evaluate(publication, priceRiskPoints, referenceMedian, referenceCount, 0);
+    }
+
+    /** Los reportes comunitarios agregan señal sin modificar cobertura ni veredictos anteriores. */
+    public RiskEvaluation evaluate(
+            Publication publication,
+            Integer priceRiskPoints,
+            BigDecimal referenceMedian,
+            int referenceCount,
+            int uniqueRecentReporters) {
 
         RiskEvaluation evaluation = new RiskEvaluation();
 
@@ -170,6 +181,16 @@ public class RiskEngine {
                     "La página de Temu mostraba la etiqueta Star Seller para la tienda. "
                     + "MarketLens no ha verificado sus criterios ni que garantice una compra segura.",
                     0);
+        }
+
+        // Reportes comunitarios: un solo factor, hasta +8 puntos, sin
+        // duplicar denuncias de un mismo usuario ni inferir fraude.
+        CommunityReportRiskScoring.Signal communitySignal =
+                CommunityReportRiskScoring.evaluate(uniqueRecentReporters);
+        if (communitySignal != null) {
+            addFactor(evaluation, communitySignal.code(),
+                    communitySignal.description(), communitySignal.points());
+            score += communitySignal.points();
         }
 
         score = Math.min(score, 100);
