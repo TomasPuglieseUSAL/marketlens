@@ -990,3 +990,22 @@ test('Mercado Libre: la cantidad de calificaciones sola no se confunde con opini
     assert.equal(result.mlProductRating,null);
     assert.equal(result.mlProductReviewCount,null);
 });
+
+
+test('Mercado Libre: pocas opiniones se muestra como señal independiente de la calificación', () => {
+    const p = popup();
+    const description = 'El producto muestra 5.0/5 con 2 opiniones en Mercado Libre. La muestra de opiniones es reducida.';
+    const label = p.run("conciseFactorLabel({code:'ML_FEW_PRODUCT_REVIEWS',description:"+JSON.stringify(description)+"})");
+    assert.equal(label, 'Muestra reducida: 2 opiniones.');
+    assert.equal(p.run("conciseFactorLabel({code:'ML_PRODUCT_REVIEWS_OBSERVED',description:"+JSON.stringify(description)+"})"),
+        'Calificación: 5,0/5 (2 opiniones).');
+});
+
+test('Mercado Libre: calificaciones malas e intermedias tienen etiquetas distintas', () => {
+    const p = popup();
+    const description = 'El producto muestra 2.4/5 con 12 opiniones en Mercado Libre.';
+    const low = p.run("conciseFactorLabel({code:'ML_LOW_PRODUCT_RATING',description:"+JSON.stringify(description)+"})");
+    assert.equal(low, 'Calificación baja: 2,4/5 (12 opiniones).');
+    const moderate = p.run("conciseFactorLabel({code:'ML_MODERATE_PRODUCT_RATING',description:"+JSON.stringify(description.replace('2.4','3.5'))+"})");
+    assert.equal(moderate, 'Calificación moderada: 3,5/5 (12 opiniones).');
+});
