@@ -59,18 +59,21 @@ export default function ReportsPanel({ token, publicationId }: ReportsPanelProps
         reason,
         description: description.trim(),
       })
-      const history = await getPublicationReports(token, publicationId)
-      setReports(history)
-      setHistoryLoaded(true)
+
+      // El envío está confirmado: cerrar progresivamente el formulario,
+      // pero mantener la confirmación visible fuera del panel colapsado.
       setDescription('')
-      setMessage('Reporte registrado correctamente.')
-      // El resumen se actualiza sin recargar la publicación. El puntaje de
-      // evaluaciones ya guardadas conserva su fotografía histórica.
-      try {
-        setCommunitySummary(await getCommunityReportSummary(token, publicationId))
-      } catch {
-        // La denuncia ya fue guardada; una falla del resumen no la invalida.
-      }
+      setExpanded(false)
+      setHistoryLoaded(false)
+      setMessage('Reporte registrado correctamente. El puntaje de las evaluaciones anteriores no cambia hasta realizar otro análisis.')
+
+      // Las consultas auxiliares no deben producir un falso error de envío.
+      const [history, summary] = await Promise.allSettled([
+        getPublicationReports(token, publicationId),
+        getCommunityReportSummary(token, publicationId),
+      ])
+      if (history.status === 'fulfilled') setReports(history.value)
+      if (summary.status === 'fulfilled') setCommunitySummary(summary.value)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error inesperado')
     } finally {
@@ -124,6 +127,13 @@ export default function ReportsPanel({ token, publicationId }: ReportsPanelProps
           </div>
           <small>Reportes no verificados; los puntajes anteriores no cambian.</small>
         </aside>
+      )}
+
+      {message && (
+        <div className="report-submit-confirmation" role="status">
+          <span className="report-submit-check" aria-hidden="true">✓</span>
+          <span>{message}</span>
+        </div>
       )}
 
       <div className="reports-disclosure">
@@ -195,7 +205,6 @@ export default function ReportsPanel({ token, publicationId }: ReportsPanelProps
               </article>
             </div>
 
-            {message && <p className="success-message" role="status">{message}</p>}
             {error && <p className="error" role="alert">{error}</p>}
 
             <AnimatedCollapse open={historyLoaded} id={reportsHistoryId} className="reports-history-reveal">
