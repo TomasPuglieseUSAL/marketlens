@@ -98,6 +98,9 @@ export default function ReportsPanel({
     <section className="reports-panel">
       <h3>Reportes colaborativos</h3>
 
+      <details className="reports-disclosure">
+        <summary>Registrar o consultar reportes</summary>
+        <div className="reports-panel-content">
       <p>
         Publicación seleccionada: <strong>#{publicationId}</strong>
       </p>
@@ -185,31 +188,40 @@ export default function ReportsPanel({
           {reports.length === 0 ? (
             <p>No hay reportes para esta publicación.</p>
           ) : (
-            reports.map((report) => (
-              <article
-                key={report.id}
-                className="detail-card report-card"
-              >
-                <div className="report-header">
-                  <strong>
-                    {reportReasons[report.reason] ?? report.reason}
-                  </strong>
+            <div
+              className="reports-history-list"
+              role="region"
+              aria-label="Historial de reportes"
+              tabIndex={0}
+            >
+              {reports.map((report) => (
+                <article
+                  key={report.id}
+                  className="detail-card report-card"
+                >
+                  <div className="report-header">
+                    <strong>
+                      {reportReasons[report.reason] ?? report.reason}
+                    </strong>
 
-                  <span>#{report.id}</span>
-                </div>
+                    <span>#{report.id}</span>
+                  </div>
 
-                <p>
-                  {report.description || 'Sin descripción'}
-                </p>
+                  <p>
+                    {report.description || 'Sin descripción'}
+                  </p>
 
-                <small>
-                  {new Date(report.createdAt).toLocaleString()}
-                </small>
-              </article>
-            ))
+                  <small>
+                    {new Date(report.createdAt).toLocaleString('es-AR')}
+                  </small>
+                </article>
+              ))}
+            </div>
           )}
         </div>
       )}
+        </div>
+      </details>
     </section>
   )
 }
