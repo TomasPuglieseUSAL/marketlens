@@ -951,3 +951,42 @@ test('catálogo: reputación ajena o panel con item_id diferente nunca se atribu
     assert.equal(data.sellerBadge,null);
     assert.equal(data.sellerSalesText,null);
 });
+
+
+test('Mercado Libre: lee 5.0 y 2 opiniones del componente reviews-capability-v3', () => {
+    const p = popup();
+    p.run("globalThis.window={location:{pathname:'/disco-solido-externo-ssd-kingston-1tb-1050mbs-duro-rigido/up/MLAU4305713541',href:'https://www.mercadolibre.com.ar/disco-solido-externo-ssd-kingston-1tb-1050mbs-duro-rigido/up/MLAU4305713541'}}");
+    p.run("globalThis.reviews={querySelector:s=>s.includes('__rating__average')?{textContent:'5.0'}:s.includes('andes-visually-hidden')?{textContent:'Calificación 5.0 de 5. 2 opiniones.'}:null,querySelectorAll:s=>s.includes('total-opinion')?[{textContent:'2 comentarios'},{textContent:'2 calificaciones'}]:[]}");
+    p.run("document.querySelectorAll=s=>s.includes('application/ld+json')?[{textContent:JSON.stringify({'@type':'Product',name:'Kingston SSD externo 1TB',offers:{price:'250000',priceCurrency:'ARS',seller:{name:'Vendedor'}}})}]:s.includes('reviews-desktop')?[reviews]:[]");
+    p.run("document.querySelector=s=>s==='h1.ui-pdp-title'?{textContent:'Disco sólido externo SSD Kingston 1TB'}:null");
+    p.run("document.body={innerText:''}");
+    const result=p.run('extractMercadoLibre()');
+    assert.equal(result.found,true);
+    assert.equal(result.externalId,'MLAU4305713541');
+    assert.equal(result.mlProductRating,5);
+    assert.equal(result.mlProductReviewCount,2);
+});
+
+test('Mercado Libre: usa 2 comentarios si faltan opiniones accesibles, sin contar calificaciones', () => {
+    const p = popup();
+    p.run("globalThis.window={location:{pathname:'/ssd/up/MLAU4305713541',href:'https://www.mercadolibre.com.ar/ssd/up/MLAU4305713541'}}");
+    p.run("globalThis.reviews={querySelector:s=>s.includes('__rating__average')?{textContent:'5,0'}:null,querySelectorAll:s=>s.includes('total-opinion')?[{textContent:'2 calificaciones'},{textContent:'2 comentarios'}]:[]}");
+    p.run("document.querySelectorAll=s=>s.includes('reviews-desktop')?[reviews]:[]");
+    p.run("document.querySelector=s=>s==='h1.ui-pdp-title'?{textContent:'SSD Kingston 1TB'}:null");
+    p.run("document.body={innerText:''}");
+    const result=p.run('extractMercadoLibre()');
+    assert.equal(result.mlProductRating,5);
+    assert.equal(result.mlProductReviewCount,2);
+});
+
+test('Mercado Libre: la cantidad de calificaciones sola no se confunde con opiniones', () => {
+    const p = popup();
+    p.run("globalThis.window={location:{pathname:'/ssd/up/MLAU4305713541',href:'https://www.mercadolibre.com.ar/ssd/up/MLAU4305713541'}}");
+    p.run("globalThis.reviews={querySelector:s=>s.includes('__rating__average')?{textContent:'5.0'}:null,querySelectorAll:()=>[{textContent:'2 calificaciones'}]}");
+    p.run("document.querySelectorAll=s=>s.includes('reviews-desktop')?[reviews]:[]");
+    p.run("document.querySelector=s=>s==='h1.ui-pdp-title'?{textContent:'SSD Kingston 1TB'}:null");
+    p.run("document.body={innerText:''}");
+    const result=p.run('extractMercadoLibre()');
+    assert.equal(result.mlProductRating,null);
+    assert.equal(result.mlProductReviewCount,null);
+});
