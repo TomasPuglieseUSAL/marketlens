@@ -17,6 +17,15 @@ Conservamos la URL ORIGINAL del catálogo y enviamos el identificador separado
 una URL de catálogo de Mercado Libre antes de normalizar la referencia como
 `LISTING`. Así no se fabrica una URL individual que quizá no existe.
 
+En fichas de catálogo que NO presentan selector lateral de ofertas, Mercado
+Libre puede mostrar un único formulario `#buybox-form` con `item_id` de
+oferta MLA, `parent_url` del catálogo y un vendedor asociado. En ese caso
+se acepta la oferta **solo si** el ID del catálogo coincide con
+`parent_url`, existe exactamente un `item_id`, hay un vendedor en el
+formulario y el importe principal único coincide con sus metadatos de precio
+en ARS. Ejemplo verificado con HTML: catálogo SanDisk `MLA2085086111`,
+oferta `MLA4003237102`. Si faltan pruebas o aparecen varios IDs, rechazar.
+
 En versiones antiguas del panel, la extensión mantiene una alternativa que
 exige un único enlace de oferta MLA/MLAU, vendedor y precio en el mismo bloque.
 Si no hay información consistente, debe rechazar la asociación e indicar
@@ -70,15 +79,24 @@ de reseñas por ventas, ni se infieren números exactos desde `1.2K+`.
 - Un `Product` en JSON-LD solo sirve como referencia si coincide con la URL
   de la ficha principal o con su título de manera estricta. El primer
   `Product` del documento ya no se acepta automáticamente.
+- **Aunque el JSON-LD coincida con el producto**, la calificación solo cuenta
+  para la cobertura si aparece un módulo visible de reseñas de la ficha
+  principal. Los valores estructurados sin representación visible no se
+  consideran calificaciones corroboradas en pantalla. En la ficha Kingston
+  `MLAU2874874181` el JSON-LD incluye `ratingValue: 4.9` y
+  `reviewCount: 1552`, pero el HTML analizado carece del módulo de reseñas
+  del producto: la cobertura de opiniones permanece incompleta.
 - Cuando la ficha principal está cargada, se observa la sección de preguntas
-  y respuestas y no hay módulo de reseñas ni puntuación atribuible al
-  producto, se conserva `mlProductRatingUnavailable=true`. **No equivale
-  a afirmar que el artículo tenga cero reseñas**.
+  y respuestas y no hay módulo de reseñas ni puntuación visible atribuible
+  al producto, se conserva `mlProductRatingUnavailable=true`, incluso si
+  existen reseñas solamente en JSON-LD. **No equivale a afirmar que el
+  artículo tenga cero reseñas**: informa falta de evidencia visible.
 - Si la sección no se cargó, es ambigua o solo hay una métrica parcial, se
   conserva estado desconocido (null), sin penalización adicional.
-- Una ausencia observada recientemente suma **+2 puntos**, no otorga la
-  tercera dimensión de cobertura y vence a los 30 días. Una revisión
-  posterior con puntuación válida sustituye ese estado.
+- Una ausencia visible observada recientemente suma **+2 puntos**, no otorga
+  la tercera dimensión de cobertura y vence a los 30 días. No es una acusación
+  de reseñas inexistentes o de fraude. Una revisión posterior con puntuación
+  visible y válida sustituye ese estado.
 - Cuando una nueva inspección concluyente informa ausencia de puntuación,
   se eliminan de la publicación los valores antiguos potencialmente
   mal atribuidos. No se reescribe el historial de evaluaciones.
