@@ -35,6 +35,7 @@ export default function ReportsPanel({
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const contentId = useId()
+  const reportsHistoryId = useId()
 
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
@@ -182,11 +183,15 @@ export default function ReportsPanel({
           </p>
 
           <button
+            type="button"
             onClick={handleLoadReports}
             disabled={loading}
-            className="secondary-button"
+            className="secondary-button history-toggle"
+            aria-expanded={historyLoaded}
+            aria-controls={reportsHistoryId}
           >
             {historyLoaded ? 'Ocultar reportes' : 'Consultar reportes'}
+            <span className="disclosure-chevron" aria-hidden="true">⌄</span>
           </button>
         </article>
       </div>
@@ -204,6 +209,7 @@ export default function ReportsPanel({
       )}
 
       <div
+        id={reportsHistoryId}
         className={`history-reveal reports-history-reveal${historyLoaded ? ' is-open' : ''}`}
         aria-hidden={!historyLoaded}
         inert={!historyLoaded}
