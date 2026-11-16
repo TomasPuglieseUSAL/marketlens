@@ -220,6 +220,7 @@ function importPayload(data) {
         temuProductReviewCount: data.temuProductReviewCount ?? null,
         mlProductRating: data.mlProductRating ?? null,
         mlProductReviewCount: data.mlProductReviewCount ?? null,
+        mlProductRatingUnavailable: data.mlProductRatingUnavailable === true ? true : null,
         temuStoreTenureText: data.temuStoreTenureText ?? null,
         temuProductSoldText: data.temuProductSoldText ?? null,
         temuStoreSoldText: data.temuStoreSoldText ?? null,
