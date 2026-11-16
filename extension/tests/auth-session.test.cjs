@@ -14,6 +14,8 @@ function environment(initial = {}) {
     let online = true;
     let now = 1_000_000;
     let refreshCalls = 0;
+    let rejectProtectedOnce = false;
+    let rejectRefresh = false;
     const storage = {
         async get(key) { return {[key]: state[key]}; },
         async set(values) { Object.assign(state, values); },
@@ -39,6 +41,7 @@ function environment(initial = {}) {
         }
         if (url.endsWith('/auth/refresh')) {
             refreshCalls++;
+            if (rejectRefresh) return {ok: false, status: 401};
             return {
                 ok: true, status: 200,
                 json: async () => ({
@@ -51,6 +54,10 @@ function environment(initial = {}) {
         if (url.endsWith('/auth/logout')) {
             return {ok: true, status: 204};
         }
+        if (rejectProtectedOnce) {
+            rejectProtectedOnce = false;
+            return {ok: false, status: 401, json: async () => ({})};
+        }
         return {ok: true, status: 200, json: async () => ({ok: true})};
     }
     const context = vm.createContext({browser, fetch, Date: FakeDate, URL, console});
@@ -61,6 +68,8 @@ function environment(initial = {}) {
     return {
         state, requests, send,
         offline() { online = false; },
+        rejectNextProtected() { rejectProtectedOnce = true; },
+        rejectRenewal() { rejectRefresh = true; },
         expireAccess() { state.marketlensAuth.expiresAt = now - 1; },
         refreshCalls() { return refreshCalls; },
         run(sourceCode) { return vm.runInContext(sourceCode, context); }
@@ -121,4 +130,28 @@ test('un JWT previo sin refresh requiere una sola autenticación nueva', async (
         marketlensAuth: {token: 'expired', expiresAt: 1}
     });
     assert.equal((await env.send({type: 'AUTH_ACCESS'})).ok, false);
+});
+
+test('un 401 anticipado reintenta con un JWT renovado sin perder la sesión', async () => {
+    const env = environment({
+        marketlensAuth: {
+            token: 'jwt-previous', expiresAt: 9_999_999,
+            refreshToken: rawToken('a')
+        }
+    });
+    env.rejectNextProtected();
+    const result = await env.run("authenticatedRequest('/publications/1')");
+    assert.equal(result.ok, true);
+    assert.equal(env.refreshCalls(), 1);
+    assert.equal(env.state.marketlensAuth.token, 'jwt-renewed');
+});
+
+test('una renovación revocada elimina solo la sesión inválida', async () => {
+    const env = environment({
+        marketlensAuth: {token: 'expired', expiresAt: 1, refreshToken: rawToken('a')}
+    });
+    env.rejectRenewal();
+    const reply = await env.send({type: 'AUTH_ACCESS'});
+    assert.equal(reply.ok, false);
+    assert.equal(env.state.marketlensAuth, undefined);
 });
