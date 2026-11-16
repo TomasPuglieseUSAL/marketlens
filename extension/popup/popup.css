@@ -736,6 +736,7 @@ footer {
   #facebook-correction:not([hidden]),
   #report-details:not([hidden]) { animation: none; }
   .report-chevron { transition: none; }
+  .report-success:not([hidden]) { animation: none; }
   #report-details.is-closing { animation: none !important; }
   .auth-exiting, #login-form:not([hidden]) { animation: none !important; }
 }
