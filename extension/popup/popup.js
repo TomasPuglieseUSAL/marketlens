@@ -323,6 +323,48 @@ function animateReportCollapse() {
         setReportExpanded(false);
     }, REPORT_COLLAPSE_MS);
 }
+// Llevar el scroll solo hasta la sección de reportes, no al comienzo del popup.
+// El límite anticipa la altura disponible tras la contracción para evitar
+// un segundo salto cuando el navegador ajuste el máximo de scroll.
+function collapseReportKeepingContext() {
+    if (prefersReducedMotion()) {
+        setReportExpanded(false);
+        return;
+    }
+
+    const body = document.body;
+    const root = document.scrollingElement || document.documentElement;
+    const scroller = body?.scrollTop > 0 ? body : root;
+    const details = $('report-details');
+    const currentTop = scroller?.scrollTop ?? 0;
+    const toggleTop = $('report-toggle').getBoundingClientRect?.().top;
+    const headerBottom = document.querySelector?.('.brand')?.getBoundingClientRect?.().bottom ?? 0;
+    const desiredTop = Number.isFinite(toggleTop)
+        ? Math.max(0, currentTop + toggleTop - Math.max(0, headerBottom) - 12)
+        : currentTop;
+
+    const openHeight = details.getBoundingClientRect?.().height;
+    const style = typeof getComputedStyle === 'function' ? getComputedStyle(details) : null;
+    const margins = (parseFloat(style?.marginTop) || 0)
+        + (parseFloat(style?.marginBottom) || 0);
+    const maxAfterClose = Number.isFinite(scroller?.scrollHeight)
+        && Number.isFinite(scroller?.clientHeight)
+        && scroller.clientHeight > 0
+        && Number.isFinite(openHeight)
+        ? Math.max(0, scroller.scrollHeight - scroller.clientHeight - openHeight - margins)
+        : currentTop;
+    const targetTop = Math.min(currentTop, desiredTop, maxAfterClose);
+
+    if (scroller?.scrollTo && currentTop - targetTop > 4) {
+        scroller.scrollTo({top: targetTop, behavior: 'smooth'});
+        reportCloseTimer = setTimeout(() => {
+            reportCloseTimer = null;
+            animateReportCollapse();
+        }, REPORT_CLOSE_SCROLL_MS);
+    } else {
+        animateReportCollapse();
+    }
+}
 function toggleReport() {
     if ($('report-toggle').disabled) return;
     // Al abrir una nueva denuncia, retirar la confirmación anterior.
@@ -338,25 +380,7 @@ function toggleReport() {
         return;
     }
 
-    // Regresar arriba antes de contraer un formulario largo. Mientras tanto
-    // sigue visible; a continuación una segunda animación lo desvanece y
-    // reduce su altura para evitar que desaparezca bruscamente.
-    const body = document.body;
-    const root = document.scrollingElement || document.documentElement;
-    const scroller = body?.scrollTop > 0 ? body : root;
-    if (prefersReducedMotion()) {
-        setReportExpanded(false);
-        return;
-    }
-    if (scroller?.scrollTo && scroller.scrollTop > 4) {
-        scroller.scrollTo({top: 0, behavior: 'smooth'});
-        reportCloseTimer = setTimeout(() => {
-            reportCloseTimer = null;
-            animateReportCollapse();
-        }, REPORT_CLOSE_SCROLL_MS);
-    } else {
-        animateReportCollapse();
-    }
+    collapseReportKeepingContext();
 }
 // Después de registrar correctamente una denuncia, animar el cierre y
 // mantener la confirmación fuera del formulario. No modificar el puntaje
@@ -369,24 +393,7 @@ function showReportSubmitted(publicationId) {
     $('report-success').hidden = false;
     if ($('report-details').hidden) return;
 
-    if (prefersReducedMotion()) {
-        setReportExpanded(false);
-        return;
-    }
-    // El formulario puede estar desplazado hacia abajo; primero volver al
-    // encabezado para que la confirmación y el cierre resulten visibles.
-    const body = document.body;
-    const root = document.scrollingElement || document.documentElement;
-    const scroller = body?.scrollTop > 0 ? body : root;
-    if (scroller?.scrollTo && scroller.scrollTop > 4) {
-        scroller.scrollTo({top: 0, behavior: 'smooth'});
-        reportCloseTimer = setTimeout(() => {
-            reportCloseTimer = null;
-            animateReportCollapse();
-        }, REPORT_CLOSE_SCROLL_MS);
-    } else {
-        animateReportCollapse();
-    }
+    collapseReportKeepingContext();
 }
 function setPanelState(state) {
     updatePopupContent(() => applyPanelState(state));
