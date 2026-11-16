@@ -4,6 +4,7 @@ import com.marketlens.backend.entity.Marketplace;
 import com.marketlens.backend.entity.Publication;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,8 +54,8 @@ public final class MercadoLibreProductReviewEvidence {
         boolean sufficientSample = reviews >= MIN_REVIEWS_FOR_FULL_RATING_WEIGHT;
         // Descripciones breves y específicas por factor: no repetir la
         // calificación y el recuento en ambas señales.
-        String ratingText = rating.stripTrailingZeros().toPlainString()
-                .replace('.', ',') + "/5";
+        String ratingText = rating.setScale(1, RoundingMode.HALF_UP)
+                .toPlainString().replace('.', ',') + "/5";
 
         List<Signal> signals = new ArrayList<>(2);
         if (rating.compareTo(LOW_RATING_LIMIT) < 0) {
