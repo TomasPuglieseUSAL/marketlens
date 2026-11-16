@@ -876,9 +876,15 @@ function extractMercadoLibre() {
                         confirmations.length === 1;
                 }
 
+                // Mercado Libre puede renderizar el vendedor como enlace,
+                // o como etiqueta dentro de un botón sin acción.
+                // En ambos casos se acepta SOLO uno en el buybox actual,
+                // no nombres de vendedores de tarjetas recomendadas.
                 const sellers = [...form.querySelectorAll(
                     '.ui-pdp-seller-summary__header__title ' +
-                    '.ui-pdp-seller-summary__link'
+                    '.ui-pdp-seller-summary__link, ' +
+                    '.ui-pdp-seller-summary__header__title ' +
+                    '.ui-pdp-seller-summary__label-text-no-action'
                 )];
                 const sellerName = sellers.length === 1
                     ? sellers[0].textContent?.replace(/\s+/g, ' ').trim() : null;
