@@ -1906,12 +1906,17 @@ async function sendReport(data) {
                 && !$('result-section').hidden) {
             renderCommunityReportSummary(reply.communityReports);
             if (pageKey) {
-                const key = pageStateKey();
-                const cached = (await ext.storage.local.get(key))[key];
-                if (cached?.status === 'success' && cached.publicationId === reply.publicationId) {
-                    await ext.storage.local.set({[key]: {
-                        ...cached, communityReports: reply.communityReports
-                    }});
+                try {
+                    const key = pageStateKey();
+                    const cached = (await ext.storage.local.get(key))[key];
+                    if (cached?.status === 'success' && cached.publicationId === reply.publicationId) {
+                        await ext.storage.local.set({[key]: {
+                            ...cached, communityReports: reply.communityReports
+                        }});
+                    }
+                } catch {
+                    // El reporte ya se envió: fallar al guardar el resumen local
+                    // no debe comunicar falsamente que el envío fue rechazado.
                 }
             }
         }
