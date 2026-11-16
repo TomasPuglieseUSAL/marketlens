@@ -85,16 +85,16 @@ test('no atribuye las 4,9 estrellas del Toshiba recomendado al Kingston', () => 
     assert.equal(data.mlProductRatingUnavailable, true);
 });
 
-test('un JSON-LD de la ficha sin módulo de opiniones NO confirma cobertura', () => {
+test('JSON-LD propio confirma rating aunque la puntuación no esté visible', () => {
     const data = extract({mainProduct: {
         '@type': 'Product',
         name: publicationTitle,
         url: publicationUrl,
         aggregateRating: {ratingValue: '4.7', reviewCount: '286'}
     }});
-    assert.equal(data.mlProductRating, null);
-    assert.equal(data.mlProductReviewCount, null);
-    assert.equal(data.mlProductRatingUnavailable, true);
+    assert.equal(data.mlProductRating, 4.7);
+    assert.equal(data.mlProductReviewCount, 286);
+    assert.equal(data.mlProductRatingUnavailable, null);
 });
 
 test('el producto principal admite otro slug SEO cuando conserva el mismo MLAU', () => {
@@ -106,9 +106,9 @@ test('el producto principal admite otro slug SEO cuando conserva el mismo MLAU',
         url: sameIdDifferentSlug,
         aggregateRating: {ratingValue: '4.6', reviewCount: '21'}
     }});
-    assert.equal(data.mlProductRating, null);
-    assert.equal(data.mlProductReviewCount, null);
-    assert.equal(data.mlProductRatingUnavailable, true);
+    assert.equal(data.mlProductRating, 4.6);
+    assert.equal(data.mlProductReviewCount, 21);
+    assert.equal(data.mlProductRatingUnavailable, null);
 });
 
 test('el fallback DOM ignora el carrusel pero puede usar una reseña principal', () => {
@@ -127,7 +127,7 @@ test('una sección incompleta o sin preguntas observables no confirma ausencia',
     assert.equal(noQuestions.mlProductRatingUnavailable, null);
 });
 
-test('el Kingston real declara 4,9 y 1552 reseñas en JSON-LD, pero no las muestra', () => {
+test('el Kingston conserva 4,9 y 1552 reseñas aunque estén solo en JSON-LD', () => {
     const data = extract({mainProduct: {
         '@type': 'Product',
         name: publicationTitle,
@@ -140,9 +140,9 @@ test('el Kingston real declara 4,9 y 1552 reseñas en JSON-LD, pero no las muest
             reviewCount: 1552
         }
     }});
-    assert.equal(data.mlProductRating, null);
-    assert.equal(data.mlProductReviewCount, null);
-    assert.equal(data.mlProductRatingUnavailable, true);
+    assert.equal(data.mlProductRating, 4.9);
+    assert.equal(data.mlProductReviewCount, 1552);
+    assert.equal(data.mlProductRatingUnavailable, null);
 });
 
 test('si las reseñas son visibles, JSON-LD del producto puede corroborar rating', () => {
