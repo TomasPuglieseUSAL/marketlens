@@ -833,6 +833,48 @@ function extractMercadoLibre() {
                 )];
                 const offerId = checkoutItems.length === 1
                     ? checkoutItems[0].value?.toUpperCase() : null;
+
+                // En páginas con navegación de variantes por React, el
+                // parent_url oculto puede quedar apuntando al catálogo
+                // anterior. Nunca confiar sólo en ese formulario cuando
+                // contradice la URL actual. La referencia independiente
+                // "Vender uno igual" vincula itemId y productId actuales.
+                let catalogLinkedToOffer = catalogId && parentId === catalogId;
+                if (!catalogLinkedToOffer && catalogId &&
+                        /^MLA[1-9]\d{5,}$/i.test(offerId ?? '')) {
+                    const links = [...document.querySelectorAll(
+                        'a.ui-pdp-syi__link[href]'
+                    )];
+                    // Exigir exactamente UNA prueba explícita, no elegir un
+                    // enlace de un carrusel ni resultados de otra oferta.
+                    const confirmations = links.filter(link => {
+                        try {
+                            if (link.closest?.(
+                                '.poly-card, .ui-recommendations-carousel-wrapper-ref'
+                            )) return false;
+                            const address = new URL(
+                                link.getAttribute('href'),
+                                window.location.href
+                            );
+                            if (address.protocol !== 'https:' ||
+                                    address.hostname !== window.location.hostname ||
+                                    address.pathname !== '/syi/core/list/equals') {
+                                return false;
+                            }
+                            return address.searchParams.get('itemId')
+                                ?.toUpperCase() === offerId &&
+                                address.searchParams.get('productId')
+                                ?.toUpperCase() === catalogId;
+                        } catch {
+                            return false;
+                        }
+                    });
+                    // Si el parent_url corresponde a otra ficha, un link
+                    // independiente explícito permite resolver la oferta
+                    // actual. Sin corroboración, mantener el rechazo.
+                    catalogLinkedToOffer = confirmations.length === 1;
+                }
+
                 const sellers = [...form.querySelectorAll(
                     '.ui-pdp-seller-summary__header__title ' +
                     '.ui-pdp-seller-summary__link'
@@ -919,7 +961,7 @@ function extractMercadoLibre() {
                 const isARS = /\bpesos\b/i.test(
                     amount?.getAttribute('aria-label') ?? ''
                 );
-                if (catalogId && catalogId === parentId &&
+                if (catalogId && catalogLinkedToOffer &&
                         selectedGradeMatches &&
                         /^MLA[1-9]\d{5,}$/i.test(offerId || '') &&
                         offerId !== catalogId && sellerName &&
