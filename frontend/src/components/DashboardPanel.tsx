@@ -25,6 +25,16 @@ const riskLabels: Record<string, string> = {
   HIGH: 'Alto',
 }
 
+// La misma petición alimenta la carga inicial y el botón de actualización.
+// No modifica estado: el efecto solo procesa su resultado asincrónico.
+async function fetchDashboardData(token: string) {
+  const [summary, marketplaces] = await Promise.all([
+    getDashboardSummary(token),
+    getMarketplaceStatistics(token),
+  ])
+  return { summary, marketplaces }
+}
+
 export default function DashboardPanel({
   token,
 }: DashboardPanelProps) {
@@ -34,7 +44,7 @@ export default function DashboardPanel({
   const [marketplaces, setMarketplaces] =
     useState<MarketplaceStatistics[]>([])
 
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
@@ -43,13 +53,10 @@ export default function DashboardPanel({
     setError('')
 
     try {
-      const [summaryResult, marketplaceResult] = await Promise.all([
-        getDashboardSummary(token),
-        getMarketplaceStatistics(token),
-      ])
+      const result = await fetchDashboardData(token)
 
-      setSummary(summaryResult)
-      setMarketplaces(marketplaceResult)
+      setSummary(result.summary)
+      setMarketplaces(result.marketplaces)
       setLastUpdated(new Date())
     } catch (err) {
       setError(
@@ -61,8 +68,24 @@ export default function DashboardPanel({
   }, [token])
 
   useEffect(() => {
-    void loadDashboard()
-  }, [loadDashboard])
+    // La carga inicial no necesita setState inmediato: loading comienza
+    // en true y se actualiza solo al completarse la solicitud HTTP.
+    let active = true
+    void fetchDashboardData(token)
+      .then((result) => {
+        if (!active) return
+        setSummary(result.summary)
+        setMarketplaces(result.marketplaces)
+        setLastUpdated(new Date())
+      })
+      .catch((err: unknown) => {
+        if (active) setError(err instanceof Error ? err.message : 'Error inesperado')
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => { active = false }
+  }, [token])
 
   return (
     <section className="dashboard-panel">
