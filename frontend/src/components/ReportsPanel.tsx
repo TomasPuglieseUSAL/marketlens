@@ -74,6 +74,10 @@ export default function ReportsPanel({
   }
 
   async function handleLoadReports() {
+    if (historyLoaded) {
+      setHistoryLoaded(false)
+      return
+    }
     setLoading(true)
     setMessage('')
     setError('')
@@ -182,7 +186,7 @@ export default function ReportsPanel({
             disabled={loading}
             className="secondary-button"
           >
-            Consultar reportes
+            {historyLoaded ? 'Ocultar reportes' : 'Consultar reportes'}
           </button>
         </article>
       </div>
@@ -205,8 +209,7 @@ export default function ReportsPanel({
         inert={!historyLoaded}
       >
         <div className="history-reveal-inner">
-          {historyLoaded && (
-        <div className="reports-history">
+          <div className="reports-history">
           <h4>Reportes registrados ({reports.length})</h4>
 
           {reports.length === 0 ? (
@@ -243,7 +246,6 @@ export default function ReportsPanel({
             </div>
           )}
         </div>
-          )}
         </div>
       </div>
             </div>
