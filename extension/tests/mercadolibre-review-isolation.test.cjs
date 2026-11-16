@@ -19,7 +19,8 @@ const publicationTitle = 'Disco Sólido Ssd Kingston Nv3 1tb M.2 2280 Nvme Pcie 
 // Reproduce el dato aportado en el HTML del usuario: un carrusel publicitario
 // de "Con 4 estrellas o más" tiene un Toshiba 4,9, no el Kingston analizado.
 function extract({mainProduct = null, questions = true, loaded = true,
-                  advertisedReview = true, legitimateReview = null} = {}) {
+                  advertisedReview = true, legitimateReview = null,
+                  currentUrl = publicationUrl} = {}) {
     const scripts = [
         {
             '@type': 'Product',
@@ -73,7 +74,7 @@ function extract({mainProduct = null, questions = true, loaded = true,
             return [];
         }
     };
-    const window = {location: new URL(publicationUrl)};
+    const window = {location: new URL(currentUrl)};
     return compile(window, document, URL)();
 }
 
@@ -256,4 +257,14 @@ test('catálogo con parent_url o precio principal contradictorios se rechaza', (
     const badPrice = extractSingleCatalog({metadataPrice: '123456.00'});
     assert.equal(badParent.found, false);
     assert.equal(badPrice.found, false);
+});
+
+test('Micron desde resultado patrocinado conserva el MLAU pero quita los trackers', () => {
+    const canonical = 'https://www.mercadolibre.com.ar/disco-oem-solido-ssd-512gb-nvme-micron-2242/up/MLAU5694773445';
+    const currentUrl = canonical +
+        '?pdp_filters=item_id:MLA2246621499|item_id:MLA2246621499' +
+        '#is_advertising=true&searchVariation=MLAU5694773445&tracking_id=test';
+    const result = extract({currentUrl});
+    assert.equal(result.url, canonical);
+    assert.equal(result.externalId, 'MLAU5694773445');
 });
