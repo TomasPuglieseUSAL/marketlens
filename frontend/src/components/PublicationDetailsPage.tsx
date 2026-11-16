@@ -22,70 +22,64 @@ const marketplaceLabels: Record<string, string> = {
   OTHER: 'Otros',
 }
 
-export default function PublicationDetailsPage({
-  token,
-}: PublicationDetailsPageProps) {
+// La validación de la ruta se resuelve al renderizar, sin efectos.
+export default function PublicationDetailsPage({ token }: PublicationDetailsPageProps) {
   const { id } = useParams<{ id: string }>()
+  const publicationId = Number(id)
+  const validId = id !== undefined
+    && /^\d+$/.test(id)
+    && Number.isSafeInteger(publicationId)
+    && publicationId > 0
 
-  const [publication, setPublication] =
-    useState<Publication | null>(null)
+  if (!validId) {
+    return (
+      <section className="publication-details-page">
+        <Link to="/publications" className="back-link">
+          ← Volver a publicaciones
+        </Link>
+        <p className="error" role="alert">El ID de la publicación no es válido.</p>
+      </section>
+    )
+  }
 
+  // Un cambio de ID crea un estado nuevo: nunca muestra la publicación
+  // anterior durante la carga de la siguiente.
+  return <ValidPublicationDetails key={publicationId} token={token} publicationId={publicationId} />
+}
+
+function ValidPublicationDetails({
+  token,
+  publicationId,
+}: {
+  token: string
+  publicationId: number
+}) {
+  const [publication, setPublication] = useState<Publication | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-
-  const publicationId = Number(id)
-
-  const validId =
-    id !== undefined &&
-    /^\d+$/.test(id) &&
-    Number.isSafeInteger(publicationId) &&
-    publicationId > 0
 
   useEffect(() => {
     let cancelled = false
 
-    if (!validId) {
-      setPublication(null)
-      setError('El ID de la publicación no es válido.')
-      setLoading(false)
-      return
-    }
-
-    async function loadPublication() {
-      setLoading(true)
-      setError('')
-      setPublication(null)
-
-      try {
-        const result = await getPublication(
-          token,
-          publicationId
-        )
-
+    // La solicitud HTTP es asíncrona. Evitamos inicializaciones síncronas
+    // de estado dentro del efecto y respuestas de rutas ya desmontadas.
+    void getPublication(token, publicationId)
+      .then((result) => {
+        if (!cancelled) setPublication(result)
+      })
+      .catch((err: unknown) => {
         if (!cancelled) {
-          setPublication(result)
+          setError(err instanceof Error
+            ? err.message
+            : 'No se pudo cargar la publicación.')
         }
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : 'No se pudo cargar la publicación.'
-          )
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
 
-    void loadPublication()
-
-    return () => {
-      cancelled = true
-    }
-  }, [token, publicationId, validId])
+    return () => { cancelled = true }
+  }, [token, publicationId])
 
   const originalUrl = publication?.originalUrl
 
