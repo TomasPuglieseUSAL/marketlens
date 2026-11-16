@@ -146,8 +146,16 @@ function validSession(auth) {
         typeof auth.expiresAt === 'number' && auth.expiresAt > Date.now();
 }
 async function getSession() {
-    const stored = await ext.storage.local.get(AUTH_KEY);
-    return validSession(stored[AUTH_KEY]) ? stored[AUTH_KEY] : null;
+    const reply = await ext.runtime.sendMessage({type: 'AUTH_ACCESS'});
+    return reply?.ok && typeof reply.token === 'string'
+        ? {token: reply.token} : null;
+}
+async function restoreLastUsername() {
+    const stored = await ext.storage.local.get('marketlensLastUsername');
+    if (typeof stored.marketlensLastUsername === 'string'
+            && !$('login-username').value) {
+        $('login-username').value = stored.marketlensLastUsername;
+    }
 }
 function showLoggedOut(message = 'Iniciá sesión para usar MarketLens.') {
     cancelReportClose();
@@ -174,7 +182,13 @@ function showLoggedIn(username) {
     });
 }
 async function checkAuthentication() {
-    const session = await getSession();
+    let session;
+    try {
+        session = await getSession();
+    } catch {
+        showLoggedOut('No se pudo comprobar la sesión. Reintentá al recuperar la conexión.');
+        return;
+    }
     if (!session) { showLoggedOut(); return; }
     let response;
     try {
@@ -187,12 +201,23 @@ async function checkAuthentication() {
         return;
     }
     if (response.status === 401) {
-        await ext.storage.local.remove(AUTH_KEY);
-        showLoggedOut('Tu sesión expiró. Iniciá sesión nuevamente.');
-        return;
+        // Dejar que el coordinador renueve una vez antes de pedir credenciales.
+        try {
+            const latest = await getSession();
+            if (latest && latest.token !== session.token) {
+                response = await fetch(`${API_BASE}/users/me`, {
+                    headers: {Authorization: `Bearer ${latest.token}`},
+                    credentials: 'omit'
+                });
+            }
+        } catch {
+            // No borrar credenciales ante un fallo de red.
+        }
     }
     if (!response.ok) {
-        showLoggedOut(`Error de autenticación HTTP ${response.status}.`);
+        showLoggedOut(response.status === 401
+            ? 'No se pudo validar la sesión. Iniciá sesión nuevamente.'
+            : `Error de autenticación HTTP ${response.status}.`);
         return;
     }
     const me = await response.json().catch(() => ({}));
@@ -203,22 +228,13 @@ async function handleLogin(event) {
     $('login-button').disabled = true;
     $('auth-status').textContent = 'Iniciando sesión…';
     try {
-        const response = await fetch(`${API_BASE}/auth/login`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            credentials: 'omit',
-            body: JSON.stringify({
-                username: $('login-username').value.trim(),
-                password: $('login-password').value
-            })
+        const username = $('login-username').value.trim();
+        const reply = await ext.runtime.sendMessage({
+            type: 'AUTH_LOGIN',
+            username,
+            password: $('login-password').value
         });
-        const result = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(result?.message || `HTTP ${response.status}`);
-        if (!result?.token || !Number.isFinite(result?.expiresIn) || result.expiresIn <= 0)
-            throw new Error('Respuesta de inicio de sesión inválida.');
-        await ext.storage.local.set({
-            [AUTH_KEY]: {token: result.token, expiresAt: Date.now() + result.expiresIn * 1000}
-        });
+        if (!reply?.ok) throw new Error(reply?.error || 'No se pudo iniciar sesión.');
         $('login-password').value = '';
         await checkAuthentication();
         await loadCurrentPage();
@@ -244,7 +260,8 @@ async function handleLogout() {
         ? new Promise(resolve => setTimeout(resolve, LOGOUT_FADE_MS))
         : Promise.resolve();
     try {
-        await ext.storage.local.remove(AUTH_KEY);
+        const reply = await ext.runtime.sendMessage({type: 'AUTH_LOGOUT'});
+        if (!reply?.ok) throw new Error(reply?.error || 'No se pudo cerrar sesión.');
         await ext.storage.session.remove(AUTH_KEY).catch(() => {});
         await visualExit;
         $('login-password').value = '';
@@ -2101,6 +2118,7 @@ ext.tabs.onUpdated.addListener((_id, changes, tab) => {
 
 void (async () => {
     await restoreTheme();
+    await restoreLastUsername();
     await checkAuthentication();
     await loadCurrentPage();
 })().catch(error => showLoggedOut(`No se pudo iniciar la extensión: ${error.message}`));
