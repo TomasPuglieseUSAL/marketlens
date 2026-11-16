@@ -961,8 +961,22 @@ function extractMercadoLibre() {
                 const structured = new URL(rawUrl, window.location.href);
                 const currentPath = window.location.pathname.replace(/\/$/, '');
                 const structuredPath = structured.pathname.replace(/\/$/, '');
-                if (structured.host === window.location.host
-                        && structuredPath === currentPath) return true;
+                const sameHost = structured.hostname.replace(/^www\./i, '') ===
+                    window.location.hostname.replace(/^www\./i, '');
+                if (sameHost && structuredPath === currentPath) return true;
+                // Los títulos de las URLs SEO pueden cambiar sin modificar
+                // la identidad de la publicación (/up/MLAU..., /p/MLA...).
+                const publicationId = path => path.match(
+                    /\/(?:up\/)?(MLAU\d+)(?=\/|$)/i
+                )?.[1] || path.match(
+                    /\/(?:p\/)?(MLA\d+)(?=\/|$)/i
+                )?.[1] || path.match(
+                    /(?:^|\/)MLA-?(\d{6,})(?=\/|$)/i
+                )?.[1];
+                const currentId = publicationId(currentPath);
+                const metadataId = publicationId(structuredPath);
+                if (sameHost && currentId && metadataId
+                        && currentId.toUpperCase() === metadataId.toUpperCase()) return true;
                 // Si el JSON-LD identifica expresamente otra ficha, nunca
                 // reutilizar su rating aunque el nombre sea muy parecido.
                 if (/\/(?:up\/MLAU\d+|p\/MLA\d+|MLA-?\d{6,})/i.test(structuredPath)) {
