@@ -24,7 +24,12 @@ function popup() {
                 removeProperty(name) { styles.delete(name); },
                 getPropertyValue(name) { return styles.get(name) || ''; }
             },
-            getBoundingClientRect() { return {height: this.hidden ? 0 : 320}; },
+            getBoundingClientRect() {
+                return {
+                    height: this.hidden ? 0 : 320,
+                    top: this.id === 'report-toggle' ? 160 : 0
+                };
+            },
             textContent: '', dataset: {}, children: [], scrollCalls: [],
             classList: {
                 add(...names) { for (const name of names) classes.add(name); },
@@ -92,12 +97,13 @@ function popup() {
     const document = {
         getElementById: element,
         createElement: tagName => makeElement(null, tagName),
-        querySelector: selector => simulateLayout && selector === '.popup'
-            ? popupSurface : null,
+        querySelector: selector => selector === '.brand'
+            ? {getBoundingClientRect: () => ({bottom: 80})}
+            : simulateLayout && selector === '.popup' ? popupSurface : null,
         documentElement: {dataset: {}, scrollTop: 0, scrollCalls: [],
             scrollTo(options) { this.scrollCalls.push(options); this.scrollTop = 0; }},
-        body: {scrollTop: 0, scrollCalls: [],
-            scrollTo(options) { this.scrollCalls.push(options); this.scrollTop = 0; }}
+        body: {scrollTop: 0, scrollHeight: 980, clientHeight: 540, scrollCalls: [],
+            scrollTo(options) { this.scrollCalls.push(options); this.scrollTop = options.top; }}
     };
     const browser = {
         storage: {
@@ -632,7 +638,7 @@ test('se conservan los matices de calificaciones bajas y moderadas', () => {
     assert.equal(moderate, 'Calificación moderada: 3,6/5 (45 opiniones).');
 });
 
-test('al cerrar el reporte se vuelve arriba suavemente antes de ocultar el formulario', () => {
+test('al cerrar el reporte se desplaza cerca de la sección, sin volver al inicio', () => {
     const p = popup();
     p.run("authenticated=true; pageSupported=true; setPanelState('initial'); setReportExpanded(false); updateActions()");
     p.run("setReportExpanded(true)");
@@ -640,7 +646,7 @@ test('al cerrar el reporte se vuelve arriba suavemente antes de ocultar el formu
     p.run("toggleReport()");
     assert.equal(p.scrollBody.scrollCalls.length, 1);
     assert.equal(p.scrollBody.scrollCalls[0].behavior, 'smooth');
-    assert.equal(p.scrollBody.scrollCalls[0].top, 0);
+    assert.equal(p.scrollBody.scrollCalls[0].top, 120);
     assert.equal(p.element('report-details').hidden, false, 'Mantener el reporte abierto durante el regreso');
     assert.equal(p.pendingTimers(), 1);
     p.advance(419);
@@ -654,6 +660,33 @@ test('al cerrar el reporte se vuelve arriba suavemente antes de ocultar el formu
     p.advance(1);
     assert.equal(p.element('report-details').hidden, true);
     assert.equal(p.element('report-details').classList.contains('is-closing'), false);
+});
+
+test('al cerrar se respeta el encabezado fijo y no se desplaza más de lo necesario', () => {
+    const p = popup();
+    p.run("authenticated=true; pageSupported=true; setPanelState('initial'); setReportExpanded(true); updateActions()");
+    p.scrollBody.scrollHeight = 1700;
+    p.scrollBody.scrollTop = 400;
+    p.element('report-toggle').getBoundingClientRect = () => ({top: 32, height: 44});
+    p.run("toggleReport()");
+    // 400 + 32 - 80 (header) - 12 (separación): 340.
+    assert.equal(p.scrollBody.scrollCalls[0].top, 340);
+    p.advance(720);
+    assert.equal(p.element('report-details').hidden, true);
+});
+
+test('después de enviar un reporte, el scroll conserva la sección y la confirmación', () => {
+    const p = popup();
+    p.element('report-details').hidden = false;
+    p.scrollBody.scrollTop = 340;
+    p.run("showReportSubmitted(57)");
+    assert.equal(p.element('report-success').hidden, false);
+    assert.equal(p.scrollBody.scrollCalls.length, 1);
+    assert.equal(p.scrollBody.scrollCalls[0].top, 120);
+    assert.equal(p.element('report-details').hidden, false);
+    p.advance(720);
+    assert.equal(p.element('report-details').hidden, true);
+    assert.equal(p.element('report-success').hidden, false);
 });
 
 test('un segundo clic interrumpe el cierre diferido del reporte', () => {
