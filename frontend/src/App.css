@@ -976,11 +976,26 @@ button:disabled {
   font-size: .83rem;
 }
 
+/* SVG centrado por geometría, sin depender de la línea base de fuentes.
+   Mismo tamaño/alineación en Firefox, Chrome y ambos temas. */
 .disclosure-chevron {
-  display: inline-block;
-  font-size: 1.25rem;
-  line-height: 1;
+  display: block;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  align-self: center;
+  transform-origin: center;
   transition: transform 300ms cubic-bezier(.2, .7, .2, 1);
+}
+
+.description-toggle,
+.history-toggle {
+  align-items: center;
+  justify-content: center;
+}
+
+.reports-toggle {
+  align-items: center;
 }
 
 .description-toggle[aria-expanded="true"] .disclosure-chevron,
