@@ -804,6 +804,27 @@ test('scrollbar ocupa ancho permanente y el encabezado sigue fijo', () => {
 });
 
 
+test('la clave del popup ignora trackers de Mercado Libre y conserva parámetros de Temu', () => {
+    const p = popup();
+    const clean = 'https://www.mercadolibre.com.ar/ssd/up/MLAU5694773445';
+    const tracked = clean +
+        '?pdp_filters=item_id:MLA2246621499|item_id:MLA2246621499' +
+        '#is_advertising=true&tracking_id=123';
+    assert.equal(
+        p.run('canonicalPageUrl(' + JSON.stringify(tracked) + ', "MERCADO_LIBRE")'),
+        clean
+    );
+    assert.equal(
+        p.run('canonicalPageUrl(' + JSON.stringify(clean) + ', "MERCADO_LIBRE")'),
+        clean
+    );
+    const temu = 'https://www.temu.com/goods.html?goods_id=606892013277333';
+    assert.equal(
+        p.run('canonicalPageUrl(' + JSON.stringify(temu) + ', "TEMU")'),
+        temu
+    );
+});
+
 test('Mercado Libre: permite inspeccionar catálogo pero exige una oferta individual', () => {
     const p = popup();
     const catalog = 'https://www.mercadolibre.com.ar/disco-solido-ssd-kingston-kc600-512gb-color-gris-oscuro/p/MLA24356923';
