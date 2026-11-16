@@ -147,6 +147,26 @@ disponibilidad de cada dimensión para explicar qué falta en 1/3, 2/3 o 3/3.
 El detalle por factor de evaluaciones históricas no estaba persistido y
 por eso no se inventa retroactivamente.
 
+## URLs limpias y parámetros de seguimiento (V31 / extensión)
+
+La extensión normaliza las URLs de las publicaciones de Mercado Libre
+antes de guardarlas e importarlas: conserva `https://host/ruta-del-producto`
+y descarta query strings y fragmentos, como `pdp_filters`,
+`searchVariation`, `is_advertising` y `tracking_id`.
+El ID de la publicación `MLAU...` o `MLA...` se obtiene de la ruta.
+Para una oferta seleccionada en una ficha `/p/MLA...`, el
+`selectedOfferId` se mantiene **como campo separado**, nunca se
+sustituye por el ID del catálogo.
+
+Se realiza otra normalización defensiva justo al construir el
+`POST /extension/imports`. La clave de caché del popup para ML también
+usa la URL sin seguimiento. Temu y Facebook no reciben este tratamiento
+porque sus parámetros pueden ser funcionales (por ejemplo, `goods_id`).
+
+Esto evita persistir enlaces publicitarios como URL de origen; no
+necesariamente corrige cualquier otro rechazo HTTP 400 causado por
+validaciones distintas del backend.
+
 ## Ejecución local y pruebas
 
 Los cambios del backend incluyen
