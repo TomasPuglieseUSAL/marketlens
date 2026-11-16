@@ -4,6 +4,7 @@ import com.marketlens.backend.dto.RiskEvaluationResponse;
 import com.marketlens.backend.dto.AutomaticPriceAnalysisResponse;
 import com.marketlens.backend.dto.RiskFactorResponse;
 import com.marketlens.backend.dto.RiskCoverageFactorResponse;
+import com.marketlens.backend.dto.CommunityReportSummaryResponse;
 import com.marketlens.backend.entity.Publication;
 import com.marketlens.backend.entity.RiskEvaluation;
 import com.marketlens.backend.repository.PublicationRepository;
@@ -11,6 +12,7 @@ import com.marketlens.backend.repository.RiskEvaluationRepository;
 import com.marketlens.backend.risk.RiskEngine;
 import com.marketlens.backend.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -23,17 +25,30 @@ public class RiskEvaluationService {
     private final RiskEvaluationRepository riskEvaluationRepository;
     private final RiskEngine riskEngine;
     private final AutomaticPriceAnalysisService priceAnalysisService;
+    private final CommunityReportService communityReportService;
 
+    @Autowired
     public RiskEvaluationService(
             PublicationRepository publicationRepository,
             RiskEvaluationRepository riskEvaluationRepository,
             RiskEngine riskEngine,
-            AutomaticPriceAnalysisService priceAnalysisService) {
+            AutomaticPriceAnalysisService priceAnalysisService,
+            CommunityReportService communityReportService) {
 
         this.publicationRepository = publicationRepository;
         this.riskEvaluationRepository = riskEvaluationRepository;
         this.riskEngine = riskEngine;
         this.priceAnalysisService = priceAnalysisService;
+        this.communityReportService = communityReportService;
+    }
+
+    /** Constructor anterior para pruebas sin dependencia de reportes. */
+    public RiskEvaluationService(
+            PublicationRepository publicationRepository,
+            RiskEvaluationRepository riskEvaluationRepository,
+            RiskEngine riskEngine,
+            AutomaticPriceAnalysisService priceAnalysisService) {
+        this(publicationRepository, riskEvaluationRepository, riskEngine, priceAnalysisService, null);
     }
 
     @Transactional
@@ -62,8 +77,15 @@ public class RiskEvaluationService {
             referenceCount = priceAnalysis.referenceCount();
         }
 
+        // El resumen se calcula para esta evaluación y queda reflejado en
+        // sus factores persistidos. Reportes posteriores no modifican
+        // retroactivamente el puntaje.
+        CommunityReportSummaryResponse summary = communityReportService == null
+                ? null : communityReportService.getSummary(publicationId);
+        int recentReporters = summary == null ? 0 : summary.uniqueReporterCount();
+
         RiskEvaluation evaluation = riskEngine.evaluate(
-                publication, pricePoints, referenceMedian, referenceCount);
+                publication, pricePoints, referenceMedian, referenceCount, recentReporters);
 
         RiskEvaluation savedEvaluation = riskEvaluationRepository.save(evaluation);
 
