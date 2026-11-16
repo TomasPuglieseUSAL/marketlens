@@ -201,17 +201,18 @@ async function checkAuthentication() {
         return;
     }
     if (response.status === 401) {
-        // Dejar que el coordinador renueve una vez antes de pedir credenciales.
+        // Un JWT puede ser rechazado antes del vencimiento local (por ejemplo,
+        // al cambiar la clave del backend). Renovar una vez sin borrar secretos.
         try {
-            const latest = await getSession();
-            if (latest && latest.token !== session.token) {
+            const reply = await ext.runtime.sendMessage({type: 'AUTH_ACCESS', force: true});
+            if (reply?.ok && typeof reply.token === 'string') {
                 response = await fetch(`${API_BASE}/users/me`, {
-                    headers: {Authorization: `Bearer ${latest.token}`},
+                    headers: {Authorization: `Bearer ${reply.token}`},
                     credentials: 'omit'
                 });
             }
         } catch {
-            // No borrar credenciales ante un fallo de red.
+            // Un fallo de red no implica revocación de la sesión persistente.
         }
     }
     if (!response.ok) {
