@@ -324,6 +324,8 @@ function animateReportCollapse() {
 }
 function toggleReport() {
     if ($('report-toggle').disabled) return;
+    // Al abrir una nueva denuncia, retirar la confirmación anterior.
+    $('report-success').hidden = true;
     // Otro clic durante el retorno o la desaparición cancela el cierre.
     if (reportCloseTimer !== null || reportCollapseTimer !== null) {
         cancelReportClose();
@@ -345,6 +347,36 @@ function toggleReport() {
         setReportExpanded(false);
         return;
     }
+    if (scroller?.scrollTo && scroller.scrollTop > 4) {
+        scroller.scrollTo({top: 0, behavior: 'smooth'});
+        reportCloseTimer = setTimeout(() => {
+            reportCloseTimer = null;
+            animateReportCollapse();
+        }, REPORT_CLOSE_SCROLL_MS);
+    } else {
+        animateReportCollapse();
+    }
+}
+// Después de registrar correctamente una denuncia, animar el cierre y
+// mantener la confirmación fuera del formulario. No modificar el puntaje
+// de una evaluación que ya se había guardado.
+function showReportSubmitted(publicationId) {
+    $('report-status').textContent = '';
+    $('report-success-message').textContent =
+        '✓ Reporte registrado para la publicación #' + publicationId
+        + '. El puntaje anterior se actualizará al volver a analizar.';
+    $('report-success').hidden = false;
+    if ($('report-details').hidden) return;
+
+    if (prefersReducedMotion()) {
+        setReportExpanded(false);
+        return;
+    }
+    // El formulario puede estar desplazado hacia abajo; primero volver al
+    // encabezado para que la confirmación y el cierre resulten visibles.
+    const body = document.body;
+    const root = document.scrollingElement || document.documentElement;
+    const scroller = body?.scrollTop > 0 ? body : root;
     if (scroller?.scrollTo && scroller.scrollTop > 4) {
         scroller.scrollTo({top: 0, behavior: 'smooth'});
         reportCloseTimer = setTimeout(() => {
@@ -640,6 +672,7 @@ async function loadCurrentPage() {
             $('correction-status').textContent = '';
             $('temu-price-status').textContent = '';
             $('report-status').textContent = '';
+            $('report-success').hidden = true;
             renderAnalysis({status:'initial'});
         }
         if (!pageSupported) {
@@ -1885,6 +1918,7 @@ async function analyzeClick() {
 async function sendReport(data) {
     if (submittingReport) return;
     submittingReport = true;
+    $('report-success').hidden = true;
     $('report-submit').textContent = 'Enviando reporte…';
     $('report-status').textContent = 'Identificando publicación y registrando reporte…';
     updateActions();
@@ -1898,9 +1932,6 @@ async function sendReport(data) {
         if (!reply?.ok) throw new Error(reply?.error || 'No se pudo registrar el reporte.');
         const currentlyAnalyzedId = lastPublicationId;
         lastPublicationId = reply.publicationId;
-        $('report-status').textContent =
-            'Reporte registrado para la publicación #' + reply.publicationId
-            + '. El puntaje de un análisis previo se mantiene hasta volver a analizar.';
         // No cambiar el puntaje histórico. Sí reflejar el recuento actual.
         if (reply.communityReports && currentlyAnalyzedId === reply.publicationId
                 && !$('result-section').hidden) {
@@ -1922,6 +1953,7 @@ async function sendReport(data) {
         }
         $('report-description').value = '';
         $('report-reason').value = '';
+        showReportSubmitted(reply.publicationId);
     } catch (error) {
         $('report-status').textContent = `No se pudo enviar: ${error.message || error}`;
     } finally {
