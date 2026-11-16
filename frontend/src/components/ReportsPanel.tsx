@@ -1,5 +1,6 @@
 import { useId, useState, type FormEvent } from 'react'
 import AnimatedCollapse from './AnimatedCollapse'
+import DisclosureChevron from './DisclosureChevron'
 
 import {
   createReport,
@@ -92,7 +93,7 @@ export default function ReportsPanel({ token, publicationId }: ReportsPanelProps
           aria-controls={contentId}
         >
           Registrar o consultar reportes
-          <span className="disclosure-chevron" aria-hidden="true">⌄</span>
+          <DisclosureChevron />
         </button>
 
         <AnimatedCollapse open={expanded} id={contentId} className="reports-reveal">
@@ -147,7 +148,7 @@ export default function ReportsPanel({ token, publicationId }: ReportsPanelProps
                   aria-controls={reportsHistoryId}
                 >
                   {historyLoaded ? 'Ocultar reportes' : 'Consultar reportes'}
-                  <span className="disclosure-chevron" aria-hidden="true">⌄</span>
+                  <DisclosureChevron />
                 </button>
               </article>
             </div>
