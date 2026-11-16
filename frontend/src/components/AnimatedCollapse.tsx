@@ -30,11 +30,15 @@ export default function AnimatedCollapse({
 
     function collapsedHeight() {
       if (previewLines <= 0) return 0
-      const text = inner?.querySelector('p') ?? inner
+      // Dentro de una función anidada TypeScript no conserva el narrowing
+      // anterior de "inner": tomar una referencia local y comprobarla.
+      const container = innerRef.current
+      if (!container) return 0
+      const text = container.querySelector('p') ?? container
       const lineHeight = Number.parseFloat(window.getComputedStyle(text).lineHeight)
       // CSS line-height 1.65 para la descripción; fallback solo si es "normal".
       const linesHeight = (Number.isFinite(lineHeight) ? lineHeight : 26) * previewLines
-      return Math.min(inner?.scrollHeight ?? 0, Math.ceil(linesHeight))
+      return Math.min(container.scrollHeight, Math.ceil(linesHeight))
     }
 
     const closed = collapsedHeight()
