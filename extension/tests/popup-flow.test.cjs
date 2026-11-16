@@ -671,7 +671,9 @@ test('al cerrar se respeta el encabezado fijo y no se desplaza más de lo necesa
     p.run("toggleReport()");
     // 400 + 32 - 80 (header) - 12 (separación): 340.
     assert.equal(p.scrollBody.scrollCalls[0].top, 340);
-    p.advance(720);
+    // El simulador avanza el reloj antes de ejecutar cada temporizador.
+    p.advance(420); // Finaliza el desplazamiento y empieza la contracción.
+    p.advance(300); // Finaliza la contracción.
     assert.equal(p.element('report-details').hidden, true);
 });
 
@@ -684,7 +686,8 @@ test('después de enviar un reporte, el scroll conserva la sección y la confirm
     assert.equal(p.scrollBody.scrollCalls.length, 1);
     assert.equal(p.scrollBody.scrollCalls[0].top, 120);
     assert.equal(p.element('report-details').hidden, false);
-    p.advance(720);
+    p.advance(420);
+    p.advance(300);
     assert.equal(p.element('report-details').hidden, true);
     assert.equal(p.element('report-success').hidden, false);
 });
