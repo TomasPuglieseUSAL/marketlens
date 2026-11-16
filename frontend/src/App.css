@@ -981,7 +981,8 @@ button:disabled {
 }
 
 .description-toggle[aria-expanded="true"] .disclosure-chevron,
-.reports-toggle[aria-expanded="true"] .disclosure-chevron {
+.reports-toggle[aria-expanded="true"] .disclosure-chevron,
+.history-toggle[aria-expanded="true"] .disclosure-chevron {
   transform: rotate(180deg);
 }
 
