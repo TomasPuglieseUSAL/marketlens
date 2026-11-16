@@ -434,6 +434,45 @@ form button { margin-top: 11px; }
   overflow-wrap: anywhere;
 }
 .factor-list li::marker { color: var(--accent-strong); }
+
+/* Resumen agregado, visible al finalizar el análisis. No presenta
+   denuncias no verificadas como hechos confirmados. */
+.community-report-summary {
+  margin: 13px 0;
+  padding: 12px;
+  border: 1px solid var(--surface-border-strong);
+  border-left: 3px solid var(--report-accent);
+  border-radius: 8px;
+  background: var(--report-surface);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.community-report-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.community-report-heading strong { color: var(--text-primary); }
+.community-report-heading span { color: var(--text-secondary); font-weight: 700; }
+.community-report-summary p { margin: 7px 0; overflow-wrap: anywhere; }
+.community-report-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  list-style: none;
+  gap: 5px;
+  padding: 0;
+  margin: 8px 0;
+}
+.community-report-reasons li {
+  padding: 4px 7px;
+  border: 1px solid var(--surface-border-strong);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  font-size: 10.5px;
+}
+#community-report-disclaimer { margin-bottom: 0; }
 .result-card button { margin-top: 8px; }
 
 /* Errores y correcciones manuales */
