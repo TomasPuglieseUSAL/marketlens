@@ -1009,3 +1009,18 @@ test('Mercado Libre: calificaciones malas e intermedias tienen etiquetas distint
     const moderate = p.run("conciseFactorLabel({code:'ML_MODERATE_PRODUCT_RATING',description:"+JSON.stringify(description.replace('2.4','3.5'))+"})");
     assert.equal(moderate, 'Calificación moderada: 3,5/5 (12 opiniones).');
 });
+
+
+test('degradados de la extensión van de arriba abajo, de claro a oscuro', () => {
+    const css = fs.readFileSync(path.join(__dirname, '../popup/popup.css'), 'utf8');
+    assert.match(css, /--app-background:\s*linear-gradient\(to bottom,\s*#ffffff/i);
+    assert.match(css, /--app-background:\s*linear-gradient\(to bottom,\s*#1c2026/i);
+    assert.match(css, /background:\s*linear-gradient\(to bottom,\s*var\(--accent-gradient-top\)/);
+    assert.match(css, /--accent-gradient-top:\s*#f98228/);
+    assert.match(css, /--accent-gradient-bottom:\s*#b94300/);
+    assert.match(css, /--accent-gradient-top:\s*#ffad70/);
+    assert.match(css, /--accent-gradient-bottom:\s*#ec7422/);
+    assert.ok(!/linear-gradient\((?:148|140|110)deg/i.test(css),
+        'No deben quedar degradados diagonales del popup');
+    assert.match(css, /background-attachment:\s*fixed,\s*local,\s*local,\s*fixed/);
+});
