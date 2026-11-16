@@ -856,7 +856,7 @@ function extractMercadoLibre() {
                 );
                 const selectedGrades = gradeItems.filter(isSelectedGrade);
                 let selectedGradeMatches = true;
-                if (gradeItems.length) {
+                if (gradeItems.length || gradeGroups.length) {
                     // Compatibilidad con HTML antiguo de un único selector.
                     selectedGradeMatches = gradeGroups.length > 0
                         ? gradeGroups.every(group => {
