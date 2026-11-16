@@ -62,6 +62,29 @@ compartido entre varios vendedores. Se registran con una fecha de observación
 y vencen para la evaluación a los **30 días**. No se sustituye un recuento
 de reseñas por ventas, ni se infieren números exactos desde `1.2K+`.
 
+### Aislamiento de reseñas y ausencia de puntuación visible (V30)
+
+- El extractor ignora las tarjetas de recomendaciones (incluidos carruseles
+  patrocinados como «Con 4 estrellas o más»). Nunca considera sus puntuaciones
+  como calificaciones del producto que se está analizando.
+- Un `Product` en JSON-LD solo sirve como referencia si coincide con la URL
+  de la ficha principal o con su título de manera estricta. El primer
+  `Product` del documento ya no se acepta automáticamente.
+- Cuando la ficha principal está cargada, se observa la sección de preguntas
+  y respuestas y no hay módulo de reseñas ni puntuación atribuible al
+  producto, se conserva `mlProductRatingUnavailable=true`. **No equivale
+  a afirmar que el artículo tenga cero reseñas**.
+- Si la sección no se cargó, es ambigua o solo hay una métrica parcial, se
+  conserva estado desconocido (null), sin penalización adicional.
+- Una ausencia observada recientemente suma **+2 puntos**, no otorga la
+  tercera dimensión de cobertura y vence a los 30 días. Una revisión
+  posterior con puntuación válida sustituye ese estado.
+- Cuando una nueva inspección concluyente informa ausencia de puntuación,
+  se eliminan de la publicación los valores antiguos potencialmente
+  mal atribuidos. No se reescribe el historial de evaluaciones.
+
+Migración: `V30__ml_public_rating_visibility.sql`.
+
 El termómetro visible del vendedor se conserva por separado con su fecha
 de observación; no se convierte en reputación corroborada mediante OAuth.
 
@@ -84,6 +107,8 @@ no demuestra fraude.
 | 1–4 opiniones observadas | +4 |
 | 5–9 opiniones observadas | +2 |
 | 10 o más opiniones | +0 por tamaño de muestra |
+| Puntuación pública no visible, observación concluyente | +2 (sin cobertura adicional) |
+| Datos desconocidos o lectura incompleta | +0 |
 | Calificación < 3/5, con menos de 10 opiniones | +5 |
 | Calificación < 3/5, con 10 o más opiniones | +15 |
 | Calificación desde 3/5 hasta < 4/5, con menos de 10 opiniones | +3 |
@@ -113,7 +138,8 @@ por eso no se inventa retroactivamente.
 
 Los cambios del backend incluyen
 `V27__ml_observed_reputation_and_product_reviews.sql` y
-`V28__ml_catalog_selected_offer.sql`; para aplicarlos:
+`V28__ml_catalog_selected_offer.sql` y
+`V30__ml_public_rating_visibility.sql`; para aplicarlos:
 
 ```powershell
 docker compose up --build -d
@@ -121,7 +147,7 @@ docker compose logs --tail=150 backend
 cd backend
 .\mvnw.cmd test
 cd ..
-node --test extension/tests/popup-flow.test.cjs
+node --test extension/tests/*.test.cjs
 cd frontend
 npm ci
 npm run build
