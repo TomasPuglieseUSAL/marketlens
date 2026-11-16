@@ -101,7 +101,14 @@ export default function RiskEvaluationPanel({
         publicationId
       )
 
-      setEvaluations(history)
+      // Al consultar el historial, conservar el desglose de cobertura
+      // de la evaluación recién realizada si todavía está en memoria.
+      setEvaluations((current) => history.map((item) => {
+        const previous = current.find((evaluation) => evaluation.id === item.id)
+        return previous?.coverageFactors
+          ? { ...item, coverageFactors: previous.coverageFactors }
+          : item
+      }))
       setShowHistory(true)
     } catch (err) {
       setError(
