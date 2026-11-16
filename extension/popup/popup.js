@@ -840,35 +840,50 @@ function extractMercadoLibre() {
                 const sellerName = sellers.length === 1
                     ? sellers[0].textContent?.replace(/\s+/g, ' ').trim() : null;
 
-                // Catálogos reacondicionados: los estados Excelente/Bueno/
-                // Aceptable son variantes de catálogo, NO ofertas simultáneas.
-                // Si hay selector, exigir una variante --SELECTED que remita
-                // al mismo MLA de la ficha (otras pueden estar --BLOCKED).
-                const grades = [...document.querySelectorAll(
+                // Distintos selectores de variantes pueden coexistir (color,
+                // almacenamiento y estado del reacondicionado). Cada grupo
+                // debe tener UNA opción elegida y apuntar al catálogo actual.
+                // Dos opciones seleccionadas de distintos grupos no son
+                // dos ofertas individuales.
+                const gradeGroups = [...document.querySelectorAll(
+                    '.ui-pdp-outside_variations__thumbnails'
+                )];
+                const gradeItems = [...document.querySelectorAll(
                     '.ui-pdp-outside_variations__thumbnails__item'
                 )];
+                const isSelectedGrade = node => node.classList?.contains(
+                    'ui-pdp-outside_variations__thumbnails__item--SELECTED'
+                );
+                const selectedGrades = gradeItems.filter(isSelectedGrade);
                 let selectedGradeMatches = true;
-                if (grades.length) {
-                    const selectedGrades = grades.filter(node =>
-                        node.classList?.contains(
-                            'ui-pdp-outside_variations__thumbnails__item--SELECTED')
-                    );
-                    selectedGradeMatches = false;
-                    if (selectedGrades.length === 1) {
-                        try {
-                            const selectedUrl = new URL(
-                                selectedGrades[0].getAttribute('href'),
-                                window.location.href
-                            );
-                            const selectedCatalogId = selectedUrl.pathname.match(
-                                /\/p\/(MLA\d{6,})\/?$/i
-                            )?.[1]?.toUpperCase();
-                            selectedGradeMatches =
-                                selectedUrl.hostname === window.location.hostname &&
-                                selectedCatalogId === catalogId;
-                        } catch {
-                            // No asumir que el estado marcado es el actual.
-                        }
+                if (gradeItems.length) {
+                    // Compatibilidad con HTML antiguo de un único selector.
+                    selectedGradeMatches = gradeGroups.length > 0
+                        ? gradeGroups.every(group => {
+                            const items = [...group.querySelectorAll(
+                                '.ui-pdp-outside_variations__thumbnails__item'
+                            )];
+                            return items.length > 0 &&
+                                items.filter(isSelectedGrade).length === 1;
+                        }) && selectedGrades.length === gradeGroups.length
+                        : selectedGrades.length === 1;
+                    if (selectedGradeMatches) {
+                        selectedGradeMatches = selectedGrades.every(node => {
+                            try {
+                                const selectedUrl = new URL(
+                                    node.getAttribute('href'),
+                                    window.location.href
+                                );
+                                const selectedCatalogId = selectedUrl.pathname.match(
+                                    /\/p\/(MLA\d{6,})\/?$/i
+                                )?.[1]?.toUpperCase();
+                                return selectedUrl.hostname ===
+                                    window.location.hostname &&
+                                    selectedCatalogId === catalogId;
+                            } catch {
+                                return false;
+                            }
+                        });
                     }
                 }
 
