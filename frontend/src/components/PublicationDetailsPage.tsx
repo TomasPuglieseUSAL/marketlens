@@ -8,6 +8,8 @@ import {
 
 import RiskEvaluationPanel from './RiskEvaluationPanel'
 import ReportsPanel from './ReportsPanel'
+import PublicationDescription from './PublicationDescription'
+import PublicationHighlights from './PublicationHighlights'
 
 interface PublicationDetailsPageProps {
   token: string
@@ -126,24 +128,7 @@ export default function PublicationDetailsPage({
               </span>
             </div>
 
-            <div className="publication-main-data">
-              <div>
-                <small>Precio</small>
-
-                <strong>
-                  {publication.price.toLocaleString('es-AR')}
-                </strong>
-              </div>
-
-              <div>
-                <small>Vendedor</small>
-
-                <strong>
-                  {publication.sellerName || (publication.sellerId == null
-                    ? 'No identificado' : `#${publication.sellerId}`)}
-                </strong>
-              </div>
-            </div>
+            <PublicationHighlights publication={publication} />
 
             {publication.marketplace === 'TEMU' && publication.temuSellerReviewCount != null && (
               <p className="session-message" role="note">
@@ -212,10 +197,10 @@ export default function PublicationDetailsPage({
               </p>
             )}
 
-            <div className="publication-description">
-              <h3>Descripción</h3>
-              <p>{publication.description}</p>
-            </div>
+            <PublicationDescription
+              key={publication.id}
+              description={publication.description}
+            />
 
             {publication.externalId && (
               <p>
@@ -229,7 +214,7 @@ export default function PublicationDetailsPage({
                 href={safeOriginalUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="external-link"
+                className="action-link original-publication-button"
               >
                 Abrir publicación original ↗
               </a>
