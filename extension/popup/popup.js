@@ -151,6 +151,7 @@ async function getSession() {
 }
 function showLoggedOut(message = 'Iniciá sesión para usar MarketLens.') {
     cancelReportClose();
+    $('report-success').hidden = true;
     updatePopupContent(() => {
         authenticated = false;
         resetLoadingTransition();
@@ -363,7 +364,7 @@ function toggleReport() {
 function showReportSubmitted(publicationId) {
     $('report-status').textContent = '';
     $('report-success-message').textContent =
-        '✓ Reporte registrado para la publicación #' + publicationId
+        'Reporte registrado para la publicación #' + publicationId
         + '. El puntaje anterior se actualizará al volver a analizar.';
     $('report-success').hidden = false;
     if ($('report-details').hidden) return;
