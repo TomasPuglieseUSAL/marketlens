@@ -224,35 +224,37 @@ export default function RiskEvaluationPanel({
       {error && <p className="error">{error}</p>}
 
       {evaluations.length > 0 && (
-        <>
-          <div className="evaluation-history evaluation-latest">
-            <EvaluationCard evaluation={evaluations[0]} latest />
-          </div>
-
-          <div
-            id={historyId}
-            className={`history-reveal${showHistory ? ' is-open' : ''}`}
-            aria-hidden={!showHistory}
-            inert={!showHistory}
-          >
-            <div className="history-reveal-inner">
-              <div
-                className="evaluation-history evaluation-history--scrollable"
-                role="region"
-                aria-label="Evaluaciones anteriores"
-                tabIndex={showHistory ? 0 : -1}
-              >
-                <h4>Evaluaciones anteriores ({Math.max(0, evaluations.length - 1)})</h4>
-                {evaluations.length > 1
-                  ? evaluations.slice(1).map((evaluation) => (
-                    <EvaluationCard key={evaluation.id} evaluation={evaluation} latest={false} />
-                  ))
-                  : <p>Aún no hay evaluaciones anteriores.</p>}
-              </div>
-            </div>
-          </div>
-        </>
+        <div className="evaluation-history evaluation-latest">
+          <EvaluationCard evaluation={evaluations[0]} latest />
+        </div>
       )}
+
+      {/* Mantener el contenedor montado incluso antes de la primera carga
+          permite animar la primera apertura, no solo las siguientes. */}
+      <div
+        id={historyId}
+        className={`history-reveal${showHistory ? ' is-open' : ''}`}
+        aria-hidden={!showHistory}
+        inert={!showHistory}
+      >
+        <div className="history-reveal-inner">
+          <div
+            className="evaluation-history evaluation-history--scrollable"
+            role="region"
+            aria-label="Evaluaciones anteriores"
+            tabIndex={showHistory ? 0 : -1}
+          >
+            <h4>Evaluaciones anteriores ({Math.max(0, evaluations.length - 1)})</h4>
+            {evaluations.length > 1
+              ? evaluations.slice(1).map((evaluation) => (
+                <EvaluationCard key={evaluation.id} evaluation={evaluation} latest={false} />
+              ))
+              : <p>{evaluations.length === 0
+                ? 'No hay evaluaciones registradas.'
+                : 'Aún no hay evaluaciones anteriores.'}</p>}
+          </div>
+        </div>
+      </div>
     </section>
   )
 }
