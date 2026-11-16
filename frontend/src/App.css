@@ -1166,6 +1166,56 @@ button:disabled {
   border-top: 1px solid var(--surface-border);
 }
 
+/* Señal comunitaria separada de los factores automáticos, visible incluso
+   cuando el formulario de reportes permanece cerrado. */
+.community-summary {
+  margin: 17px 0;
+  padding: 15px 18px;
+  border: 1px solid var(--surface-border-strong);
+  border-left: 4px solid var(--risk-medium);
+  border-radius: var(--radius-control);
+  background: var(--gradient-muted);
+}
+
+.community-summary-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.community-summary-heading span {
+  font-size: .82rem;
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.community-summary p {
+  margin: 9px 0;
+  color: var(--text-secondary);
+}
+
+.community-summary-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.community-summary-reasons span {
+  padding: 5px 9px;
+  font-size: .8rem;
+  border-radius: 999px;
+  border: 1px solid var(--surface-border);
+  background: var(--surface-muted);
+}
+
+.community-summary > small {
+  display: block;
+  color: var(--text-tertiary);
+}
+
 .reports-disclosure {
   margin-top: 16px;
 }
