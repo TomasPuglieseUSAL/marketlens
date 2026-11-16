@@ -1058,3 +1058,62 @@ test('el coordinador incluye reporte comunitario en el resultado de análisis y 
     assert.match(background, /status: 'success'[\s\S]*communityReports/);
     assert.match(background, /return \{publicationId, reportId: report\?\.id \?\? null, communityReports\}/);
 });
+
+
+test('envío de reporte exitoso: confirma fuera del formulario y cierra con animación', async () => {
+    const p = popup();
+    p.element('report-details').hidden = false;
+    p.element('report-reason').value = 'SUSPICIOUS_PRICE';
+    p.run("browser.runtime.sendMessage = async () => ({ok:true,publicationId:57,reportId:9})");
+    await p.run("sendReport({marketplace:'MERCADO_LIBRE'})");
+    assert.equal(p.element('report-success').hidden, false);
+    assert.match(p.element('report-success-message').textContent, /Reporte registrado para la publicación #57/);
+    assert.equal(p.element('report-status').textContent, '');
+    assert.equal(p.element('report-details').hidden, false,
+        'Durante la animación el formulario debe permanecer montado');
+    assert.equal(p.element('report-details').classList.contains('is-closing'), true);
+    p.advance(300);
+    assert.equal(p.element('report-details').hidden, true);
+    assert.equal(p.element('report-success').hidden, false,
+        'La confirmación debe seguir visible después del cierre');
+});
+
+test('error al enviar reporte: no muestra confirmación ni cierra el formulario', async () => {
+    const p = popup();
+    p.element('report-details').hidden = false;
+    p.run("browser.runtime.sendMessage = async () => ({ok:false,error:'Error simulado'})");
+    await p.run("sendReport({marketplace:'MERCADO_LIBRE'})");
+    assert.equal(p.element('report-success').hidden, true);
+    assert.equal(p.element('report-details').hidden, false);
+    assert.match(p.element('report-status').textContent, /No se pudo enviar: Error simulado/);
+});
+
+test('movimiento reducido: reporte exitoso cierra inmediatamente y conserva confirmación', () => {
+    const p = popup();
+    p.setReducedMotion(true);
+    p.element('report-details').hidden = false;
+    p.run("showReportSubmitted(91)");
+    assert.equal(p.element('report-details').hidden, true);
+    assert.equal(p.element('report-success').hidden, false);
+    assert.match(p.element('report-success-message').textContent, /#91/);
+});
+
+test('al abrir otro reporte se oculta la confirmación previa', () => {
+    const p = popup();
+    p.element('report-toggle').disabled = false;
+    p.element('report-details').hidden = true;
+    p.run("showReportSubmitted(91)");
+    assert.equal(p.element('report-success').hidden, false);
+    p.run("toggleReport()");
+    assert.equal(p.element('report-success').hidden, true);
+    assert.equal(p.element('report-details').hidden, false);
+});
+
+test('la confirmación visual está fuera del panel y respeta movimiento reducido', () => {
+    const html = fs.readFileSync(path.join(__dirname, '../popup/popup.html'), 'utf8');
+    const css = fs.readFileSync(path.join(__dirname, '../popup/popup.css'), 'utf8');
+    assert.ok(html.indexOf('id="report-success"') < html.indexOf('id="report-details"'));
+    assert.match(html, /id="report-success"[^>]*role="status"/);
+    assert.match(css, /\.report-success\s*\{[\s\S]*animation:\s*ml-report-success-enter/);
+    assert.match(css, /\.report-success:not\(\[hidden\]\)\s*\{\s*animation:\s*none/);
+});
