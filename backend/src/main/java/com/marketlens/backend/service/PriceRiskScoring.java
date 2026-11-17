@@ -15,7 +15,7 @@ public final class PriceRiskScoring {
     }
 
     /**
-     * @return null si faltan datos; 0 si no hay anomalía; 5, 15 o 25 si la hay.
+     * @return null si faltan datos; 0 si no hay anomalía; 5, 15, 25, 35 o 45 si la hay.
      */
     public static Integer score(
             BigDecimal publicationPrice,
@@ -43,6 +43,12 @@ public final class PriceRiskScoring {
         if (priceTimes100.compareTo(medianReferencePrice.multiply(BigDecimal.valueOf(50))) >= 0) {
             return 15;
         }
-        return 25;
+        if (priceTimes100.compareTo(medianReferencePrice.multiply(BigDecimal.valueOf(25))) >= 0) {
+            return 25;
+        }
+        if (priceTimes100.compareTo(medianReferencePrice.multiply(BigDecimal.valueOf(10))) >= 0) {
+            return 35;
+        }
+        return 45;
     }
 }
