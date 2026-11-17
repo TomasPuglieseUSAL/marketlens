@@ -365,11 +365,15 @@ Resultados posibles:
 access token OAuth. Los perfiles locales `demo` y `registration`
 deshabilitan OAuth: no se simula el respaldo del tercer factor.
 En modo sin OAuth, la evaluación de precio, vendedor y descripción
-continúa normalmente. Para probar reseñas propias corroboradas hay que
-habilitar una configuración legítima de OAuth y vincular una cuenta;
-no almacenar tokens en el código. Las importaciones antiguas y el
-JSON-LD por sí solos no pueden convertirse retroactivamente en
-`ITEM_REVIEWS` verificado.
+continúa normalmente. El perfil opt-in `connected` permite probar
+**una sola cuenta de integración administrada por el servidor** para
+consultar reseñas públicas, sin solicitar OAuth a cada usuario final
+de la extensión. La factibilidad real se verifica con ítems de distintos
+vendedores; consultar [ML-CENTRAL-OAUTH-TRIAL.md](ML-CENTRAL-OAUTH-TRIAL.md).
+En esta prueba los tokens siguen en memoria: no hay persistencia ni
+renovación automática hasta que se compruebe la hipótesis.
+Las importaciones antiguas y el JSON-LD por sí solos no pueden convertirse
+retroactivamente en `ITEM_REVIEWS` verificado.
 
 La señal `ML_ITEM_REVIEWS_VERIFIED` se muestra con **0 puntos** para
 no restar gravedad a un precio extremo ni transformar satisfacción
