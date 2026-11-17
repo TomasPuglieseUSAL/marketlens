@@ -12,14 +12,14 @@ import java.util.List;
 /**
  * Las opiniones del PRODUCTO Mercado Libre pueden ser compartidas entre
  * varios vendedores. No equivalen a reputación comercial ni a ventas
- * verificadas. Umbrales exploratorios pendientes de validación empírica.
+ * verificadas. Se usan únicamente como información contextual.
  */
 public final class MercadoLibreProductReviewEvidence {
 
     public record Signal(String code, String description, int points) { }
 
     private static final int MAX_AGE_DAYS = 30;
-    private static final int MIN_REVIEWS_FOR_FULL_RATING_WEIGHT = 10;
+    private static final int MIN_REVIEWS_FOR_SAMPLE_CONTEXT = 10;
     private static final BigDecimal LOW_RATING_LIMIT = new BigDecimal("3.0");
     private static final BigDecimal MODERATE_RATING_LIMIT = new BigDecimal("4.0");
 
