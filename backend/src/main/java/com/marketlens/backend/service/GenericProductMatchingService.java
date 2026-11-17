@@ -64,6 +64,7 @@ public class GenericProductMatchingService {
 
     private enum Condition { NEW, USED, REFURBISHED, UNKNOWN }
     private enum Packaging { WITH_BOX, WITHOUT_BOX, UNKNOWN, CONFLICT }
+    private record Specifications(Set<String> storage, Set<String> ram, boolean ambiguous) { }
 
     public MatchDecision compare(Publication target, Publication candidate, double similarity) {
         if (!Double.isFinite(similarity) || similarity < MIN_SIMILARITY) {
@@ -90,16 +91,24 @@ public class GenericProductMatchingService {
             return notComparable("Los estados declarados (nuevo, usado o reacondicionado) difieren.");
         }
 
-        Set<String> capacitiesA = capacities(target);
-        Set<String> capacitiesB = capacities(candidate);
-        // Si falta una capacidad, NO se rechaza automaticamente.
-        if (!capacitiesA.isEmpty() && !capacitiesB.isEmpty()
-                && !capacitiesA.equals(capacitiesB)) {
-            if (disjoint(capacitiesA, capacitiesB)) {
-                return notComparable("Las capacidades declaradas son distintas.");
-            }
-            return insufficient("Hay varias capacidades y no se puede comprobar su equivalencia.");
+        Specifications specsA = specifications(target);
+        Specifications specsB = specifications(candidate);
+        if (specsA.ambiguous() || specsB.ambiguous()) {
+            return insufficient("Se encontraron capacidades contradictorias o ambiguas dentro de una publicacion.");
         }
+        if (!specsA.storage().isEmpty() && !specsB.storage().isEmpty()
+                && !specsA.storage().equals(specsB.storage())) {
+            return notComparable("Las capacidades de almacenamiento declaradas son distintas.");
+        }
+        if (!specsA.ram().isEmpty() && !specsB.ram().isEmpty()
+                && !specsA.ram().equals(specsB.ram())) {
+            return notComparable("Las capacidades de memoria RAM declaradas son distintas.");
+        }
+
+        Set<String> capacitiesA = new HashSet<>(specsA.storage());
+        capacitiesA.addAll(specsA.ram());
+        Set<String> capacitiesB = new HashSet<>(specsB.storage());
+        capacitiesB.addAll(specsB.ram());
 
         Packaging packagingA = detectPackaging(normalize(target.getTitle())
                 + " " + normalize(target.getDescription()));
@@ -121,14 +130,47 @@ public class GenericProductMatchingService {
         Set<String> shared = new HashSet<>(uniqueA);
         shared.retainAll(uniqueB);
 
-        if (shared.size() < MIN_SHARED_IDENTIFYING_TOKENS) {
+        // La identidad debe estar anclada en AMBOS titulos. Una
+        // descripcion nunca puede reemplazar un modelo incompatible.
+        if (uniqueA.isEmpty() || uniqueB.isEmpty()
+                || shared.size() < MIN_SHARED_IDENTIFYING_TOKENS) {
             return insufficient("No hay suficientes terminos identificativos compartidos.");
         }
 
         double coverageA = (double) shared.size() / uniqueA.size();
         double coverageB = (double) shared.size() / uniqueB.size();
         if (Math.min(coverageA, coverageB) < MIN_TOKEN_COVERAGE) {
-            return insufficient("La coincidencia de terminos identificativos es demasiado baja.");
+            // Ampliación controlada para titulos abreviados: solo si uno
+            // es subconjunto del otro y su DESCRIPCION confirma palabras
+            // identificativas adicionales del titulo más largo.
+            boolean aIsShort = uniqueA.size() < uniqueB.size()
+                    && shared.containsAll(uniqueA);
+            boolean bIsShort = uniqueB.size() < uniqueA.size()
+                    && shared.containsAll(uniqueB);
+            if (!aIsShort && !bIsShort) {
+                return insufficient("La coincidencia de terminos identificativos es demasiado baja.");
+            }
+
+            Publication shortPublication = aIsShort ? target : candidate;
+            Set<String> longTitle = aIsShort ? uniqueB : uniqueA;
+            Specifications shortSpecs = aIsShort ? specsA : specsB;
+            Specifications longSpecs = aIsShort ? specsB : specsA;
+
+            // La variante de almacenamiento anunciada en el titulo largo
+            // debe constar tambien en el anuncio corto (titulo o descripcion).
+            // No inventar 64/128 GB para un modelo que no lo declara.
+            if (!longSpecs.storage().isEmpty() && shortSpecs.storage().isEmpty()) {
+                return insufficient("Falta la capacidad de almacenamiento en el anuncio abreviado.");
+            }
+            Set<String> supported = new HashSet<>(identityTokens(
+                    descriptionPrefix(shortPublication.getDescription())));
+            supported.retainAll(longTitle);
+            supported.removeAll(shared);
+            if (supported.isEmpty()
+                    || (double) (shared.size() + supported.size()) / longTitle.size()
+                            < MIN_TOKEN_COVERAGE) {
+                return insufficient("La descripcion no confirma suficientes identificadores del titulo ampliado.");
+            }
         }
 
         // Descartar numeros de modelo completamente incompatibles
@@ -198,21 +240,52 @@ public class GenericProductMatchingService {
                 + capacityLabel(match.group(1), match.group(2)) + " ");
     }
 
-    private Set<String> capacities(Publication publication) {
-        Set<String> fromTitle = extractCapacities(normalize(publication.getTitle()));
-        if (!fromTitle.isEmpty()) return fromTitle;
-        String description = normalize(publication.getDescription());
-        return extractCapacities(description.substring(0,
-                Math.min(DESCRIPTION_PREFIX_LENGTH, description.length())));
+    private String descriptionPrefix(String description) {
+        String normalized = normalize(description);
+        return normalized.substring(0,
+                Math.min(DESCRIPTION_PREFIX_LENGTH, normalized.length()));
     }
 
-    private Set<String> extractCapacities(String text) {
+    private Specifications specifications(Publication publication) {
+        String title = normalize(publication.getTitle());
+        String description = descriptionPrefix(publication.getDescription());
+        Set<String> titleStorage = extractCapacities(title, false);
+        Set<String> titleRam = extractCapacities(title, true);
+        Set<String> descriptionStorage = extractCapacities(description, false);
+        Set<String> descriptionRam = extractCapacities(description, true);
+
+        // El titulo tiene prioridad, pero una contradicción explícita con
+        // la descripcion no se resuelve a favor de ninguno de los dos.
+        boolean ambiguous = conflicting(titleStorage, descriptionStorage)
+                || conflicting(titleRam, descriptionRam);
+        Set<String> storage = titleStorage.isEmpty() ? descriptionStorage : titleStorage;
+        Set<String> ram = titleRam.isEmpty() ? descriptionRam : titleRam;
+        ambiguous |= storage.size() > 1 || ram.size() > 1;
+        return new Specifications(storage, ram, ambiguous);
+    }
+
+    private boolean conflicting(Set<String> titleValues, Set<String> descriptionValues) {
+        return !titleValues.isEmpty() && !descriptionValues.isEmpty()
+                && !titleValues.equals(descriptionValues);
+    }
+
+    private Set<String> extractCapacities(String text, boolean ram) {
         Set<String> result = new LinkedHashSet<>();
         Matcher matcher = CAPACITY.matcher(text);
         while (matcher.find()) {
-            result.add(capacityLabel(matcher.group(1), matcher.group(2)));
+            if (isRam(text, matcher.start(), matcher.end()) == ram) {
+                result.add(capacityLabel(matcher.group(1), matcher.group(2)));
+            }
         }
         return result;
+    }
+
+    private boolean isRam(String text, int start, int end) {
+        String before = text.substring(Math.max(0, start - 25), start);
+        String after = text.substring(end, Math.min(text.length(), end + 25));
+        // Patrones genéricos: "4 GB RAM", "RAM de 4 GB" y "memoria RAM 4 GB".
+        return after.matches("(?s)^\\s*(?:de\\s+)?(?:ram|memoria\\s+ram)\\b.*")
+                || before.matches("(?s).*\\b(?:ram|memoria\\s+ram)\\s*(?:de\\s+)?$");
     }
 
     private String capacityLabel(String number, String unit) {
