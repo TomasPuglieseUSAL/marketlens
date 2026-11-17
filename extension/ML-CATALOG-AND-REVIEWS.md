@@ -208,6 +208,29 @@ el puntaje de riesgo. No se consulta la API oficial ni se afirma una
 identidad de vendedor corroborada por OAuth. Temu conserva sus factores
 propios. Los indicadores son disponibilidad de datos, no pruebas de seguridad.
 
+### Matching textual enriquecido (sin ampliar la base de datos)
+
+El servicio de búsqueda de referencias utiliza TF-IDF de **títulos** y,
+cuando existen en ambos anuncios, incorpora una señal secundaria de
+**descripciones**. Para acotar CPU y memoria, lee como máximo los
+primeros 420 caracteres y 60 términos filtrados de cada descripción.
+El título conserva la mayor ponderación (80 %, o 70 % si es corto).
+Los vectores se calculan en memoria durante la consulta y no se
+persisten; se mantiene el límite existente de 500 candidatos.
+
+La validación posterior conserva el anclaje en los identificadores
+presentes en los **títulos**. Para un título abreviado, la descripción
+puede respaldar atributos de un título más completo siempre que
+haya una identidad textual compartida y no existan contradicciones.
+Almacenamiento y RAM se distinguen para evitar comparar «64 GB de
+almacenamiento» con «4 GB de RAM». Un almacenamiento explícito
+diferente se rechaza; si falta una especificación indispensable en
+el anuncio abreviado, el match sigue como `INSUFFICIENT_DATA`.
+
+Los resultados `PROVISIONAL_MATCH` siguen siendo aproximaciones:
+no garantizan equivalencia comercial. No se aplican reglas especiales
+por marca, modelo o categoría.
+
 ### Precio anormal: tramos y referencias
 
 Se necesita un mínimo de **cinco ofertas independientes comparables**,
