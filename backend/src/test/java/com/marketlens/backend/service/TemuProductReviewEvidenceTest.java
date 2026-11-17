@@ -120,6 +120,28 @@ class TemuProductReviewEvidenceTest {
         p.setSeller(s);
         var result = new RiskEngine(new RiskCoverageCalculator()).evaluate(p);
         assertEquals(1, result.getAvailableFactors());
+        // Las opiniones generales del modelo ya no cuentan para la
+        // cobertura de Mercado Libre: descripción y vendedor (2 factores).
+        assertEquals(2, result.getTotalFactors());
+        assertTrue(result.getFactors().stream().anyMatch(f ->
+                "NEW_SELLER_ACCOUNT".equals(f.getCode())
+                        && f.getScoreContribution() == 20));
+    }
+
+    @Test void temuRetainsThreeCoverageFactorsWithoutMakingAccountAgeMandatory() {
+        Publication p = new Publication();
+        p.setMarketplace(Marketplace.TEMU);
+        p.setDescription("Funda protectora");
+        Seller s = new Seller();
+        s.setMarketplace(Marketplace.TEMU);
+        s.setAccountAgeDays(10);
+        p.setSeller(s);
+
+        var result = new RiskEngine(new RiskCoverageCalculator()).evaluate(p);
+
+        // La descripción está disponible; la reputación de tienda y las
+        // reseñas del producto no lo están, y la antigüedad no añade cobertura.
+        assertEquals(1, result.getAvailableFactors());
         assertEquals(3, result.getTotalFactors());
         assertTrue(result.getFactors().stream().anyMatch(f ->
                 "NEW_SELLER_ACCOUNT".equals(f.getCode())
