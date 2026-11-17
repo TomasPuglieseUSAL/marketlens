@@ -6,6 +6,7 @@ import com.marketlens.backend.dto.MercadoLibreSellerLookupResponse;
 import com.marketlens.backend.dto.MercadoLibreItemResponse;
 import java.util.Locale;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -30,6 +31,15 @@ public class MercadoLibreApiService {
         private static final Logger logger = LoggerFactory.getLogger(MercadoLibreApiService.class);
 
         private final ObjectMapper objectMapper = new ObjectMapper();
+
+        // Prueba de integración: la autorización pertenece a una cuenta
+        // designada en el servidor, nunca al usuario final de la extensión.
+        // Se mantiene desactivada salvo habilitación explícita.
+        @Value("${mercadolibre.reviews.central-enabled:false}")
+        private boolean centralReviewsEnabled = false;
+
+        @Value("${mercadolibre.reviews.central-owner:}")
+        private String centralReviewsOwner = "";
 
         public MercadoLibreApiService(
                         MercadoLibreOAuthService oauthService) {
@@ -92,7 +102,30 @@ public class MercadoLibreApiService {
         }
 
         public boolean hasReviewAccess(String username) {
-                return username != null && oauthService.isConnected(username);
+                String owner = reviewTokenOwner(username);
+                return owner != null && oauthService.isConnected(owner);
+        }
+
+        public boolean isCentralReviewsEnabled() {
+                return centralReviewsEnabled
+                        && centralReviewsOwner != null
+                        && !centralReviewsOwner.isBlank();
+        }
+
+        public boolean isCentralReviewsOwner(String username) {
+                return isCentralReviewsEnabled() && username != null
+                        && centralReviewsOwner.trim().equals(username);
+        }
+
+        private String reviewTokenOwner(String requestingUsername) {
+                if (centralReviewsEnabled) {
+                        // Fallar de forma cerrada: nunca pasar a OAuth personal
+                        // por un error de configuración del modo centralizado.
+                        return centralReviewsOwner == null || centralReviewsOwner.isBlank()
+                                ? null : centralReviewsOwner.trim();
+                }
+                return requestingUsername == null || requestingUsername.isBlank()
+                        ? null : requestingUsername;
         }
 
         /**
@@ -107,7 +140,12 @@ public class MercadoLibreApiService {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                                         "ID de ítem Mercado Libre inválido.");
                 }
-                String accessToken = oauthService.getAccessToken(username);
+                String tokenOwner = reviewTokenOwner(username);
+                if (tokenOwner == null) {
+                        throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                                "La cuenta de integración de reseñas no está configurada.");
+                }
+                String accessToken = oauthService.getAccessToken(tokenOwner);
                 JsonNode response = executeGet("/reviews/item/" + itemId, accessToken);
                 return MercadoLibreItemReviewEvidence.fromApiResponse(itemId, response);
         }
