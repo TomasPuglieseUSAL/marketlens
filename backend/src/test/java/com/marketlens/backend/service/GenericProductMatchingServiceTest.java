@@ -137,6 +137,62 @@ class GenericProductMatchingServiceTest {
                 "Consola PX 5 Digital 1000 GB nueva", "", 0.07);
     }
 
+    @Test
+    void shortTitleUsesDescriptionToConfirmSameStorageAndRam() {
+        assertStatus("PROVISIONAL_MATCH",
+                "Samsung A13 (Usado)",
+                "Samsung Galaxy A13 de 64 GB con 4 GB RAM en buen estado.",
+                "Samsung Galaxy A13 64gb Negro 4gb Ram (Usado)",
+                "Liberado y funcional.", 0.38);
+    }
+
+    @Test
+    void shortTitleWithoutStorageDoesNotAssumeSixtyFourGb() {
+        assertStatus("INSUFFICIENT_DATA",
+                "Samsung A13 (Usado)", "Equipo funcionando.",
+                "Samsung Galaxy A13 64gb Negro 4gb Ram (Usado)",
+                "Liberado.", 0.38);
+    }
+
+    @Test
+    void descriptionCannotHideStorageConflict() {
+        assertStatus("NOT_COMPARABLE",
+                "Samsung A13 (Usado)", "Samsung Galaxy A13 con 128 GB de almacenamiento.",
+                "Samsung Galaxy A13 64gb Negro 4gb Ram (Usado)", "", 0.38);
+    }
+
+    @Test
+    void distinguishesStorageFromRamAndRejectsRamConflict() {
+        assertStatus("PROVISIONAL_MATCH",
+                "Samsung Galaxy A13 64GB 4GB RAM (Usado)", "",
+                "Samsung Galaxy A13 64GB Negro 4GB RAM (Usado)", "", 0.6);
+        assertStatus("NOT_COMPARABLE",
+                "Samsung Galaxy A13 64GB 4GB RAM (Usado)", "",
+                "Samsung Galaxy A13 64GB Negro 8GB RAM (Usado)", "", 0.6);
+    }
+
+    @Test
+    void contradictoryDescriptionDoesNotOverrideExplicitTitle() {
+        assertStatus("INSUFFICIENT_DATA",
+                "Samsung Galaxy A13 64GB (Usado)",
+                "Almacenamiento interno: 128 GB.",
+                "Samsung Galaxy A13 64GB (Usado)", "", 0.6);
+    }
+
+    @Test
+    void descriptionDoesNotTurnAccessoryIntoSameProduct() {
+        assertStatus("INSUFFICIENT_DATA",
+                "Funda Samsung A13 (Usado)", "Compatible con Samsung Galaxy A13 de 64 GB.",
+                "Samsung Galaxy A13 64GB Negro 4GB RAM (Usado)", "", 0.6);
+    }
+
+    @Test
+    void descriptionCannotOverrideDifferentModelNumbers() {
+        assertStatus("INSUFFICIENT_DATA",
+                "Samsung A15 (Usado)", "Descripcion Samsung Galaxy A13 64 GB.",
+                "Samsung Galaxy A13 64GB Negro (Usado)", "", 0.6);
+    }
+
     private String targetTitle() {
         return "Sony Playstation 5 Slim 1t Usado Como Nuevo (Usado)";
     }
