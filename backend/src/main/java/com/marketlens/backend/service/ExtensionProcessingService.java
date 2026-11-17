@@ -11,7 +11,6 @@ import com.marketlens.backend.entity.Seller;
 import com.marketlens.backend.repository.ExtensionImportRepository;
 import com.marketlens.backend.repository.PublicationRepository;
 import com.marketlens.backend.repository.SellerRepository;
-import com.marketlens.backend.dto.MercadoLibreUserResponse;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -30,20 +29,17 @@ public class ExtensionProcessingService {
         private final ExtensionNormalizationService normalizationService;
         private final PublicationRepository publicationRepository;
         private final SellerRepository sellerRepository;
-        private final MercadoLibreApiService mercadoLibreApiService;
 
         public ExtensionProcessingService(
                         ExtensionImportRepository importRepository,
                         ExtensionNormalizationService normalizationService,
                         PublicationRepository publicationRepository,
-                        SellerRepository sellerRepository,
-                        MercadoLibreApiService mercadoLibreApiService) {
+                        SellerRepository sellerRepository) {
 
                 this.importRepository = importRepository;
                 this.normalizationService = normalizationService;
                 this.publicationRepository = publicationRepository;
                 this.sellerRepository = sellerRepository;
-                this.mercadoLibreApiService = mercadoLibreApiService;
         }
 
         @Transactional
@@ -75,10 +71,6 @@ public class ExtensionProcessingService {
 
                 Marketplace marketplace = Marketplace.valueOf(
                                 normalized.marketplace());
-
-                VerifiedSeller verified = marketplace == Marketplace.MERCADO_LIBRE
-                                ? verifySeller(imported, normalized, username)
-                                : null;
 
                 // 4. Buscar una publicación existente.
                 Optional<Publication> existing = publicationRepository.findByMarketplaceAndExternalId(
@@ -200,10 +192,7 @@ public class ExtensionProcessingService {
                                 boolean idConflict = existingSellerId != null
                                                 && incomingObservedId != null
                                                 && !Objects.equals(existingSellerId, incomingObservedId);
-                                boolean verifiedConflict = verified != null
-                                                && existingSellerId != null
-                                                && !Objects.equals(existingSellerId, verified.id());
-                                if (!sameObservedName || idConflict || verifiedConflict) {
+                                if (!sameObservedName || idConflict) {
                                         throw new ResponseStatusException(
                                                         HttpStatus.CONFLICT,
                                                         "La publicación ya existe, pero no coincide la identidad del vendedor.");
@@ -220,10 +209,6 @@ public class ExtensionProcessingService {
                         }
 
                         if (marketplace == Marketplace.MERCADO_LIBRE) {
-                                if (verified != null) {
-                                        updateVerifiedSeller(publication.getSeller(), verified);
-                                        sellerRepository.save(publication.getSeller());
-                                }
                                 applyMercadoLibreObservedEvidence(publication, imported);
                         }
 
@@ -237,7 +222,7 @@ public class ExtensionProcessingService {
                         Seller savedSeller;
 
                         if (marketplace == Marketplace.MERCADO_LIBRE) {
-                                savedSeller = resolveSeller(normalized, verified);
+                                savedSeller = resolveSeller(normalized);
                         } else if (marketplace == Marketplace.TEMU) {
                                 // Nombre de tienda observado en esta publicación; no identidad verificada.
                                 savedSeller = normalized.sellerName() == null
@@ -536,118 +521,17 @@ public class ExtensionProcessingService {
                 return sellerRepository.save(seller);
         }
 
-        private record VerifiedSeller(
-                        Long id,
-                        Integer reputationLevel) {
-        }
-
-        private VerifiedSeller verifySeller(
-                        ExtensionImport imported,
-                        ExtensionNormalizationResponse normalized,
-                        String username) {
-
-                Long sellerId = imported.getExternalSellerId();
-
-                if (sellerId == null || sellerId <= 0) {
-                        return null;
-                }
-
-                MercadoLibreUserResponse user;
-
-                try {
-                        user = mercadoLibreApiService.getPublicUser(
-                                        username,
-                                        sellerId);
-                } catch (ResponseStatusException exception) {
-                        // Si la API no permite la consulta, conservamos
-                        // la importación sin confirmar la identidad.
-                        return null;
-                }
-
-                if (!Objects.equals(user.id(), sellerId)) {
-                        return null;
-                }
-
-                String expectedName = normalized.sellerName();
-                String returnedNickname = user.nickname();
-
-                if (expectedName == null ||
-                                returnedNickname == null ||
-                                !expectedName.trim().equalsIgnoreCase(
-                                                returnedNickname.trim())) {
-
-                        // Un nombre comercial puede ser diferente del
-                        // nickname. No confirmamos esa asociación
-                        // automáticamente.
-                        return null;
-                }
-
-                Integer reputationLevel = parseReputationLevel(user.reputationLevel());
-
-                return new VerifiedSeller(
-                                sellerId,
-                                reputationLevel);
-        }
-
-        private Integer parseReputationLevel(String levelId) {
-
-                if (levelId == null) {
-                        return null;
-                }
-
-                return switch (levelId) {
-                        case "1_red" -> 1;
-                        case "2_orange" -> 2;
-                        case "3_yellow" -> 3;
-                        case "4_light_green" -> 4;
-                        case "5_green" -> 5;
-                        default -> null;
-                };
-        }
-
-        // Solo se invoca con identidad corroborada por Mercado Libre.
-        private void updateVerifiedSeller(Seller seller, VerifiedSeller verified) {
-                if (verified.reputationLevel() != null) {
-                        seller.setReputationLevel(verified.reputationLevel());
-                }
-        }
-
-        private Seller resolveSeller(
-                        ExtensionNormalizationResponse normalized,
-                        VerifiedSeller verified) {
-
-                Seller seller;
-
-                if (verified != null) {
-
-                        seller = sellerRepository
-                                        .findByMarketplaceAndExternalSellerId(
-                                                        Marketplace.MERCADO_LIBRE,
-                                                        verified.id())
-                                        .orElseGet(Seller::new);
-
-                } else {
-                        // No asociar un ID externo sin verificar.
-                        seller = new Seller();
-                }
-
-                if (seller.getId() == null) {
-
-                        seller.setName(normalized.sellerName());
-                        seller.setMarketplace(Marketplace.MERCADO_LIBRE);
-
-                        seller.setReputation(null);
-                        seller.setAccountAgeDays(null);
-
-                        if (verified != null) {
-                                seller.setExternalSellerId(verified.id());
-                        }
-                }
-
-                if (verified != null) {
-                        updateVerifiedSeller(seller, verified);
-                }
-
+        private Seller resolveSeller(ExtensionNormalizationResponse normalized) {
+                // La extensión observa el nombre del vendedor, pero sin la API
+                // no atribuimos un ID ni una reputación verificada. No asociar
+                // automáticamente vendedores distintos solo por el nickname.
+                Seller seller = new Seller();
+                seller.setName(normalized.sellerName());
+                seller.setMarketplace(Marketplace.MERCADO_LIBRE);
+                seller.setExternalSellerId(null);
+                seller.setReputation(null);
+                seller.setReputationLevel(null);
+                seller.setAccountAgeDays(null);
                 return sellerRepository.save(seller);
         }
 }
