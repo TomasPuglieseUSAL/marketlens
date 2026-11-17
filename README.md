@@ -202,6 +202,7 @@ La instalación temporal normalmente se pierde al reiniciar Firefox.
 
 - La extensión se conecta al backend local mediante **`http://localhost:8080/api`**; no está configurada para un servidor remoto.
 - La integración **OAuth de Mercado Libre está deshabilitada** con los perfiles locales `registration` y `demo`. Las acciones que requieran autorización o validaciones autenticadas contra esa API no estarán disponibles; otras funciones pueden seguir utilizando datos visibles de la página.
+- **Prueba opt-in de OAuth centralizado para reseñas:** el perfil `connected` permite a una sola cuenta operadora autorizar el backend y consultar reseñas públicas de ítems distintos sin OAuth por cada usuario final. El token sigue en memoria; aún no tiene persistencia ni renovación automática. Para configurarlo y probar ítems de vendedores distintos, consultá [ML-CENTRAL-OAUTH-TRIAL.md](extension/ML-CENTRAL-OAUTH-TRIAL.md).
 - Las integraciones externas opcionales, como Gemini, no están habilitadas en estos perfiles locales.
 - La compatibilidad de extracción depende del formato y de los cambios que realicen los marketplaces en sus páginas.
 - **Temu (experimental):** reconoce `goods.html?goods_id=...` y `*-g-<id>.html`. Solo importa precios cuya moneda ARS esté identificada explícitamente, no inventa identidad del vendedor y todavía no realiza comparaciones automáticas de precios. Consultá [TEMU-MVP.md](extension/TEMU-MVP.md).
