@@ -74,6 +74,21 @@ public class Publication {
     @Column(name = "ml_product_observed_at")
     private LocalDateTime mlProductObservedAt;
 
+    // Solo reseñas respaldadas por la API /reviews/item/MLA... cuando
+    // reviewable_object.type=item y reviewable_object.id coincide.
+    // Separadas de las opiniones agregadas del modelo de catálogo.
+    @Column(name = "ml_item_review_rating", precision = 2, scale = 1)
+    private BigDecimal mlItemReviewRating;
+
+    @Column(name = "ml_item_review_count")
+    private Integer mlItemReviewCount;
+
+    @Column(name = "ml_item_review_verified_id", length = 120)
+    private String mlItemReviewVerifiedId;
+
+    @Column(name = "ml_item_review_observed_at")
+    private LocalDateTime mlItemReviewObservedAt;
+
     // Termómetro público de vendedor, SIN corroboración OAuth.
     @Column(name = "ml_seller_reputation_observed")
     private Integer mlSellerReputationObserved;
@@ -238,6 +253,19 @@ public class Publication {
     public void setMlProductReviewCount(Integer value) { this.mlProductReviewCount = value; }
     public LocalDateTime getMlProductObservedAt() { return mlProductObservedAt; }
     public void setMlProductObservedAt(LocalDateTime value) { this.mlProductObservedAt = value; }
+    public BigDecimal getMlItemReviewRating() { return mlItemReviewRating; }
+    public Integer getMlItemReviewCount() { return mlItemReviewCount; }
+    public String getMlItemReviewVerifiedId() { return mlItemReviewVerifiedId; }
+    public LocalDateTime getMlItemReviewObservedAt() { return mlItemReviewObservedAt; }
+
+    public void setMlItemReviews(String verifiedId, BigDecimal rating,
+                                 Integer count, LocalDateTime observedAt) {
+        this.mlItemReviewVerifiedId = verifiedId;
+        this.mlItemReviewRating = rating;
+        this.mlItemReviewCount = count;
+        this.mlItemReviewObservedAt = observedAt;
+    }
+
     public Integer getMlSellerReputationObserved() { return mlSellerReputationObserved; }
     public void setMlSellerReputationObserved(Integer value) { this.mlSellerReputationObserved = value; }
     public LocalDateTime getMlSellerReputationObservedAt() { return mlSellerReputationObservedAt; }
