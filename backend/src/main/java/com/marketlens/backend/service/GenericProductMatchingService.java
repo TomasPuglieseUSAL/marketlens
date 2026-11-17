@@ -82,8 +82,8 @@ public class GenericProductMatchingService {
             return insufficient("Al menos un titulo declara un combo o paquete cuya composicion no esta clara.");
         }
 
-        Condition conditionA = condition(titleA);
-        Condition conditionB = condition(titleB);
+        Condition conditionA = observedCondition(target, titleA);
+        Condition conditionB = observedCondition(candidate, titleB);
         if (conditionA == Condition.UNKNOWN || conditionB == Condition.UNKNOWN) {
             return insufficient("No se pudo establecer el estado de ambos productos.");
         }
@@ -356,6 +356,18 @@ public class GenericProductMatchingService {
     private boolean disjoint(Set<String> a, Set<String> b) {
         for (String value : a) if (b.contains(value)) return false;
         return true;
+    }
+
+    private Condition observedCondition(Publication publication, String title) {
+        Condition fromTitle = condition(title);
+        if (fromTitle != Condition.UNKNOWN) return fromTitle;
+        // Si el titulo se contradice ("nuevo" y "usado"), una
+        // descripcion no puede resolver esa contradicción.
+        if (USED.matcher(title).find() || REFURBISHED.matcher(title).find()
+                || NEW.matcher(title).find()) {
+            return Condition.UNKNOWN;
+        }
+        return condition(descriptionPrefix(publication.getDescription()));
     }
 
     private Condition condition(String title) {
