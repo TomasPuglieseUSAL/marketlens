@@ -81,7 +81,7 @@ public final class MercadoLibreProductReviewEvidence {
                             + ". No es una calificación de este vendedor ni verifica esta oferta.", 0));
         }
 
-        if (reviews < MIN_REVIEWS_FOR_FULL_RATING_WEIGHT) {
+        if (reviews < MIN_REVIEWS_FOR_SAMPLE_CONTEXT) {
             signals.add(new Signal("ML_FEW_PRODUCT_REVIEWS",
                     "Muestra reducida del producto: " + reviews
                             + " opiniones. Es información general del modelo, no de este vendedor.", 0));
