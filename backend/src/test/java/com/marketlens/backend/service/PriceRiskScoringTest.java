@@ -28,6 +28,11 @@ class PriceRiskScoringTest {
         assertEquals(15, PriceRiskScoring.score(new BigDecimal("599999.99"), MEDIAN, 5));
         assertEquals(15, PriceRiskScoring.score(new BigDecimal("500000"), MEDIAN, 5));
         assertEquals(25, PriceRiskScoring.score(new BigDecimal("499999.99"), MEDIAN, 5));
+        assertEquals(25, PriceRiskScoring.score(new BigDecimal("250000"), MEDIAN, 5));
+        assertEquals(35, PriceRiskScoring.score(new BigDecimal("249999.99"), MEDIAN, 5));
+        assertEquals(35, PriceRiskScoring.score(new BigDecimal("100000"), MEDIAN, 5));
+        assertEquals(45, PriceRiskScoring.score(new BigDecimal("99999.99"), MEDIAN, 5));
+        assertEquals(45, PriceRiskScoring.score(new BigDecimal("1000"), MEDIAN, 5));
     }
 
     @Test
@@ -36,6 +41,15 @@ class PriceRiskScoringTest {
         assertEquals(5, PriceRiskScoring.score(new BigDecimal("650000"), MEDIAN, 5));
         assertEquals(0, PriceRiskScoring.score(new BigDecimal("900000"), MEDIAN, 5));
         assertNull(PriceRiskScoring.score(new BigDecimal("100000"), MEDIAN, 4));
+    }
+
+    @Test
+    void galaxyA13ExtremelyCheapUsedPhoneScoresFortyFiveOnlyWithEnoughReferences() {
+        BigDecimal median = new BigDecimal("100000");
+        BigDecimal offer = new BigDecimal("2000");
+        assertEquals(45, PriceRiskScoring.score(offer, median, 5));
+        assertEquals(45, PriceRiskScoring.score(offer, median, 12));
+        assertNull(PriceRiskScoring.score(offer, median, 4));
     }
 
     @Test
