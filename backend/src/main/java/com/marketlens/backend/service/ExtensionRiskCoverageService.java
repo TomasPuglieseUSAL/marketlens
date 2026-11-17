@@ -72,7 +72,18 @@ public class ExtensionRiskCoverageService {
                         "DESCRIPTION", "Información del producto", hasDescription));
                 factors.add(new RiskCoverageFactorResponse(
                         "SELLER_REPUTATION", "Reputación del vendedor", hasReputation));
-                if ("TEMU".equals(imported.getMarketplace())) {
+                MarketplaceReference reference = imported.getMarketplaceReference();
+                if (MercadoLibreItemReviewEvidence.eligible(
+                        imported.getMarketplace(),
+                        reference == null ? null : reference.getReferenceType(),
+                        reference == null ? null : reference.getExternalId(),
+                        imported.getOriginalUrl())) {
+                        boolean verified = MercadoLibreItemReviewEvidence.hasVerifiedEvidence(
+                                imported.getProcessedPublication(), java.time.LocalDateTime.now());
+                        factors.add(new RiskCoverageFactorResponse("ITEM_REVIEWS",
+                                "Opiniones vinculadas a esta publicación (verificadas por ítem)",
+                                verified));
+                } else if ("TEMU".equals(imported.getMarketplace())) {
                         boolean reviews = TemuProductReviewEvidence.hasMetrics(
                                 imported.getTemuProductRating(),
                                 imported.getTemuProductReviewCount());
@@ -97,8 +108,6 @@ public class ExtensionRiskCoverageService {
                 } else {
                         status = "PARTIAL";
                 }
-
-                MarketplaceReference reference = imported.getMarketplaceReference();
 
                 String referenceType = reference != null
                                 ? reference.getReferenceType()
