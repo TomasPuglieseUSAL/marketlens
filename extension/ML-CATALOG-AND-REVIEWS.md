@@ -300,3 +300,25 @@ El popup prioriza ese texto antes del mensaje genérico del estado HTTP.
 Los errores de origen desconocido siguen requiriendo consultar los
 logs y `GET /api/extension/imports/{id}/normalized`.
 
+
+## User Products con nombre abreviado en JSON-LD
+
+Algunas fichas `/up/MLAU...` presentan un título de página con condición
+(ej. `Samsung A13 (Usado)`) y un JSON-LD `Product` de nombre abreviado
+(`Samsung A13`). El `Product` puede no tener `url` directa, pero sí
+`sku`, `productID` y `offers.url` que identifican el mismo `MLAU`.
+
+Para evitar falsos rechazos, `isCurrentProduct` ahora confirma la identidad
+por esos identificadores cuando son inequívocos; si cualquiera de los ID
+explícitos apunta a otro producto, el JSON-LD se rechaza. El nombre
+es solo una alternativa cuando no hay referencias estructuradas fiables.
+
+Caso reproducido con el HTML del Samsung A13 usado, `MLAU3344351864`:
+el precio visible es `111.552 ARS`, el vendedor `FERNANDOZUZULIA`,
+el JSON-LD tiene `offers.priceCurrency=ARS`, pero no hay
+`meta[property="product:price:currency"]`. Antes, el nombre abreviado
+hacía que se descartara el JSON-LD, dejando `currency=null` y causando
+el potencial rechazo `422` al procesar la importación. La nueva
+prueba de regresión comprueba que se conserva `ARS` sin aceptar
+calificaciones ni moneda de otro producto.
+
