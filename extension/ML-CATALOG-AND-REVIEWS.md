@@ -201,10 +201,12 @@ pero su contribución es **0** en las nuevas evaluaciones.
 La interfaz declara expresamente que estas calificaciones no verifican
 la oferta. Las evaluaciones históricas no se reescriben automáticamente.
 
-La cobertura **Mercado Libre 2/2** comprende únicamente descripción e
-información comercial del vendedor; las opiniones del modelo quedan
-fuera. Temu conserva sus factores de cobertura propios.
-Los indicadores son disponibilidad de datos, no pruebas de seguridad.
+La cobertura básica de Mercado Libre comprende descripción e
+información comercial del vendedor; las opiniones del MODELO quedan
+fuera. En ítems MLA individuales elegibles se agrega condicionalmente
+un tercer factor de **opiniones propias del ítem**, verificado por la API
+de Mercado Libre. Temu conserva sus factores propios. Los indicadores
+son disponibilidad de datos, no pruebas de seguridad.
 
 ### Precio anormal: tramos y referencias
 
@@ -323,3 +325,53 @@ hacía que se descartara el JSON-LD, dejando `currency=null` y causando
 el potencial rechazo `422` al procesar la importación. La nueva
 prueba de regresión comprueba que se conserva `ARS` sin aceptar
 calificaciones ni moneda de otro producto.
+
+## Opiniones propias del ítem MLA (tercer factor condicional)
+
+No toda estrella observada debajo del título pertenece a la oferta.
+El JSON-LD de un modelo (`MLAU` o `/p/MLA`) puede agregar experiencias
+de múltiples tiendas. Por eso se mantienen las variables `ml_product_*`
+como **contexto no puntuable** y se crean variables separadas en
+`V31__ml_item_verified_reviews.sql`:
+
+- `ml_item_review_rating`, `ml_item_review_count`
+- `ml_item_review_verified_id`, `ml_item_review_observed_at`
+
+Para publicaciones `LISTING` con `external_id=MLA...` y URL que no
+sea una ficha de catálogo `/p/MLA...`, el tercer factor
+`ITEM_REVIEWS` queda pendiente hasta corroborarlo. Durante una nueva
+evaluación autenticada, el backend consulta
+`GET https://api.mercadolibre.com/reviews/item/{ITEM_ID}` y exige:
+
+1. Que haya una muestra publicada de reseñas.
+2. Que todas las reseñas muestreadas tengan
+   `reviewable_object.type=item` y el mismo `reviewable_object.id`
+   que el MLA analizado, sin mezcla con reseñas de producto.
+3. Que `rating_average` y `paging.total` sean válidos, con un recuento
+   al menos igual a la muestra.
+4. Que la evidencia persistida sea reciente (máximo 30 días).
+   Se reconsulta, como máximo, cada 24 horas.
+
+Resultados posibles:
+
+| Publicación | Cobertura ilustrativa | Interpretación |
+| --- | --- | --- |
+| `/up/MLAU...` o producto de catálogo `/p/MLA...` | `2/2` | Reseñas agregadas del modelo no cuentan |
+| Ítem MLA sin evidencia propia corroborada | `2/3` | La verificación de reseñas del ítem falta o no está disponible |
+| Ítem MLA con reseñas propias corroboradas | `3/3` | Hay compras anteriores asociadas al ítem, no garantía de seguridad |
+
+**Requisito operacional:** La API oficial de reseñas requiere un
+access token OAuth. Los perfiles locales `demo` y `registration`
+deshabilitan OAuth: no se simula el respaldo del tercer factor.
+En modo sin OAuth, la evaluación de precio, vendedor y descripción
+continúa normalmente. Para probar reseñas propias corroboradas hay que
+habilitar una configuración legítima de OAuth y vincular una cuenta;
+no almacenar tokens en el código. Las importaciones antiguas y el
+JSON-LD por sí solos no pueden convertirse retroactivamente en
+`ITEM_REVIEWS` verificado.
+
+La señal `ML_ITEM_REVIEWS_VERIFIED` se muestra con **0 puntos** para
+no restar gravedad a un precio extremo ni transformar satisfacción
+con el producto en reputación verificada del vendedor. La evidencia
+contribuye a la **cobertura**, no certifica que una venta futura sea
+segura. Las evaluaciones ya persistidas se conservan.
