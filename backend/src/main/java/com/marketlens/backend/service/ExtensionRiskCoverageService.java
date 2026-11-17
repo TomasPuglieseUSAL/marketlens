@@ -81,7 +81,8 @@ public class ExtensionRiskCoverageService {
                         boolean verified = MercadoLibreItemReviewEvidence.hasVerifiedEvidence(
                                 imported.getProcessedPublication(), java.time.LocalDateTime.now());
                         factors.add(new RiskCoverageFactorResponse("ITEM_REVIEWS",
-                                "Opiniones vinculadas a esta publicación (verificadas por ítem)",
+                                verified ? "Opiniones propias de compradores (verificadas por ítem)"
+                                        : "Opiniones propias de compradores (pendientes de verificación)",
                                 verified));
                 } else if ("TEMU".equals(imported.getMarketplace())) {
                         boolean reviews = TemuProductReviewEvidence.hasMetrics(
