@@ -906,18 +906,20 @@ test('catálogo: ofertas ambiguas no se asignan a un vendedor arbitrario', () =>
     assert.match(result.message, /no pude identificar una oferta/);
 });
 
-test('Mercado Libre informa qué dimensiones faltan en una cobertura parcial', () => {
+test('Mercado Libre informa la cobertura parcial solo con descripción y vendedor', () => {
     const p = popup();
-    p.run("renderRisk({evaluation:{level:'INDETERMINATE',score:0,availableFactors:1,totalFactors:3,coverageStatus:'PARTIAL',coverageFactors:[{code:'DESCRIPTION',name:'Información del producto',available:true},{code:'SELLER_REPUTATION',name:'Reputación o actividad del vendedor',available:false},{code:'PRODUCT_REVIEWS',name:'Calificación y opiniones del producto',available:false}],factors:[]}})");
-    assert.match(p.element('result-coverage-note').textContent, /Falta: Reputación o actividad del vendedor, Calificación y opiniones del producto/);
-    assert.equal(p.element('result-coverage').textContent, '1/3');
+    p.run("currentMarketplace='MERCADO_LIBRE'");
+    p.run("renderRisk({evaluation:{level:'INDETERMINATE',score:0,availableFactors:1,totalFactors:2,coverageStatus:'PARTIAL',coverageFactors:[{code:'DESCRIPTION',name:'Información del producto',available:true},{code:'SELLER_REPUTATION',name:'Reputación o actividad del vendedor',available:false}],factors:[]}})");
+    assert.match(p.element('result-coverage-note').textContent, /Falta: Reputación o actividad del vendedor/);
+    assert.doesNotMatch(p.element('result-coverage-note').textContent, /Calificación y opiniones del producto/);
+    assert.equal(p.element('result-coverage').textContent, '1/2');
 });
 
-test('la calificación observada de Mercado Libre aparece resumida', () => {
+test('la calificación general de Mercado Libre aclara que no evalúa al vendedor', () => {
     const p = popup();
     const note = 'El producto muestra 4.7/5 con 286 opiniones en Mercado Libre. No representan reputación del vendedor.';
     const text = p.run("conciseFactorLabel({code:'ML_PRODUCT_REVIEWS_OBSERVED',description:"+JSON.stringify(note)+"})");
-    assert.equal(text, 'Calificación: 4,7/5 (286 opiniones).');
+    assert.equal(text, 'Calificación general del producto: 4,7/5. No evalúa al vendedor ni acredita esta oferta.');
 });
 
 
