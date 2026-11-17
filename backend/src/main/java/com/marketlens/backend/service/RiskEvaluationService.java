@@ -12,6 +12,7 @@ import com.marketlens.backend.repository.RiskEvaluationRepository;
 import com.marketlens.backend.risk.RiskEngine;
 import com.marketlens.backend.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -25,6 +26,7 @@ public class RiskEvaluationService {
     private final RiskEngine riskEngine;
     private final AutomaticPriceAnalysisService priceAnalysisService;
     private final CommunityReportService communityReportService;
+    @Autowired
     public RiskEvaluationService(
             PublicationRepository publicationRepository,
             RiskEvaluationRepository riskEvaluationRepository,
