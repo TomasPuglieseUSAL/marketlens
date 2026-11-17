@@ -314,3 +314,25 @@ el potencial rechazo `422` al procesar la importación. La nueva
 prueba de regresión comprueba que se conserva `ARS` sin aceptar
 calificaciones ni moneda de otro producto.
 
+
+## Calificación compartida frente a una oferta de precio anormal
+
+Caso de demostración: Samsung Galaxy A13 usado publicado a `2000 ARS`,
+con historia comercial limitada y calificación general del producto
+observada en JSON-LD (4,7/5). Cuando existen suficientes referencias
+válidas, el análisis atribuye `+25` por precio anormal y `+15` por
+actividad reducida del vendedor: **40 puntos**. Una valoración general
+positiva del modelo no resta puntos y NO confirma la confiabilidad de
+esa oferta particular.
+
+La extensión conserva la calificación como información de contexto,
+pero la etiqueta abreviada incluye «No evalúa al vendedor ni acredita
+esta oferta». Cuando hay un factor `UNUSUALLY_LOW_PRICE` positivo,
+el encabezado de resultado destaca el precio anormal. El detalle de
+cobertura aclara que `3/3` representa tipos de datos observados, no
+una verificación de seguridad. No se incorpora una penalización ad hoc
+por calificaciones ocultas o compartidas.
+
+Una posible evolución de producto es separar las opiniones compartidas
+del modelo de las señales estrictamente vinculadas a la oferta en el
+resumen de cobertura, antes de redefinir umbrales o puntuaciones.
