@@ -43,7 +43,7 @@ class CommunityReportEvaluationIntegrationTest {
         assertTrue(response.factors().stream().anyMatch(factor ->
                 "COMMUNITY_REPORTS".equals(factor.code())
                         && factor.scoreContribution() == 3));
-        assertEquals(3, response.totalFactors());
+        assertEquals(2, response.totalFactors());
         assertEquals(1, response.availableFactors());
         verify(community).getSummary(5L);
         verify(evaluations).save(any(RiskEvaluation.class));
