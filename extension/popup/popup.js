@@ -672,15 +672,20 @@ function renderRisk(value) {
         ? evaluation.coverageFactors : [];
     const missing = factorDetails.filter(item => item && item.available === false)
         .map(item => item.name).filter(Boolean);
-    const mlGeneralReviewsAvailable = currentMarketplace === 'MERCADO_LIBRE'
-        && factorDetails.some(item => item?.code === 'PRODUCT_REVIEWS'
-            && item.available === true);
+    // A diferencia de Temu, las reseñas agregadas de Mercado Libre son
+    // contexto del modelo. Ya no pertenecen a la cobertura de la oferta.
+    const mlGeneralReviewsObserved = currentMarketplace === 'MERCADO_LIBRE'
+        && factors.some(item => [
+            'ML_PRODUCT_REVIEWS_OBSERVED', 'ML_PRODUCT_RATING_UNAVAILABLE',
+            'ML_LOW_PRODUCT_RATING', 'ML_MODERATE_PRODUCT_RATING',
+            'ML_FEW_PRODUCT_REVIEWS'
+        ].includes(item?.code));
     const detail = missing.length
         ? 'Falta: ' + missing.join(', ') + '. '
         : factorDetails.length ? 'Todos los tipos de datos están presentes. ' : '';
-    const reviewScope = mlGeneralReviewsAvailable
-        ? 'La calificación del producto puede agrupar compradores de otros ' +
-          'vendedores y no verifica esta oferta. '
+    const reviewScope = mlGeneralReviewsObserved
+        ? 'Las opiniones generales del modelo son informativas; no se cuentan ' +
+          'como evidencia de esta oferta ni suman puntos de riesgo. '
         : '';
     $('result-coverage-note').textContent = detail + reviewScope + (
         level === 'INDETERMINATE'
