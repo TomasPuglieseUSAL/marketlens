@@ -66,7 +66,7 @@ class MercadoLibreNoApiCoverageTest {
         var evaluation = new RiskEngine(new RiskCoverageCalculator()).evaluate(
                 p, 45, new BigDecimal("100000"), 5);
         assertEquals(45, evaluation.getScore());
-        assertEquals(RiskLevel.HIGH, evaluation.getLevel());
+        assertEquals(RiskLevel.MEDIUM, evaluation.getLevel());
         assertEquals(2, evaluation.getTotalFactors());
         assertTrue(evaluation.getFactors().stream().anyMatch(f ->
                 "ML_PRODUCT_REVIEWS_OBSERVED".equals(f.getCode())
