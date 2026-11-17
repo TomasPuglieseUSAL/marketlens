@@ -108,9 +108,9 @@ public class RiskEngine {
             score += productSignal.points();
         }
 
-        // Opiniones del producto de Mercado Libre: penalizar por separado
-        // calificaciones desfavorables y muestras pequeñas, sin confundir
-        // reseñas del catálogo con la reputación de su vendedor.
+        // Opiniones generales del catálogo de Mercado Libre: CONTEXTO
+        // no puntuable, pues no describen al vendedor ni a esta oferta.
+        // Los factores aparecen como información, siempre con 0 puntos.
         for (MercadoLibreProductReviewEvidence.Signal mlSignal :
                 MercadoLibreProductReviewEvidence.evaluateSignals(publication, LocalDateTime.now())) {
             addFactor(evaluation, mlSignal.code(), mlSignal.description(), mlSignal.points());
