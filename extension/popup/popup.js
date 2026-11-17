@@ -1138,7 +1138,28 @@ function extractMercadoLibre() {
             .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     }
     function isCurrentProduct(data) {
-        const rawUrl = data?.url || data?.['@id'];
+        // El nombre de Product en JSON-LD puede omitir estado, color o
+        // detalles que sí figuran en el h1 (ej.: "Samsung A13" frente a
+        // "Samsung A13 (Usado)"). Confirmar identidad con sku/productID
+        // ANTES de intentar un matching textual.
+        const currentId = window.location.pathname.match(
+            /\/(?:up\/)?(MLAU\d{6,})(?=\/|$)/i
+        )?.[1]?.toUpperCase() || window.location.pathname.match(
+            /\/p\/(MLA\d{6,})(?=\/|$)/i
+        )?.[1]?.toUpperCase();
+        const structuredIds = [data?.sku, data?.productID]
+            .filter(id => typeof id === 'string' &&
+                /^(?:MLAU|MLA)\d{6,}$/i.test(id.trim()))
+            .map(id => id.trim().toUpperCase());
+        if (currentId && structuredIds.length &&
+                structuredIds.some(id => id !== currentId)) {
+            // Una referencia inequívoca a OTRA publicación prevalece
+            // sobre similitudes de títulos.
+            return false;
+        }
+        const offer = Array.isArray(data?.offers)
+            ? data.offers[0] : data?.offers;
+        const rawUrl = data?.url || data?.['@id'] || offer?.url;
         if (typeof rawUrl === 'string' && rawUrl.trim()) {
             try {
                 const structured = new URL(rawUrl, window.location.href);
@@ -1170,7 +1191,14 @@ function extractMercadoLibre() {
             }
         }
 
-        // Sin URL utilizable, exigir correspondencia estricta con el h1.
+        // Si SKU y productID identifican inequívocamente ESTA ficha,
+        // el nombre abreviado del JSON-LD no debe descartar su moneda,
+        // precio ni señales de reseñas. Se verificó antes que la URL
+        // estructurada no identificara otra ficha.
+        if (currentId && structuredIds.length) return true;
+
+        // Sin identidad estructurada utilizable, exigir correspondencia
+        // estricta con el h1.
         const heading = normalizeProductName(
             document.querySelector('h1.ui-pdp-title')?.textContent);
         const name = normalizeProductName(data?.name);
