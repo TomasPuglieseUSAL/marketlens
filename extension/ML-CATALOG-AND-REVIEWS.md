@@ -154,10 +154,11 @@ de reseñas por ventas, ni se infieren números exactos desde `1.2K+`.
   aportan calificaciones al producto analizado. También se comprueba que
   cualquier `Product` en JSON-LD pertenezca a la URL o título principal,
   y no se acepta automáticamente el primer objeto del documento.
-- **La visibilidad en pantalla NO es requisito.** Un `aggregateRating`
-  con calificación y `reviewCount` válido del JSON-LD del producto
-  correcto sí cuenta para la cobertura y el análisis, aunque la sección
-  visual de reseñas no exista.
+- **La visibilidad en pantalla NO es requisito para registrar el contexto.**
+  Un `aggregateRating` con calificación y `reviewCount` válido del JSON-LD
+  del producto correcto puede informarse, aunque la sección visual de
+  reseñas no exista. Nunca cuenta para el puntaje ni la cobertura de
+  confiabilidad de la oferta individual.
 - Ejemplo real: Kingston `MLAU2874874181`, cuyo JSON-LD declara
   `ratingValue: 4.9` y `reviewCount: 1552`. Se aceptan ambos valores
   aunque no haya módulo visual de reseñas. No se deben confundir con el
@@ -168,8 +169,8 @@ de reseñas por ventas, ni se infieren números exactos desde `1.2K+`.
   Esto indica ausencia de evidencia disponible, no cero reseñas.
 - Si existe información parcial o la extracción fue inconclusa, se
   mantiene el estado desconocido (null), sin puntos. La ausencia
-  confirmada suma **+2 puntos**, no completa cobertura y vence a 30 días.
-  Una nueva observación válida reemplaza la ausencia anterior.
+  confirmada también es neutral: no prueba fraude, no completa cobertura
+  y vence a 30 días. Una nueva observación válida reemplaza la anterior.
 - Si una inspección concluyente registra ausencia, puede limpiar datos
   antiguos mal atribuidos; las evaluaciones históricas no se reescriben.
 
@@ -185,44 +186,53 @@ penalizaciones por una observación pública del mismo termómetro.
 Una buena puntuación del producto por sí sola nunca permite riesgo bajo
 cuando faltan señales del vendedor.
 
-### Penalización exploratoria por opiniones del producto
+### Reseñas compartidas: información del modelo, no riesgo de la oferta
 
-Mercado Libre utiliza señales **independientes y acumulables** para la media
-de estrellas y el tamaño de la muestra. Estos pesos todavía deben validarse
-con un conjunto representativo; una muestra pequeña refleja incertidumbre,
-no demuestra fraude.
+Las opiniones generales de un producto de Mercado Libre pueden reunir
+compras a vendedores diferentes. Por ello **todas sus señales pasan a 0
+puntos**, independientemente de la media, cantidad de reseñas o ausencia
+concluyente. Se mantienen para informar sobre la calidad percibida del
+modelo; no constituyen evidencia sobre la reputación del vendedor.
 
-| Condición | Puntos |
+Se conservan los códigos históricos `ML_PRODUCT_REVIEWS_OBSERVED`,
+`ML_LOW_PRODUCT_RATING`, `ML_MODERATE_PRODUCT_RATING`,
+`ML_FEW_PRODUCT_REVIEWS` y `ML_PRODUCT_RATING_UNAVAILABLE`,
+pero su contribución es **0** en las nuevas evaluaciones.
+La interfaz declara expresamente que estas calificaciones no verifican
+la oferta. Las evaluaciones históricas no se reescriben automáticamente.
+
+La cobertura **Mercado Libre 2/2** comprende únicamente descripción e
+información comercial del vendedor; las opiniones del modelo quedan
+fuera. Temu conserva sus factores de cobertura propios.
+Los indicadores son disponibilidad de datos, no pruebas de seguridad.
+
+### Precio anormal: tramos y referencias
+
+Se necesita un mínimo de **cinco ofertas independientes comparables**,
+ya filtradas por el algoritmo de matching. Las diferencias se miden
+contra la mediana en ARS, no contra un precio fijo o una marca.
+
+| Precio como porcentaje de la mediana | Puntos |
 | --- | ---: |
-| 1–4 opiniones observadas | +4 |
-| 5–9 opiniones observadas | +2 |
-| 10 o más opiniones | +0 por tamaño de muestra |
-| Puntuación pública no visible, observación concluyente | +2 (sin cobertura adicional) |
-| Datos desconocidos o lectura incompleta | +0 |
-| Calificación < 3/5, con menos de 10 opiniones | +5 |
-| Calificación < 3/5, con 10 o más opiniones | +15 |
-| Calificación desde 3/5 hasta < 4/5, con menos de 10 opiniones | +3 |
-| Calificación desde 3/5 hasta < 4/5, con 10 o más opiniones | +6 |
-| Calificación >= 4/5 | +0 por calificación |
+| 70 % o más | 0 |
+| 60 % a menos de 70 % | +5 |
+| 50 % a menos de 60 % | +15 |
+| 25 % a menos de 50 % | +25 |
+| 10 % a menos de 25 % | +35 |
+| Menos de 10 % | +45 |
 
-Con 5,0/5 y 2 opiniones, el resultado es **+4 puntos únicamente por la muestra
-pequeña**. Con 2,4/5 y 2 opiniones, el resultado es **+9 puntos** (+5 por
-calificación desfavorable, +4 por muestra pequeña). Las calificaciones sin
-cantidad exacta de opiniones y las observaciones vencidas (más de 30 días)
-no generan puntos. Estos datos describen el PRODUCTO de catálogo, no la
-calidad comercial del vendedor.
+Caso ilustrativo: Galaxy A13 usado a `2000 ARS`, mediana de
+`100000 ARS` calculada sobre cinco o más ofertas realmente comparables.
+Por precio: **+45**; por historial del vendedor insuficiente: **+15**;
+total esperado **60/100 (riesgo alto)**, si no existen otros factores.
+La calificación general del Galaxy A13, aunque figure como 4,7/5,
+no suma ni resta puntos. La etiqueta de la extensión destaca el precio
+«extremadamente inferior» y señala que las reseñas no verifican la
+oferta particular.
 
-Las descripciones de las señales de producto en Mercado Libre se mantienen
-breves e independientes: `Calificación del producto: 5,0/5.` y
-`Cantidad de opiniones reducida: 2.` El frontend omite los códigos internos
-y muestra las señales de cero puntos como informativas, sin `+0`.
-Para el historial antiguo adapta las descripciones largas solo al mostrarlas;
-no modifica las evaluaciones ya persistidas.
-
-La evaluación nueva devuelve `coverageFactors` con código, nombre y
-disponibilidad de cada dimensión para explicar qué falta en 1/3, 2/3 o 3/3.
-El detalle por factor de evaluaciones históricas no estaba persistido y
-por eso no se inventa retroactivamente.
+Los umbrales son **heurísticos experimentales**, no probabilidades
+estadísticas de fraude. Se deberá validarlos con datos etiquetados antes
+de usarlos como criterio automatizado concluyente.
 
 ## URLs limpias y parámetros de seguimiento (extensión)
 
@@ -313,26 +323,3 @@ hacía que se descartara el JSON-LD, dejando `currency=null` y causando
 el potencial rechazo `422` al procesar la importación. La nueva
 prueba de regresión comprueba que se conserva `ARS` sin aceptar
 calificaciones ni moneda de otro producto.
-
-
-## Calificación compartida frente a una oferta de precio anormal
-
-Caso de demostración: Samsung Galaxy A13 usado publicado a `2000 ARS`,
-con historia comercial limitada y calificación general del producto
-observada en JSON-LD (4,7/5). Cuando existen suficientes referencias
-válidas, el análisis atribuye `+25` por precio anormal y `+15` por
-actividad reducida del vendedor: **40 puntos**. Una valoración general
-positiva del modelo no resta puntos y NO confirma la confiabilidad de
-esa oferta particular.
-
-La extensión conserva la calificación como información de contexto,
-pero la etiqueta abreviada incluye «No evalúa al vendedor ni acredita
-esta oferta». Cuando hay un factor `UNUSUALLY_LOW_PRICE` positivo,
-el encabezado de resultado destaca el precio anormal. El detalle de
-cobertura aclara que `3/3` representa tipos de datos observados, no
-una verificación de seguridad. No se incorpora una penalización ad hoc
-por calificaciones ocultas o compartidas.
-
-Una posible evolución de producto es separar las opiniones compartidas
-del modelo de las señales estrictamente vinculadas a la oferta en el
-resumen de cobertura, antes de redefinir umbrales o puntuaciones.
