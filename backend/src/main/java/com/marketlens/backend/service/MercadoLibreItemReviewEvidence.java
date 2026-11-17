@@ -7,7 +7,6 @@ import tools.jackson.databind.JsonNode;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.util.Locale;
 
 /**
  * Reseñas del ITEM de Mercado Libre, no del modelo / producto de catálogo.
@@ -21,13 +20,21 @@ public final class MercadoLibreItemReviewEvidence {
     private MercadoLibreItemReviewEvidence() { }
 
     public static boolean eligible(Publication publication) {
-        return publication != null
-                && publication.getMarketplace() == Marketplace.MERCADO_LIBRE
-                && "LISTING".equals(publication.getReferenceType())
-                && publication.getExternalId() != null
-                && publication.getExternalId().matches("MLA[1-9]\\d{5,}")
-                && (publication.getOriginalUrl() == null
-                    || !publication.getOriginalUrl().matches(
+        return publication != null && eligible(
+                publication.getMarketplace() == null ? null : publication.getMarketplace().name(),
+                publication.getReferenceType(),
+                publication.getExternalId(),
+                publication.getOriginalUrl());
+    }
+
+    public static boolean eligible(String marketplace, String referenceType,
+                                   String externalId, String originalUrl) {
+        return "MERCADO_LIBRE".equals(marketplace)
+                && "LISTING".equals(referenceType)
+                && externalId != null
+                && externalId.matches("MLA[1-9]\\d{5,}")
+                && (originalUrl == null
+                    || !originalUrl.matches(
                         "(?i)^https?://[^/]+/(?:[^/]+/)?p/MLA\\d{6,}/?(?:[?#].*)?$"));
     }
 
