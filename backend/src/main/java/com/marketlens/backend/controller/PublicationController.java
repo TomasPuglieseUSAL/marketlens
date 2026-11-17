@@ -9,7 +9,6 @@ import com.marketlens.backend.service.RiskEvaluationService;
 import com.marketlens.backend.dto.RiskEvaluationResponse;
 
 import jakarta.validation.Valid;
-import org.springframework.security.core.Authentication;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
@@ -44,12 +43,10 @@ public class PublicationController {
 
     @PostMapping("/{id}/evaluations")
     @ResponseStatus(HttpStatus.CREATED)
-    public RiskEvaluationResponse evaluate(@PathVariable Long id,
-                                            Authentication authentication) {
-        // La validación opcional de reseñas necesita el OAuth ligado
-        // al usuario que pidió esta evaluación.
-        return riskEvaluationService.evaluate(id,
-                authentication == null ? null : authentication.getName());
+    public RiskEvaluationResponse evaluate(@PathVariable Long id) {
+        // La evaluación opera únicamente con señales propias o públicas
+        // observadas, sin consultar la API oficial de Mercado Libre.
+        return riskEvaluationService.evaluate(id);
     }
 
     @GetMapping("/{id}")
