@@ -13,6 +13,8 @@ import com.marketlens.backend.service.ExtensionReferenceService;
 import com.marketlens.backend.dto.RiskCoverageResponse;
 import com.marketlens.backend.service.ExtensionRiskCoverageService;
 
+import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -44,6 +46,20 @@ public class ExtensionController {
         this.processingService = processingService;
         this.referenceService = referenceService;
         this.coverageService = coverageService;
+    }
+
+    // Devolver una explicación accionable al popup cuando las verificaciones
+    // de importación/procesamiento rechazan una oferta. Sin esto el navegador
+    // solo muestra «422 Unprocessable Content» sin saber qué campo falló.
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ProblemDetail> explainImportFailure(
+            ResponseStatusException exception) {
+        String reason = exception.getReason();
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                exception.getStatusCode(),
+                reason == null || reason.isBlank()
+                        ? "No se pudo procesar la publicación." : reason);
+        return ResponseEntity.status(exception.getStatusCode()).body(problem);
     }
 
     @PostMapping("/preview")
