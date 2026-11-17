@@ -64,12 +64,6 @@ public class SecurityConfig {
                         .dispatcherTypeMatchers(DispatcherType.ERROR)
                         .permitAll()
 
-                        // Callback de Mercado Libre: no requiere JWT de MarketLens.
-                        .requestMatchers(
-                                org.springframework.http.HttpMethod.GET,
-                                "/api/integrations/mercadolibre/callback")
-                        .permitAll()
-
                         // Login y registro de MarketLens.
                         .requestMatchers("/api/auth/**")
                         .permitAll()
