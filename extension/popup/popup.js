@@ -653,11 +653,13 @@ function renderRisk(value) {
     const factors = Array.isArray(evaluation.factors) ? evaluation.factors : [];
     const unusualPrice = factors.some(factor =>
         factor?.code === 'UNUSUALLY_LOW_PRICE'
-        && Number(factor?.contribution ?? factor?.scoreContribution ?? 1) > 0
+        && Number(factor?.scoreContribution) > 0
     );
     $('result-explanation').textContent = unusualPrice
-        ? 'Precio muy inferior a referencias comparables. Las opiniones ' +
-          'generales del producto no acreditan esta oferta.'
+        ? 'Precio muy inferior a referencias comparables.' +
+          (currentMarketplace === 'MERCADO_LIBRE'
+              ? ' Las opiniones generales del producto no acreditan esta oferta.'
+              : ' Verificá la oferta antes de comprar.')
         : descriptor[1];
     $('result-icon').textContent = descriptor[2];
     $('result-score').textContent = Number.isFinite(evaluation.score) ? String(evaluation.score) : '—';
