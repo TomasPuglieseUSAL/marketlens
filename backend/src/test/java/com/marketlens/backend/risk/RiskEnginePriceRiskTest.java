@@ -65,6 +65,12 @@ class RiskEnginePriceRiskTest {
         when(seller.getCompletedSales()).thenReturn(1);
         when(seller.getSalesObservedAt()).thenReturn(LocalDateTime.now().minusHours(1));
         when(seller.getAccountAgeDays()).thenReturn(null);
+        // Las reseñas generales de otros compradores del modelo no verifican
+        // al vendedor y no modifican el puntaje de esta oferta.
+        when(publication.getMlProductRating()).thenReturn(new BigDecimal("4.7"));
+        when(publication.getMlProductReviewCount()).thenReturn(867);
+        when(publication.getMlProductObservedAt())
+                .thenReturn(LocalDateTime.now().minusDays(1));
 
         // Precio de referencia hipotético: la mediana del sistema debe
         // provenir de al menos cinco publicaciones realmente comparables.
@@ -80,6 +86,9 @@ class RiskEnginePriceRiskTest {
         assertTrue(result.getFactors().stream().anyMatch(f ->
                 "LIMITED_SELLER_HISTORY".equals(f.getCode())
                         && f.getScoreContribution() == 15));
+        assertTrue(result.getFactors().stream().anyMatch(f ->
+                "ML_PRODUCT_REVIEWS_OBSERVED".equals(f.getCode())
+                        && f.getScoreContribution() == 0));
     }
 
     @Test
