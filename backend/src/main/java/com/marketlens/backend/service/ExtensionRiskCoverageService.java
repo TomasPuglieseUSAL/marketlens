@@ -64,7 +64,9 @@ public class ExtensionRiskCoverageService {
                 }
 
                 // La antigüedad deja de ser una dimensión obligatoria.
-                // Sólo Temu dispone por ahora de extracción de opiniones del producto.
+                // Las reseñas del catálogo de Mercado Libre no describen
+                // la oferta individual y no cuentan para la cobertura.
+                // Esta misma definición se aplica en RiskCoverageCalculator.
                 List<RiskCoverageFactorResponse> factors = new java.util.ArrayList<>();
                 factors.add(new RiskCoverageFactorResponse(
                         "DESCRIPTION", "Información del producto", hasDescription));
