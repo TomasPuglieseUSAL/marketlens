@@ -13,6 +13,20 @@ public class PublicationSimilarityService {
     private static final double WORD_WEIGHT = 0.60;
     private static final double CHAR_WEIGHT = 0.40;
     private static final int NGRAM_SIZE = 3;
+    // No se guarda ningún índice ni vector adicional: se calcula por consulta.
+    // Limitar el texto acota memoria/CPU con hasta 500 candidatos.
+    private static final int MAX_DESCRIPTION_CHARS = 420;
+    private static final int MAX_DESCRIPTION_WORDS = 60;
+    private static final int SHORT_TITLE_WORD_LIMIT = 3;
+    private static final double DESCRIPTION_WEIGHT = 0.20;
+    private static final double SHORT_TITLE_DESCRIPTION_WEIGHT = 0.30;
+
+    private static final Set<String> DESCRIPTION_NOISE = Set.of(
+            "producto", "articulo", "publicacion", "consulta", "consultas",
+            "envio", "envios", "entrega", "gratis", "precio", "stock",
+            "disponible", "disponibilidad", "garantia", "excelentes",
+            "condiciones", "calidad", "comprar", "compra", "vendedor",
+            "tienda", "oficial", "original", "detalles", "fotos");
 
     private static final Set<String> STOP_WORDS = Set.of(
             "de", "del", "la", "el", "los", "las",
@@ -52,6 +66,21 @@ public class PublicationSimilarityService {
             );
         }
 
+        // La descripción es una señal secundaria, acotada y filtrada;
+        // jamás reemplaza a la coincidencia del título.
+        List<Map<String, Integer>> descriptionWordFrequencies = new ArrayList<>();
+        List<Map<String, Integer>> descriptionCharFrequencies = new ArrayList<>();
+        for (Publication publication : documents) {
+            List<String> words = descriptionTokens(publication.getDescription());
+            descriptionWordFrequencies.add(frequencies(words));
+            descriptionCharFrequencies.add(frequencies(characterNgrams(words)));
+        }
+
+        Map<String, Integer> descriptionWordDf =
+                documentFrequencies(descriptionWordFrequencies);
+        Map<String, Integer> descriptionCharDf =
+                documentFrequencies(descriptionCharFrequencies);
+
         Map<String, Integer> wordDf =
                 documentFrequencies(wordFrequencies);
 
@@ -73,6 +102,14 @@ public class PublicationSimilarityService {
                         charDf,
                         documentCount
                 );
+
+        Map<String, Double> targetDescriptionWords =
+                toTfidf(descriptionWordFrequencies.get(0), descriptionWordDf, documentCount);
+        Map<String, Double> targetDescriptionChars =
+                toTfidf(descriptionCharFrequencies.get(0), descriptionCharDf, documentCount);
+
+        double descriptionWeight = wordFrequencies.get(0).size() <= SHORT_TITLE_WORD_LIMIT
+                ? SHORT_TITLE_DESCRIPTION_WEIGHT : DESCRIPTION_WEIGHT;
 
         Map<Long, Double> results = new HashMap<>();
 
@@ -102,9 +139,27 @@ public class PublicationSimilarityService {
                     charVector
             );
 
-            double combinedSimilarity =
+            double titleSimilarity =
                     WORD_WEIGHT * wordSimilarity
                     + CHAR_WEIGHT * charSimilarity;
+
+            Map<String, Double> candidateDescriptionWords =
+                    toTfidf(descriptionWordFrequencies.get(i + 1),
+                            descriptionWordDf, documentCount);
+            Map<String, Double> candidateDescriptionChars =
+                    toTfidf(descriptionCharFrequencies.get(i + 1),
+                            descriptionCharDf, documentCount);
+
+            double combinedSimilarity = titleSimilarity;
+            if (!targetDescriptionWords.isEmpty() && !candidateDescriptionWords.isEmpty()) {
+                double descriptionSimilarity =
+                        WORD_WEIGHT * cosineSimilarity(targetDescriptionWords,
+                                candidateDescriptionWords)
+                        + CHAR_WEIGHT * cosineSimilarity(targetDescriptionChars,
+                                candidateDescriptionChars);
+                combinedSimilarity = (1.0 - descriptionWeight) * titleSimilarity
+                        + descriptionWeight * descriptionSimilarity;
+            }
 
             results.put(
                     candidates.get(i).getId(),
@@ -138,6 +193,16 @@ public class PublicationSimilarityService {
                 )
                 .filter(token -> !token.isBlank())
                 .filter(token -> !STOP_WORDS.contains(token))
+                .toList();
+    }
+
+    private List<String> descriptionTokens(String text) {
+        if (text == null || text.isBlank()) return List.of();
+        // Cortar antes de normalizar para evitar procesar descripciones enormes.
+        String prefix = text.substring(0, Math.min(MAX_DESCRIPTION_CHARS, text.length()));
+        return tokenize(prefix).stream()
+                .filter(word -> !DESCRIPTION_NOISE.contains(word))
+                .limit(MAX_DESCRIPTION_WORDS)
                 .toList();
     }
 
