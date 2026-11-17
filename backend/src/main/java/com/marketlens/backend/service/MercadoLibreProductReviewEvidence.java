@@ -45,52 +45,46 @@ public final class MercadoLibreProductReviewEvidence {
     }
 
     /**
-     * La calificación y el tamaño de muestra son dos señales separadas:
-     * una media baja basada en 2 reseñas pesa menos que la basada en 100.
-     * No inferir cero reseñas cuando faltan ambas métricas.
+     * Las opiniones del MODELO pueden corresponder a otros vendedores.
+     * Son información contextual, nunca evidencia de que esta publicación
+     * o la transacción individual sea confiable o fraudulenta.
+     * Su puntuación NO modifica el riesgo de la oferta.
      */
     public static List<Signal> evaluateSignals(Publication publication, LocalDateTime now) {
-        // Solo la ausencia observada y vigente genera +2 puntos. Nunca
-        // convertir una extracción fallida o un dato null en penalización.
         if (publication != null && publication.getMarketplace() == Marketplace.MERCADO_LIBRE
                 && Boolean.TRUE.equals(publication.getMlProductRatingUnavailable())
                 && !hasMetrics(publication.getMlProductRating(), publication.getMlProductReviewCount())
                 && fresh(publication.getMlProductObservedAt(), now)) {
             return List.of(new Signal("ML_PRODUCT_RATING_UNAVAILABLE",
-                    "No se mostró una calificación pública del producto en la última observación.",
-                    2));
+                    "No se encontró una calificación general del producto en la última observación. "
+                    + "Su ausencia no acredita ni desacredita esta oferta.", 0));
         }
         if (!hasObservedEvidence(publication, now)) return List.of();
 
         BigDecimal rating = publication.getMlProductRating();
         int reviews = publication.getMlProductReviewCount();
-        boolean sufficientSample = reviews >= MIN_REVIEWS_FOR_FULL_RATING_WEIGHT;
-        // Descripciones breves y específicas por factor: no repetir la
-        // calificación y el recuento en ambas señales.
         String ratingText = rating.setScale(1, RoundingMode.HALF_UP)
                 .toPlainString().replace('.', ',') + "/5";
 
         List<Signal> signals = new ArrayList<>(2);
         if (rating.compareTo(LOW_RATING_LIMIT) < 0) {
             signals.add(new Signal("ML_LOW_PRODUCT_RATING",
-                    "Calificación baja del producto: " + ratingText + ".",
-                    sufficientSample ? 15 : 5));
+                    "Calificación general baja del producto: " + ratingText
+                            + ". No evalúa al vendedor ni acredita esta oferta.", 0));
         } else if (rating.compareTo(MODERATE_RATING_LIMIT) < 0) {
             signals.add(new Signal("ML_MODERATE_PRODUCT_RATING",
-                    "Calificación intermedia del producto: " + ratingText + ".",
-                    sufficientSample ? 6 : 3));
+                    "Calificación general intermedia del producto: " + ratingText
+                            + ". No evalúa al vendedor ni acredita esta oferta.", 0));
         } else {
             signals.add(new Signal("ML_PRODUCT_REVIEWS_OBSERVED",
-                    "Calificación general del producto: " + ratingText + ". No es una calificación de este vendedor ni verifica esta oferta.", 0));
+                    "Calificación general del producto: " + ratingText
+                            + ". No es una calificación de este vendedor ni verifica esta oferta.", 0));
         }
 
-        // La cantidad limitada de opiniones es una señal independiente
-        // de la media de estrellas, sin repetirla en esta descripción.
         if (reviews < MIN_REVIEWS_FOR_FULL_RATING_WEIGHT) {
-            int points = reviews <= 4 ? 4 : 2;
             signals.add(new Signal("ML_FEW_PRODUCT_REVIEWS",
-                    "Cantidad de opiniones reducida: " + reviews + ".",
-                    points));
+                    "Muestra reducida del producto: " + reviews
+                            + " opiniones. Es información general del modelo, no de este vendedor.", 0));
         }
         return List.copyOf(signals);
     }
