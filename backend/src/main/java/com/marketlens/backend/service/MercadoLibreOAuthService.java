@@ -292,7 +292,18 @@ public class MercadoLibreOAuthService {
         if (!enabled) {
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
-                    "La integracion OAuth de Mercado Libre esta deshabilitada en modo demo.");
+                    "La integracion OAuth de Mercado Libre está deshabilitada en este perfil.");
+        }
+        if (clientId == null || clientId.isBlank()
+                || clientSecret == null || clientSecret.isBlank()
+                || redirectUri == null || redirectUri.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Faltan credenciales OAuth o la URL de retorno de Mercado Libre.");
+        }
+        // DevCenter requiere el callback HTTPS registrado para esta app.
+        if (!redirectUri.startsWith("https://")) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "MELI_REDIRECT_URI debe ser una URL HTTPS registrada en DevCenter.");
         }
     }
 
