@@ -34,6 +34,22 @@ class AutomaticPriceAnalysisServiceTest {
     }
 
     @Test
+    void calculatesFortyFivePointsForExtremeDiscountWithFiveDistinctReferences() {
+        Fixture fixture = new Fixture("2000");
+        fixture.add(1, "MLA1", "80000");
+        fixture.add(2, "MLA2", "95000");
+        fixture.add(3, "MLA3", "100000");
+        fixture.add(4, "MLA4", "120000");
+        fixture.add(5, "MLA5", "150000");
+
+        var result = fixture.analyze();
+
+        assertEquals(5, result.referenceCount());
+        assertEquals(0, result.referencePriceArs().compareTo(new BigDecimal("100000")));
+        assertEquals(45, result.riskPoints());
+    }
+
+    @Test
     void countsTwoImportsOfTheSameExternalOfferOnlyOnce() {
         Fixture fixture = new Fixture();
         fixture.add(1, "MLA1", "1100000");
@@ -73,8 +89,12 @@ class AutomaticPriceAnalysisServiceTest {
         final List<PriceCandidateResponse> candidates = new ArrayList<>();
 
         Fixture() {
+            this("741000");
+        }
+
+        Fixture(String targetPrice) {
             when(target.getId()).thenReturn(70L);
-            when(target.getPrice()).thenReturn(new BigDecimal("741000"));
+            when(target.getPrice()).thenReturn(new BigDecimal(targetPrice));
             when(target.getMarketplace()).thenReturn(Marketplace.MERCADO_LIBRE);
             when(target.getExternalId()).thenReturn("TARGET");
             when(publicationRepository.findById(70L)).thenReturn(Optional.of(target));
