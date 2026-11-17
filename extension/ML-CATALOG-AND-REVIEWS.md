@@ -350,7 +350,8 @@ evaluación autenticada, el backend consulta
 3. Que `rating_average` y `paging.total` sean válidos, con un recuento
    al menos igual a la muestra.
 4. Que la evidencia persistida sea reciente (máximo 30 días).
-   Se reconsulta, como máximo, cada 24 horas.
+   Las observaciones concluyentes se reutilizan durante 24 horas;
+   los errores de API se consideran inconclusos y pueden reintentarse.
 
 Resultados posibles:
 
