@@ -1191,22 +1191,20 @@ test('Mercado Libre: la valoración del modelo no parece reputación del vendedo
     assert.match(label, /No evalúa al vendedor ni acredita esta oferta/);
 });
 
-test('Galaxy A13 de $2000: 40 puntos siguen visibles y se explica la anomalía', () => {
+test('Galaxy A13 de $2000: 60 puntos y reseñas fuera de la cobertura', () => {
     const p = popup();
     p.run("currentMarketplace='MERCADO_LIBRE'");
     const result = {
         publicationId: 98,
         evaluation: {
-            level: 'MEDIUM',
-            score: 40,
-            availableFactors: 3,
-            totalFactors: 3,
+            level: 'HIGH',
+            score: 60,
+            availableFactors: 2,
+            totalFactors: 2,
             coverageStatus: 'COMPLETE',
             coverageFactors: [
                 {code: 'DESCRIPTION', name: 'Información del producto', available: true},
                 {code: 'SELLER_REPUTATION', name: 'Reputación o actividad del vendedor',
-                    available: true},
-                {code: 'PRODUCT_REVIEWS', name: 'Calificación general del producto',
                     available: true}
             ],
             factors: [
@@ -1214,7 +1212,7 @@ test('Galaxy A13 de $2000: 40 puntos siguen visibles y se explica la anomalía',
                     description: 'Historial de vendedor reducido.', scoreContribution: 15},
                 {code: 'UNUSUALLY_LOW_PRICE',
                     description: 'El precio publicado está un 98% por debajo de la mediana.',
-                    scoreContribution: 25},
+                    scoreContribution: 45},
                 {code: 'ML_PRODUCT_REVIEWS_OBSERVED',
                     description: 'Calificación general del producto: 4,7/5. ' +
                         'No es una calificación de este vendedor ni verifica esta oferta.',
@@ -1223,11 +1221,11 @@ test('Galaxy A13 de $2000: 40 puntos siguen visibles y se explica la anomalía',
         }
     };
     p.run('renderRisk(' + JSON.stringify(result) + ')');
-    assert.equal(p.element('result-score').textContent, '40');
-    assert.equal(p.element('result-coverage').textContent, '3/3');
-    assert.match(p.element('result-explanation').textContent, /Precio muy inferior/);
+    assert.equal(p.element('result-score').textContent, '60');
+    assert.equal(p.element('result-coverage').textContent, '2/2');
+    assert.match(p.element('result-explanation').textContent, /Precio extremadamente inferior/);
     assert.match(p.element('result-coverage-note').textContent,
-        /no verifica esta oferta/);
+        /no se cuentan.*ni suman puntos de riesgo/);
     assert.equal(p.element('result-factors').children.length, 3);
     assert.match(p.element('result-factors').children[2].textContent,
         /No evalúa al vendedor ni acredita esta oferta/);
@@ -1238,8 +1236,8 @@ test('sin anomalía de precio, el resultado conserva su descripción habitual', 
     p.run("currentMarketplace='MERCADO_LIBRE'");
     p.run('renderRisk(' + JSON.stringify({
         publicationId: 99,
-        evaluation: {level: 'LOW', score: 0, availableFactors: 3,
-            totalFactors: 3, coverageStatus: 'COMPLETE',
+        evaluation: {level: 'LOW', score: 0, availableFactors: 2,
+            totalFactors: 2, coverageStatus: 'COMPLETE',
             coverageFactors: [], factors: []}
     }) + ')');
     assert.match(p.element('result-explanation').textContent,
