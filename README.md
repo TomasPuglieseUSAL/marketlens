@@ -201,12 +201,11 @@ La instalación temporal normalmente se pierde al reiniciar Firefox.
 ### Limitaciones de la demostración
 
 - La extensión se conecta al backend local mediante **`http://localhost:8080/api`**; no está configurada para un servidor remoto.
-- La integración **OAuth de Mercado Libre está deshabilitada** con los perfiles locales `registration` y `demo`. Las acciones que requieran autorización o validaciones autenticadas contra esa API no estarán disponibles; otras funciones pueden seguir utilizando datos visibles de la página.
-- **Prueba opt-in de OAuth centralizado para reseñas:** el perfil `connected` permite a una sola cuenta operadora autorizar el backend y consultar reseñas públicas de ítems distintos sin OAuth por cada usuario final. El token sigue en memoria; aún no tiene persistencia ni renovación automática. Para configurarlo y probar ítems de vendedores distintos, consultá [ML-CENTRAL-OAUTH-TRIAL.md](extension/ML-CENTRAL-OAUTH-TRIAL.md).
+- **Sin API oficial de Mercado Libre:** las consultas OAuth se retiraron tras pruebas en las que `/users/me` funcionaba, pero `/items` y `/reviews/item` devolvían 403. El flujo normal usa información pública observada por la extensión; no requiere ngrok, DevCenter ni credenciales de Mercado Libre.
 - Las integraciones externas opcionales, como Gemini, no están habilitadas en estos perfiles locales.
 - La compatibilidad de extracción depende del formato y de los cambios que realicen los marketplaces en sus páginas.
 - **Temu (experimental):** reconoce `goods.html?goods_id=...` y `*-g-<id>.html`. Solo importa precios cuya moneda ARS esté identificada explícitamente, no inventa identidad del vendedor y todavía no realiza comparaciones automáticas de precios. Consultá [TEMU-MVP.md](extension/TEMU-MVP.md).
-- **Mercado Libre (catálogo):** en páginas `/p/MLA...` la extensión puede identificar una oferta elegida cuando el panel visible expone un único enlace de oferta MLA/MLAU, un vendedor y un precio coherente. Si no, solicita abrir la oferta individual; no reutiliza el ID general de catálogo como ID de vendedor/oferta. La cobertura de Mercado Libre incluye descripción y datos del vendedor; para ítems MLA individuales agrega condicionalmente un tercer factor de reseñas propias, solo si la API /reviews/item corrobora type=item e ID idéntico. Las opiniones generales del modelo siguen siendo contexto sin puntaje. Esta verificación requiere OAuth activo (inaccesible en los perfiles demo y registration). Los descuentos extremos frente a una mediana con cinco o más referencias comparables pueden sumar hasta 45 puntos. Consultá [ML-CATALOG-AND-REVIEWS.md](extension/ML-CATALOG-AND-REVIEWS.md).
+- **Mercado Libre (catálogo):** en páginas `/p/MLA...` la extensión puede identificar una oferta elegida cuando el panel visible expone un único enlace de oferta MLA/MLAU, un vendedor y un precio coherente. Si no, solicita abrir la oferta individual. La cobertura de Mercado Libre tiene dos factores: descripción y reputación/actividad del vendedor observada. Las opiniones generales del producto son contexto, sin puntos de riesgo ni cobertura adicional. No se afirma que la identidad del vendedor esté corroborada por una API. Los descuentos extremos frente a cinco o más referencias comparables pueden sumar hasta 45 puntos. Consultá [ML-CATALOG-AND-REVIEWS.md](extension/ML-CATALOG-AND-REVIEWS.md).
 
 ## Comandos útiles de Docker
 
@@ -264,11 +263,11 @@ Las migraciones de Flyway se encuentran en [`backend/src/main/resources/db/migra
 - **`.env.example`**: plantilla pública de configuración sin secretos reales.
 - **`.env`**: configuración local privada (excluida por `.gitignore`).
 - **`application-container.properties`**: conexión interna de Spring Boot al servicio Docker `db:5432`.
-- **`application-demo.properties`**: usuario `demo` y datos de ejemplo; deshabilita OAuth y Gemini.
-- **`application-registration.properties`**: registro de usuarios sin cuenta precreada, con datos sintéticos; deshabilita OAuth y Gemini.
+- **`application-demo.properties`**: usuario `demo` y datos de ejemplo; deshabilita Gemini.
+- **`application-registration.properties`**: registro de usuarios sin cuenta precreada, con datos sintéticos; deshabilita Gemini.
 - **`compose.yaml`**: red, puertos y dependencias de los tres servicios.
 
-No subas `.env`, contraseñas, claves JWT, tokens OAuth ni credenciales de proveedores externos al repositorio. Evitá compartir capturas o registros que contengan estos valores.
+No subas `.env`, contraseñas, claves JWT ni credenciales de proveedores externos al repositorio. Evitá compartir capturas o registros que contengan estos valores.
 
 La configuración usa **HTTP local** y no incluye las medidas necesarias para exponer la plataforma a Internet. Está destinada al desarrollo, la demostración y la evaluación académica; **no es un despliegue de producción**.
 
@@ -284,7 +283,7 @@ La configuración usa **HTTP local** y no incluye las medidas necesarias para ex
 | No existe el usuario `demo` | Es normal en el perfil predeterminado `registration`. Crear una cuenta desde el frontend o elegir el modo demo tradicional. |
 | Falló el backend | Ejecutar `docker compose logs --tail=150 backend`. |
 | No funciona la extensión | Confirmar que el backend esté activo en `localhost:8080`, que la sesión esté vigente y que la página sea compatible. |
-| OAuth de Mercado Libre devuelve servicio no disponible | Es esperado en los perfiles locales `registration` y `demo`, porque está deshabilitado. |
+| Usabas `MARKETLENS_PROFILE=connected` | Reemplazarlo por `registration` o `demo` en `.env`; la API OAuth de Mercado Libre fue retirada. |
 
 ## Estructura del proyecto
 
