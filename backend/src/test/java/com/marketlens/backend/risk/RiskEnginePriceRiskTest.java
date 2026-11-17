@@ -44,9 +44,9 @@ class RiskEnginePriceRiskTest {
         assertEquals(40, result.getScore());
         assertEquals(RiskLevel.MEDIUM, result.getLevel());
         assertEquals(2, (int) result.getAvailableFactors());
-        // Mercado Libre ahora contempla tres dimensiones: descripción,
-        // vendedor y opiniones del producto. En este caso no hay reseñas.
-        assertEquals(3, (int) result.getTotalFactors());
+        // Mercado Libre evalúa confiabilidad de la oferta mediante la
+        // descripción y el vendedor. Reseñas generales son contexto.
+        assertEquals(2, (int) result.getTotalFactors());
         assertEquals(2, result.getFactors().size());
         assertTrue(result.getFactors().stream().anyMatch(f ->
                 "LIMITED_SELLER_HISTORY".equals(f.getCode())
@@ -54,6 +54,46 @@ class RiskEnginePriceRiskTest {
         assertTrue(result.getFactors().stream().anyMatch(f ->
                 "UNUSUALLY_LOW_PRICE".equals(f.getCode())
                         && f.getScoreContribution() == 25));
+    }
+
+    @Test
+    void oneObservedSaleAndExtremelyLowPriceGivesSixtyHighRisk() {
+        Publication publication = basePublication("2000");
+        Seller seller = mock(Seller.class);
+        when(publication.getSeller()).thenReturn(seller);
+        when(publication.getDescription()).thenReturn("Samsung Galaxy A13 usado.");
+        when(seller.getCompletedSales()).thenReturn(1);
+        when(seller.getSalesObservedAt()).thenReturn(LocalDateTime.now().minusHours(1));
+        when(seller.getAccountAgeDays()).thenReturn(null);
+
+        // Precio de referencia hipotético: la mediana del sistema debe
+        // provenir de al menos cinco publicaciones realmente comparables.
+        var result = engine.evaluate(publication, 45, new BigDecimal("100000"), 5);
+
+        assertEquals(60, result.getScore());
+        assertEquals(RiskLevel.HIGH, result.getLevel());
+        assertEquals(2, result.getAvailableFactors());
+        assertEquals(2, result.getTotalFactors());
+        assertTrue(result.getFactors().stream().anyMatch(f ->
+                "UNUSUALLY_LOW_PRICE".equals(f.getCode())
+                        && f.getScoreContribution() == 45));
+        assertTrue(result.getFactors().stream().anyMatch(f ->
+                "LIMITED_SELLER_HISTORY".equals(f.getCode())
+                        && f.getScoreContribution() == 15));
+    }
+
+    @Test
+    void lowPriceDoesNotEarnHighRiskWithoutReliableReferenceSample() {
+        Publication publication = basePublication("2000");
+        Seller seller = mock(Seller.class);
+        when(publication.getSeller()).thenReturn(seller);
+        when(seller.getCompletedSales()).thenReturn(1);
+        when(seller.getSalesObservedAt()).thenReturn(LocalDateTime.now().minusHours(1));
+        when(seller.getAccountAgeDays()).thenReturn(null);
+        var result = engine.evaluate(publication, null, new BigDecimal("100000"), 4);
+        assertEquals(15, result.getScore());
+        assertTrue(result.getFactors().stream().noneMatch(f ->
+                "UNUSUALLY_LOW_PRICE".equals(f.getCode())));
     }
 
     @Test
