@@ -292,9 +292,10 @@ public class GenericProductMatchingService {
     private boolean isRam(String text, int start, int end) {
         String before = text.substring(Math.max(0, start - 25), start);
         String after = text.substring(end, Math.min(text.length(), end + 25));
-        // Patrones genéricos: "4 GB RAM", "RAM de 4 GB" y "memoria RAM 4 GB".
+        // "4 GB RAM", "RAM de 4 GB", "RAM: 4GB" y "memoria RAM 4GB".
         boolean suffix = after.matches("(?s)^\\s*(?:de\\s+)?(?:ram|memoria\\s+ram)\\b.*");
-        boolean prefix = before.matches("(?s).*\\b(?:ram|memoria\\s+ram)\\s*(?:de\\s+)?$");
+        boolean prefix = before.matches(
+                "(?s).*\\b(?:ram|memoria\\s+ram)\\s*(?:de\\s+)?(?:[:=]\\s*)?$");
         // "4 GB RAM 64 GB": RAM califica al primer número, no al segundo.
         if (prefix && before.matches(
                 "(?s).*\\d+(?:[.,]\\d+)?\\s*(?:gb|tb|t)\\s+ram\\s*$")) {
