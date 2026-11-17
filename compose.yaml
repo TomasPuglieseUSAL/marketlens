@@ -33,13 +33,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Crea .env con POSTGRES_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?Crea .env con JWT_SECRET}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-}
-      # Credenciales usadas solo cuando se activa el perfil connected.
-      MELI_CLIENT_ID: ${MELI_CLIENT_ID:-}
-      MELI_CLIENT_SECRET: ${MELI_CLIENT_SECRET:-}
-      MELI_REDIRECT_URI: ${MELI_REDIRECT_URI:-http://localhost:8080/api/integrations/mercadolibre/callback}
-      MELI_PKCE_ENABLED: ${MELI_PKCE_ENABLED:-true}
-      MELI_REVIEWS_CENTRAL_ENABLED: ${MELI_REVIEWS_CENTRAL_ENABLED:-false}
-      MELI_REVIEWS_CENTRAL_OWNER: ${MELI_REVIEWS_CENTRAL_OWNER:-}
     depends_on:
       db:
         condition: service_healthy
