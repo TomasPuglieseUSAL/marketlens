@@ -73,18 +73,8 @@ public class ExtensionRiskCoverageService {
                 factors.add(new RiskCoverageFactorResponse(
                         "SELLER_REPUTATION", "Reputación del vendedor", hasReputation));
                 MarketplaceReference reference = imported.getMarketplaceReference();
-                if (MercadoLibreItemReviewEvidence.eligible(
-                        imported.getMarketplace(),
-                        reference == null ? null : reference.getReferenceType(),
-                        reference == null ? null : reference.getExternalId(),
-                        imported.getOriginalUrl())) {
-                        boolean verified = MercadoLibreItemReviewEvidence.hasVerifiedEvidence(
-                                imported.getProcessedPublication(), java.time.LocalDateTime.now());
-                        factors.add(new RiskCoverageFactorResponse("ITEM_REVIEWS",
-                                verified ? "Opiniones propias de compradores (verificadas por ítem)"
-                                        : "Opiniones propias de compradores (pendientes de verificación)",
-                                verified));
-                } else if ("TEMU".equals(imported.getMarketplace())) {
+                // Mercado Libre no depende de reseñas de la API para cobertura.
+                if ("TEMU".equals(imported.getMarketplace())) {
                         boolean reviews = TemuProductReviewEvidence.hasMetrics(
                                 imported.getTemuProductRating(),
                                 imported.getTemuProductReviewCount());
