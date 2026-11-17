@@ -45,11 +45,15 @@ public class RiskCoverageCalculator {
                 "Reputación o actividad del vendedor", hasSellerEvidence(publication, now)));
 
         Marketplace marketplace = publication.getMarketplace();
-        // Las reseñas agregadas de Mercado Libre califican el MODELO
-        // compartido por vendedores distintos. No acreditan esta oferta y
-        // por ello no integran su cobertura de confiabilidad.
-        // Temu conserva por ahora su cobertura comercial específica.
-        if (marketplace == Marketplace.TEMU) {
+        // Opiniones generales del catálogo no acreditan la oferta.
+        // Solo un ítem MLA regular admite el factor condicional de
+        // calificaciones propias, corroboradas mediante API y su ID.
+        if (marketplace == Marketplace.MERCADO_LIBRE
+                && MercadoLibreItemReviewEvidence.eligible(publication)) {
+            result.add(new RiskCoverageFactorResponse("ITEM_REVIEWS",
+                    "Opiniones vinculadas a esta publicación (verificadas por ítem)",
+                    MercadoLibreItemReviewEvidence.hasVerifiedEvidence(publication, now)));
+        } else if (marketplace == Marketplace.TEMU) {
             boolean hasReviews = TemuProductReviewEvidence.hasObservedEvidence(publication, now);
             result.add(new RiskCoverageFactorResponse("PRODUCT_REVIEWS",
                     "Calificación y opiniones del producto", hasReviews));
