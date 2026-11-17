@@ -72,15 +72,10 @@ public class ExtensionRiskCoverageService {
                         "DESCRIPTION", "Información del producto", hasDescription));
                 factors.add(new RiskCoverageFactorResponse(
                         "SELLER_REPUTATION", "Reputación del vendedor", hasReputation));
-                if ("TEMU".equals(imported.getMarketplace())
-                        || "MERCADO_LIBRE".equals(imported.getMarketplace())) {
-                        boolean reviews = "TEMU".equals(imported.getMarketplace())
-                                ? TemuProductReviewEvidence.hasMetrics(
-                                    imported.getTemuProductRating(),
-                                    imported.getTemuProductReviewCount())
-                                : MercadoLibreProductReviewEvidence.hasMetrics(
-                                    imported.getMlProductRating(),
-                                    imported.getMlProductReviewCount());
+                if ("TEMU".equals(imported.getMarketplace())) {
+                        boolean reviews = TemuProductReviewEvidence.hasMetrics(
+                                imported.getTemuProductRating(),
+                                imported.getTemuProductReviewCount());
                         factors.add(new RiskCoverageFactorResponse(
                                 "PRODUCT_REVIEWS", "Calificación y opiniones del producto", reviews));
                 }
