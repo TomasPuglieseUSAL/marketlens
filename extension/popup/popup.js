@@ -1246,59 +1246,6 @@ function extractMercadoLibre() {
         }
     }
 
-    // Al cambiar de publicación con navegación dinámica, la URL de /up/
-    // puede cambiar antes que el h1 y el JSON-LD del producto principal.
-    // No registrar la oferta vieja bajo el identificador de la URL nueva.
-    // Ignorar productos recomendados: se exige coincidencia EXACTA del
-    // nombre estructurado con el h1, un único SKU/ID MLAU y una sola
-    // identidad de ficha entre los bloques JSON-LD pertinentes.
-    const currentUpId = window.location.pathname.match(
-        /\/up\/(MLAU\d{6,})(?:\/|$)/i
-    )?.[1]?.toUpperCase();
-    if (currentUpId) {
-        const h1Name = normalizeProductName(
-            document.querySelector('h1.ui-pdp-title')?.textContent
-        );
-        const pageProductIds = new Set();
-        if (h1Name) {
-            for (const script of document.querySelectorAll(
-                'script[type="application/ld+json"]'
-            )) {
-                try {
-                    const root = JSON.parse(script.textContent);
-                    const nodes = Array.isArray(root) ? root
-                        : Array.isArray(root?.['@graph']) ? root['@graph']
-                        : [root];
-                    for (const node of nodes) {
-                        const types = Array.isArray(node?.['@type'])
-                            ? node['@type'] : [node?.['@type']];
-                        if (!types.some(type => type === 'Product' ||
-                                (typeof type === 'string' &&
-                                type.endsWith('/Product')))) continue;
-                        if (normalizeProductName(node.name) !== h1Name) continue;
-                        const productIds = [node.sku, node.productID]
-                            .filter(id => typeof id === 'string'
-                                && /^MLAU\d{6,}$/i.test(id))
-                            .map(id => id.toUpperCase());
-                        if (productIds.length && new Set(productIds).size === 1) {
-                            pageProductIds.add(productIds[0]);
-                        }
-                    }
-                } catch {
-                    // JSON-LD inválido: no usarlo para inferir un conflicto.
-                }
-            }
-        }
-        if (pageProductIds.size === 1 && !pageProductIds.has(currentUpId)) {
-            return {
-                found: false,
-                message: 'La URL y los datos de la publicación no coinciden. '
-                    + 'Mercado Libre podría mostrar datos de una pestaña o '
-                    + 'variante anterior. Recargá la página y volvé a analizarla.'
-            };
-        }
-    }
-
     // URL sin fragmento de navegación.
     // El contexto comercial (item_id seleccionado y vendedor del catálogo)
     // viaja por campos específicos, no por los trackers del enlace.
