@@ -284,14 +284,6 @@ cobertura y el factor informativo de 0 puntos lo especifican
 expresamente. El historial del vendedor, precio y reportes comunitarios
 se evalúan por separado.
 
-Para rutas `/up/MLAU...`, una ficha cuyo `h1` coincide con un
-único producto estructurado `Product` de `sku/productID=MLAU...`
-distinto del de la URL se rechaza **antes de importar**.
-Esto evita almacenar datos de la ficha anterior cuando la navegación
-dinámica no actualizó todavía el DOM. Las tarjetas de recomendaciones
-no se usan para decidir este conflicto. Reintentar después de
-recargar la página.
-
 Si el backend rechaza el proceso con un `ResponseStatusException`,
 el controlador de extensión devuelve un JSON ProblemDetail con el
 motivo concreto en `detail` (por ejemplo, «No se pudo normalizar un
