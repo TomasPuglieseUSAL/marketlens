@@ -20,6 +20,38 @@ class MercadoLibreOAuthServiceDemoTest {
     }
 
     @Test
+    void connectedOAuthRejectsMissingCredentialsBeforeGeneratingAuthorizationUrl() {
+        MercadoLibreOAuthService service = new MercadoLibreOAuthService(
+                "", "", "https://example.com/api/integrations/mercadolibre/callback", true);
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.createAuthorizationUrl("operador"));
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, error.getStatusCode());
+    }
+
+    @Test
+    void connectedOAuthRequiresAnHttpsRedirectRegisteredInDevCenter() {
+        MercadoLibreOAuthService service = new MercadoLibreOAuthService(
+                "app-id", "app-secret",
+                "http://localhost:8080/api/integrations/mercadolibre/callback", true);
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.createAuthorizationUrl("operador"));
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, error.getStatusCode());
+    }
+
+    @Test
+    void connectedOAuthCreatesPckeAuthorizationWithoutContactingMercadoLibre() {
+        MercadoLibreOAuthService service = new MercadoLibreOAuthService(
+                "app-id", "app-secret",
+                "https://example.com/api/integrations/mercadolibre/callback", true);
+        String url = service.createAuthorizationUrl("operador");
+        org.junit.jupiter.api.Assertions.assertTrue(url.contains("client_id=app-id"));
+        org.junit.jupiter.api.Assertions.assertTrue(url.contains("code_challenge="));
+        org.junit.jupiter.api.Assertions.assertTrue(url.contains("state="));
+    }
+
+    @Test
     void demoBlocksAuthorizationUrlCreation() {
         MercadoLibreOAuthService service = disabledService();
         ResponseStatusException error = assertThrows(
