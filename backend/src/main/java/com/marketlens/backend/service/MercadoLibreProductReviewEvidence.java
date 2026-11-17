@@ -81,7 +81,7 @@ public final class MercadoLibreProductReviewEvidence {
                     sufficientSample ? 6 : 3));
         } else {
             signals.add(new Signal("ML_PRODUCT_REVIEWS_OBSERVED",
-                    "Calificación del producto: " + ratingText + ".", 0));
+                    "Calificación general del producto: " + ratingText + ". No es una calificación de este vendedor ni verifica esta oferta.", 0));
         }
 
         // La cantidad limitada de opiniones es una señal independiente
