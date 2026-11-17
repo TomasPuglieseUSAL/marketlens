@@ -12,13 +12,10 @@ import com.marketlens.backend.repository.RiskEvaluationRepository;
 import com.marketlens.backend.risk.RiskEngine;
 import com.marketlens.backend.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class RiskEvaluationService {
@@ -28,58 +25,35 @@ public class RiskEvaluationService {
     private final RiskEngine riskEngine;
     private final AutomaticPriceAnalysisService priceAnalysisService;
     private final CommunityReportService communityReportService;
-    private final MercadoLibreApiService mercadoLibreApiService;
-
-    @Autowired
     public RiskEvaluationService(
             PublicationRepository publicationRepository,
             RiskEvaluationRepository riskEvaluationRepository,
             RiskEngine riskEngine,
             AutomaticPriceAnalysisService priceAnalysisService,
-            CommunityReportService communityReportService,
-            MercadoLibreApiService mercadoLibreApiService) {
+            CommunityReportService communityReportService) {
         this.publicationRepository = publicationRepository;
         this.riskEvaluationRepository = riskEvaluationRepository;
         this.riskEngine = riskEngine;
         this.priceAnalysisService = priceAnalysisService;
         this.communityReportService = communityReportService;
-        this.mercadoLibreApiService = mercadoLibreApiService;
     }
 
-    /** Constructor de compatibilidad para pruebas con reportes. */
-    public RiskEvaluationService(
-            PublicationRepository publications,
-            RiskEvaluationRepository evaluations,
-            RiskEngine engine,
-            AutomaticPriceAnalysisService prices,
-            CommunityReportService communityReports) {
-        this(publications, evaluations, engine, prices, communityReports, null);
-    }
-
-    /** Constructor anterior para pruebas sin dependencia de reportes. */
+    /** Constructor de compatibilidad para pruebas sin reportes. */
     public RiskEvaluationService(
             PublicationRepository publicationRepository,
             RiskEvaluationRepository riskEvaluationRepository,
             RiskEngine riskEngine,
             AutomaticPriceAnalysisService priceAnalysisService) {
-        this(publicationRepository, riskEvaluationRepository, riskEngine, priceAnalysisService, null);
+        this(publicationRepository, riskEvaluationRepository, riskEngine,
+                priceAnalysisService, null);
     }
 
     @Transactional
     public RiskEvaluationResponse evaluate(Long publicationId) {
-        return evaluate(publicationId, null);
-    }
-
-    /** Usuario autenticado para consultar reseñas acreditadas por OAuth. */
-    @Transactional
-    public RiskEvaluationResponse evaluate(Long publicationId, String username) {
-
         Publication publication = publicationRepository
                 .findById(publicationId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Publication not found: " + publicationId));
-
-        refreshItemReviews(publication, username);
 
         Integer pricePoints = null;
         BigDecimal referenceMedian = null;
@@ -113,37 +87,6 @@ public class RiskEvaluationService {
 
         // La explicación corresponde a la evidencia observada en ESTA evaluación.
         return toResponse(savedEvaluation, RiskCoverageCalculator.factors(publication));
-    }
-
-    private void refreshItemReviews(Publication publication, String username) {
-        if (mercadoLibreApiService == null
-                || !MercadoLibreItemReviewEvidence.eligible(publication)
-                || username == null || username.isBlank()) return;
-
-        LocalDateTime now = LocalDateTime.now();
-        // No repetir una observación concluyente antes de 24 horas.
-        // Si la API falla, la verificación sigue inconclusa y puede reintentarse.
-        LocalDateTime last = publication.getMlItemReviewObservedAt();
-        if (last != null && !last.isAfter(now)
-                && last.isAfter(now.minusHours(24))) return;
-
-        try {
-            if (!mercadoLibreApiService.hasReviewAccess(username)) return;
-            MercadoLibreItemReviewEvidence.Verified verified =
-                    mercadoLibreApiService.getVerifiedItemReviews(
-                            username, publication.getExternalId());
-            if (verified == null) {
-                // La API respondió, pero no acreditó reseñas de este ítem.
-                publication.setMlItemReviews(null, null, null, now);
-            } else {
-                publication.setMlItemReviews(verified.itemId(), verified.rating(),
-                        verified.count(), now);
-            }
-            publicationRepository.save(publication);
-        } catch (ResponseStatusException exception) {
-            // Token vencido, error de red o límite de API: no simular
-            // reseñas y no impedir la evaluación de los demás factores.
-        }
     }
 
     private RiskEvaluationResponse toResponse(
