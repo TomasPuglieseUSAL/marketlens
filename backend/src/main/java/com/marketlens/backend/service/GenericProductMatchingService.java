@@ -207,13 +207,22 @@ public class GenericProductMatchingService {
                 && !wordsA.equals(wordsB)
                 && (numericIdentifiers(wordsA).size() >= 2
                     || hasMixedAlphanumericIdentifier(titleA)
-                    || hasMixedAlphanumericIdentifier(titleB))) {
+                    || hasMixedAlphanumericIdentifier(titleB))
+                // No confundir el orden de los identificadores de modelo
+                // con una reordenación inocua de "64GB / 4GB RAM".
+                && !coreIdentityOrder(wordsA).equals(coreIdentityOrder(wordsB))) {
             return insufficient("Se invirtio el orden de codigos o cantidades potencialmente relevantes.");
         }
 
         return new MatchDecision("PROVISIONAL_MATCH",
                 "Coincidencia textual parcial suficiente y sin contradicciones explicitas "
                 + "de estado o capacidad. Equivalencia comercial no verificada.");
+    }
+
+    private List<String> coreIdentityOrder(List<String> tokens) {
+        return tokens.stream()
+                .filter(token -> !token.startsWith("capacity_") && !"ram".equals(token))
+                .toList();
     }
 
     private List<String> identityTokens(String normalizedTitle) {
