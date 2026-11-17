@@ -284,8 +284,14 @@ public class GenericProductMatchingService {
         String before = text.substring(Math.max(0, start - 25), start);
         String after = text.substring(end, Math.min(text.length(), end + 25));
         // Patrones genéricos: "4 GB RAM", "RAM de 4 GB" y "memoria RAM 4 GB".
-        return after.matches("(?s)^\\s*(?:de\\s+)?(?:ram|memoria\\s+ram)\\b.*")
-                || before.matches("(?s).*\\b(?:ram|memoria\\s+ram)\\s*(?:de\\s+)?$");
+        boolean suffix = after.matches("(?s)^\\s*(?:de\\s+)?(?:ram|memoria\\s+ram)\\b.*");
+        boolean prefix = before.matches("(?s).*\\b(?:ram|memoria\\s+ram)\\s*(?:de\\s+)?$");
+        // "4 GB RAM 64 GB": RAM califica al primer número, no al segundo.
+        if (prefix && before.matches(
+                "(?s).*\\d+(?:[.,]\\d+)?\\s*(?:gb|tb|t)\\s+ram\\s*$")) {
+            prefix = false;
+        }
+        return prefix || suffix;
     }
 
     private String capacityLabel(String number, String unit) {
