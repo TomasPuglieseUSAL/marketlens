@@ -37,7 +37,7 @@ class MercadoLibreSellerReputationRiskTest {
             var result = new RiskEngine(new RiskCoverageCalculator())
                     .evaluate(publication(levels[i], null, true));
             assertEquals(points[i], result.getScore(), "Nivel " + levels[i]);
-            assertEquals(3, result.getTotalFactors());
+            assertEquals(2, result.getTotalFactors());
             assertEquals(2, result.getAvailableFactors());
             assertEquals(1, result.getFactors().size());
             assertEquals("ML_SELLER_REPUTATION_OBSERVED", result.getFactors().get(0).getCode());
