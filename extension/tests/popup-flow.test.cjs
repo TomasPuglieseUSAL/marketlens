@@ -1245,3 +1245,42 @@ test('sin anomalía de precio, el resultado conserva su descripción habitual', 
     assert.match(p.element('result-explanation').textContent,
         /No se detectaron señales relevantes/);
 });
+
+test('reseñas verificadas de un ítem MLA no se confunden con calificaciones del catálogo', () => {
+    const p = popup();
+    const explanation = 'Opiniones de compradores vinculadas a esta publicación (18): 4,8/5. ' +
+        'Verificadas por identificador de ítem en Mercado Libre; ' +
+        'no garantizan por sí solas la confiabilidad de la transacción.';
+    const summary = p.run('conciseFactorLabel(' + JSON.stringify({
+        code: 'ML_ITEM_REVIEWS_VERIFIED', description: explanation, scoreContribution: 0
+    }) + ')');
+    assert.equal(summary, 'Opiniones verificadas de esta publicación: 4,8/5 (18 opiniones). ' +
+        'Son experiencias anteriores, no una garantía.');
+});
+
+test('una publicación MLA con reseñas propias comprobadas muestra cobertura 3/3', () => {
+    const p = popup();
+    p.run("currentMarketplace='MERCADO_LIBRE'");
+    p.run('renderRisk(' + JSON.stringify({
+        publicationId: 29,
+        evaluation: {
+            level: 'MEDIUM', score: 30, coverageStatus: 'COMPLETE',
+            availableFactors: 3, totalFactors: 3,
+            coverageFactors: [
+                {code:'DESCRIPTION', name:'Información del producto', available:true},
+                {code:'SELLER_REPUTATION', name:'Reputación del vendedor', available:true},
+                {code:'ITEM_REVIEWS', name:'Opiniones vinculadas a esta publicación', available:true}
+            ],
+            factors: [{
+                code:'ML_ITEM_REVIEWS_VERIFIED',
+                description:'Opiniones de compradores vinculadas a esta publicación (18): 4,8/5. ' +
+                    'Verificadas por identificador de ítem en Mercado Libre; ' +
+                    'no garantizan por sí solas la confiabilidad de la transacción.',
+                scoreContribution:0
+            }]
+        }
+    }) + ')');
+    assert.equal(p.element('result-coverage').textContent, '3/3');
+    assert.equal(p.element('result-score').textContent, '30');
+    assert.match(p.element('result-factors').children[0].textContent, /Opiniones verificadas de esta publicación/);
+});
