@@ -117,7 +117,8 @@ public class MercadoLibreApiService {
                         && centralReviewsOwner.trim().equals(username);
         }
 
-        private String reviewTokenOwner(String requestingUsername) {
+        // Sin anotación private para cubrir el ruteo por identidad en pruebas.
+        String reviewTokenOwner(String requestingUsername) {
                 if (centralReviewsEnabled) {
                         // Fallar de forma cerrada: nunca pasar a OAuth personal
                         // por un error de configuración del modo centralizado.
