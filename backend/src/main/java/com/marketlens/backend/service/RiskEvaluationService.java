@@ -121,7 +121,8 @@ public class RiskEvaluationService {
                 || username == null || username.isBlank()) return;
 
         LocalDateTime now = LocalDateTime.now();
-        // Máximo una consulta cada 24 horas por ítem, aunque se reevalúe.
+        // No repetir una observación concluyente antes de 24 horas.
+        // Si la API falla, la verificación sigue inconclusa y puede reintentarse.
         LocalDateTime last = publication.getMlItemReviewObservedAt();
         if (last != null && !last.isAfter(now)
                 && last.isAfter(now.minusHours(24))) return;
