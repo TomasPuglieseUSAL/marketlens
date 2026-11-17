@@ -50,9 +50,11 @@ public class RiskCoverageCalculator {
         // calificaciones propias, corroboradas mediante API y su ID.
         if (marketplace == Marketplace.MERCADO_LIBRE
                 && MercadoLibreItemReviewEvidence.eligible(publication)) {
+            boolean verified = MercadoLibreItemReviewEvidence.hasVerifiedEvidence(publication, now);
             result.add(new RiskCoverageFactorResponse("ITEM_REVIEWS",
-                    "Opiniones vinculadas a esta publicación (verificadas por ítem)",
-                    MercadoLibreItemReviewEvidence.hasVerifiedEvidence(publication, now)));
+                    verified ? "Opiniones propias de compradores (verificadas por ítem)"
+                            : "Opiniones propias de compradores (pendientes de verificación)",
+                    verified));
         } else if (marketplace == Marketplace.TEMU) {
             boolean hasReviews = TemuProductReviewEvidence.hasObservedEvidence(publication, now);
             result.add(new RiskCoverageFactorResponse("PRODUCT_REVIEWS",
