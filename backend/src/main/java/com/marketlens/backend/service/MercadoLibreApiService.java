@@ -91,6 +91,23 @@ public class MercadoLibreApiService {
                                 nullableString(response, "permalink"));
         }
 
+        /**
+         * Solo registra reseñas cuando la API confirma que pertenecen al
+         * ITEM solicitado. Un estado de catálogo/producto devuelve null;
+         * errores de OAuth o red son manejados por el consumidor como
+         * verificación inconclusa y no impiden evaluar otros factores.
+         */
+        public MercadoLibreItemReviewEvidence.Verified getVerifiedItemReviews(
+                        String username, String itemId) {
+                if (itemId == null || !itemId.matches("MLA[1-9]\\d{5,}")) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                        "ID de ítem Mercado Libre inválido.");
+                }
+                String accessToken = oauthService.getAccessToken(username);
+                JsonNode response = executeGet("/reviews/item/" + itemId, accessToken);
+                return MercadoLibreItemReviewEvidence.fromApiResponse(itemId, response);
+        }
+
         public MercadoLibreUserResponse getItemSeller(
                         String username,
                         String itemId) {
