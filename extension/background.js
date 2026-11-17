@@ -169,7 +169,7 @@ async function authenticatedRequest(path, options = {}) {
 
     const result = await response.json().catch(() => null);
     if (!response.ok) {
-        const raw = result?.message || result?.detail || result?.error;
+        const raw = result?.detail || result?.message || result?.error;
         const detail = typeof raw === 'string' ? raw.slice(0, 350) : 'Error de respuesta';
         const method = options.method ?? 'GET';
         throw new Error(`${method} ${path} → HTTP ${response.status}: ${detail}`);
