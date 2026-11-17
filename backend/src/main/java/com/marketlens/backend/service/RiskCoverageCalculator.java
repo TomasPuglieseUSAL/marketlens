@@ -50,7 +50,9 @@ public class RiskCoverageCalculator {
                     ? TemuProductReviewEvidence.hasObservedEvidence(publication, now)
                     : MercadoLibreProductReviewEvidence.hasObservedEvidence(publication, now);
             result.add(new RiskCoverageFactorResponse("PRODUCT_REVIEWS",
-                    "Calificación y opiniones del producto", hasReviews));
+                    marketplace == Marketplace.MERCADO_LIBRE
+                        ? "Calificación general del producto (no del vendedor)"
+                        : "Calificación y opiniones del producto", hasReviews));
         }
         return List.copyOf(result);
     }
