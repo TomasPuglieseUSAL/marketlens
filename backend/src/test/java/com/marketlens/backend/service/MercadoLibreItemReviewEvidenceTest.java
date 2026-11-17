@@ -1,6 +1,9 @@
 package com.marketlens.backend.service;
 
 import com.marketlens.backend.entity.*;
+import com.marketlens.backend.repository.ExtensionImportRepository;
+import java.util.Optional;
+import static org.mockito.Mockito.*;
 import com.marketlens.backend.risk.RiskEngine;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -130,6 +133,26 @@ class MercadoLibreItemReviewEvidenceTest {
         p.setExternalId("MLAU3344351864");
         assertEquals(2, new RiskCoverageCalculator().factors(p).size());
         assertFalse(MercadoLibreItemReviewEvidence.hasVerifiedEvidence(p, LocalDateTime.now()));
+    }
+
+    @Test
+    void previewOnlyAdmitsIndividualReviewFactorForRegularItemIds() {
+        ExtensionImportRepository repo = mock(ExtensionImportRepository.class);
+        ExtensionImport imported = new ExtensionImport("MERCADO_LIBRE",
+                "Teléfono usado", "100000", "ARS", "VENDEDOR",
+                "MLA123456789", "En buen estado",
+                "https://articulo.mercadolibre.com.ar/MLA-123456789-telefono-_JM", "demo");
+        imported.setMarketplaceReference(new MarketplaceReference(
+                Marketplace.MERCADO_LIBRE, "LISTING", "MLA123456789"));
+        imported.setSellerReputationLevel(5);
+        when(repo.findByIdAndImportedBy(42L, "demo")).thenReturn(Optional.of(imported));
+
+        var preview = new ExtensionRiskCoverageService(repo).getCoverage(42L, "demo");
+
+        assertEquals(2, preview.availableFactors());
+        assertEquals(3, preview.totalFactors());
+        assertTrue(preview.factors().stream().anyMatch(f ->
+                "ITEM_REVIEWS".equals(f.code()) && !f.available()));
     }
 
     @Test
