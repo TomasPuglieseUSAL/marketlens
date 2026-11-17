@@ -20,7 +20,8 @@ const publicationTitle = 'Disco Sólido Ssd Kingston Nv3 1tb M.2 2280 Nvme Pcie 
 // de "Con 4 estrellas o más" tiene un Toshiba 4,9, no el Kingston analizado.
 function extract({mainProduct = null, questions = true, loaded = true,
                   advertisedReview = true, legitimateReview = null,
-                  currentUrl = publicationUrl} = {}) {
+                  currentUrl = publicationUrl, headingTitle = publicationTitle,
+                  currencyMeta = true} = {}) {
     const scripts = [
         {
             '@type': 'Product',
@@ -43,7 +44,7 @@ function extract({mainProduct = null, questions = true, loaded = true,
         closest: () => null,
         querySelector: () => ({textContent: legitimateReview.rating})
     } : null;
-    const heading = {textContent: publicationTitle};
+    const heading = {textContent: headingTitle};
     const amount = {querySelector: selector =>
         selector.includes('fraction') ? {textContent: '140.000'} : null};
     const document = {
@@ -56,7 +57,7 @@ function extract({mainProduct = null, questions = true, loaded = true,
                 return {textContent: 'Preguntas y respuestas'};
             }
             if (selector.includes('meta[property="product:price:currency"]')) {
-                return {getAttribute: () => 'ARS'};
+                return currencyMeta ? {getAttribute: () => 'ARS'} : null;
             }
             return null;
         },
@@ -876,4 +877,96 @@ test('User Product: no confundir producto recomendado con ficha principal', () =
         }
     });
     assert.equal(result.found, true);
+});
+
+
+const samsungA13UpUrl =
+    'https://www.mercadolibre.com.ar/samsung-a13/up/MLAU3344351864';
+
+test('Samsung A13 usado: reconoce JSON-LD con título abreviado y moneda solamente en Offer', () => {
+    // HTML aportado: h1 "Samsung A13 (Usado)", Product.name "Samsung A13".
+    // No hay meta[property="product:price:currency"].
+    const data = extract({
+        currentUrl: samsungA13UpUrl,
+        headingTitle: 'Samsung A13 (Usado)',
+        currencyMeta: false,
+        mainProduct: {
+            '@type': 'Product',
+            name: 'Samsung A13',
+            sku: 'MLAU3344351864',
+            productID: 'MLAU3344351864',
+            offers: {
+                price: 111552, priceCurrency: 'ARS',
+                url: samsungA13UpUrl
+            }
+        }
+    });
+    assert.equal(data.found, true);
+    assert.equal(data.externalId, 'MLAU3344351864');
+    assert.equal(data.currency, 'ARS');
+    assert.equal(data.price, '140.000');
+});
+
+test('Samsung A13 usado: admite SKU inequívoco aun sin URLs JSON-LD', () => {
+    const data = extract({
+        currentUrl: samsungA13UpUrl,
+        headingTitle: 'Samsung A13 (Usado)',
+        currencyMeta: false,
+        mainProduct: {
+            '@type': 'Product',
+            name: 'Samsung A13',
+            sku: 'MLAU3344351864',
+            productID: 'MLAU3344351864',
+            offers: {price: 111552, priceCurrency: 'ARS'}
+        }
+    });
+    assert.equal(data.currency, 'ARS');
+});
+
+test('No admitir reseñas ni moneda de otro User Product con el mismo nombre', () => {
+    const data = extract({
+        currentUrl: samsungA13UpUrl,
+        headingTitle: 'Samsung A13 (Usado)',
+        currencyMeta: false,
+        mainProduct: {
+            '@type': 'Product',
+            name: 'Samsung A13',
+            sku: 'MLAU1111111111',
+            productID: 'MLAU1111111111',
+            offers: {priceCurrency: 'ARS',
+                     aggregateRating: {ratingValue: 4.8, reviewCount: 900}}
+        }
+    });
+    assert.equal(data.currency, null);
+    assert.equal(data.mlProductRating, null);
+});
+
+test('Si SKU contradice la URL de oferta, se rechaza el Product estructurado', () => {
+    const data = extract({
+        currentUrl: samsungA13UpUrl,
+        headingTitle: 'Samsung A13 (Usado)',
+        currencyMeta: false,
+        mainProduct: {
+            '@type': 'Product',
+            name: 'Samsung A13',
+            sku: 'MLAU1111111111',
+            productID: 'MLAU1111111111',
+            offers: {url: samsungA13UpUrl, priceCurrency: 'ARS'}
+        }
+    });
+    assert.equal(data.currency, null);
+});
+
+test('Una URL Offer que identifica la ficha puede corroborar un Product sin SKU', () => {
+    const data = extract({
+        currentUrl: samsungA13UpUrl,
+        headingTitle: 'Samsung A13 (Usado)',
+        currencyMeta: false,
+        mainProduct: {
+            '@type': 'Product',
+            name: 'Samsung A13',
+            offers: {url: samsungA13UpUrl, priceCurrency: 'ARS'}
+        }
+    });
+    assert.equal(data.currency, 'ARS');
 });
