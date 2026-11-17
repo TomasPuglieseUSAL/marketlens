@@ -91,6 +91,10 @@ public class MercadoLibreApiService {
                                 nullableString(response, "permalink"));
         }
 
+        public boolean hasReviewAccess(String username) {
+                return username != null && oauthService.isConnected(username);
+        }
+
         /**
          * Solo registra reseñas cuando la API confirma que pertenecen al
          * ITEM solicitado. Un estado de catálogo/producto devuelve null;
