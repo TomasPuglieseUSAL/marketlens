@@ -553,11 +553,22 @@ function conciseFactorLabel(factor) {
     const displayedSales = quoted?.[1].replace(/\s+sold\s*$/i, '').trim();
     const ratingLabel = rating ? rating[1].replace('.', ',') + '/5' : '';
 
+    // El JSON-LD de Mercado Libre suele calificar el MODELO del producto,
+    // no al vendedor ni a esta oferta. No eliminar esta advertencia al
+    // acortar la descripción (especialmente si no incluye "N opiniones").
+    if (code === 'ML_PRODUCT_REVIEWS_OBSERVED' && ratingLabel)
+        return 'Calificación general del producto: ' + ratingLabel +
+            '. No evalúa al vendedor ni acredita esta oferta.';
+    if (code === 'ML_LOW_PRODUCT_RATING' && ratingLabel)
+        return 'Calificación general baja del producto: ' + ratingLabel +
+            '. No evalúa la confiabilidad del vendedor.';
+    if (code === 'ML_MODERATE_PRODUCT_RATING' && ratingLabel)
+        return 'Calificación general intermedia del producto: ' + ratingLabel +
+            '. No evalúa la confiabilidad del vendedor.';
     if (code === 'ML_FEW_PRODUCT_REVIEWS' && reviews)
-        return 'Muestra reducida: ' + reviews[1] + ' opiniones.';
-    if (code === 'ML_PRODUCT_REVIEWS_OBSERVED' || code === 'ML_LOW_PRODUCT_RATING'
-            || code === 'ML_MODERATE_PRODUCT_RATING'
-            || code === 'TEMU_PRODUCT_REVIEWS_OBSERVED' || code === 'TEMU_LOW_PRODUCT_RATING'
+        return 'Muestra reducida del producto: ' + reviews[1] +
+            ' opiniones. No son ventas de este vendedor.';
+    if (code === 'TEMU_PRODUCT_REVIEWS_OBSERVED' || code === 'TEMU_LOW_PRODUCT_RATING'
             || code === 'TEMU_MODERATE_PRODUCT_RATING') {
         if (ratingLabel && reviews) {
             const prefix = code === 'TEMU_LOW_PRODUCT_RATING'
@@ -639,7 +650,15 @@ function renderRisk(value) {
     };
     const descriptor = labels[level] ?? ['Riesgo: ' + level, 'Resultado del análisis.', '?'];
     $('result-level').textContent = descriptor[0];
-    $('result-explanation').textContent = descriptor[1];
+    const factors = Array.isArray(evaluation.factors) ? evaluation.factors : [];
+    const unusualPrice = factors.some(factor =>
+        factor?.code === 'UNUSUALLY_LOW_PRICE'
+        && Number(factor?.contribution ?? factor?.scoreContribution ?? 1) > 0
+    );
+    $('result-explanation').textContent = unusualPrice
+        ? 'Precio muy inferior a referencias comparables. Las opiniones ' +
+          'generales del producto no acreditan esta oferta.'
+        : descriptor[1];
     $('result-icon').textContent = descriptor[2];
     $('result-score').textContent = Number.isFinite(evaluation.score) ? String(evaluation.score) : '—';
     const available = evaluation.availableFactors;
@@ -651,16 +670,22 @@ function renderRisk(value) {
         ? evaluation.coverageFactors : [];
     const missing = factorDetails.filter(item => item && item.available === false)
         .map(item => item.name).filter(Boolean);
+    const mlGeneralReviewsAvailable = currentMarketplace === 'MERCADO_LIBRE'
+        && factorDetails.some(item => item?.code === 'PRODUCT_REVIEWS'
+            && item.available === true);
     const detail = missing.length
         ? 'Falta: ' + missing.join(', ') + '. '
-        : factorDetails.length ? 'Todos los factores disponibles fueron observados. ' : '';
-    $('result-coverage-note').textContent = detail + (
+        : factorDetails.length ? 'Todos los tipos de datos están presentes. ' : '';
+    const reviewScope = mlGeneralReviewsAvailable
+        ? 'La calificación del producto puede agrupar compradores de otros ' +
+          'vendedores y no verifica esta oferta. '
+        : '';
+    $('result-coverage-note').textContent = detail + reviewScope + (
         level === 'INDETERMINATE'
             ? 'La cobertura mide datos disponibles, no su fiabilidad.'
             : coverage === 'PARTIAL'
                 ? 'La información disponible es parcial; interpretá el resultado con precaución.'
                 : 'La clasificación no garantiza una compra segura.');
-    const factors = Array.isArray(evaluation.factors) ? evaluation.factors : [];
     $('result-factors').replaceChildren();
     for (const factor of factors.slice(0, 8)) {
         const label = factor?.description ?? factor?.reason ?? factor?.name;
