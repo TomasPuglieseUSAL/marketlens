@@ -156,6 +156,26 @@ class MercadoLibreItemReviewEvidenceTest {
     }
 
     @Test
+    void positiveVerifiedReviewsDoNotCancelExtremePriceAndLimitedSellerHistory() {
+        Publication p = regularItem();
+        p.setPrice(new BigDecimal("2000"));
+        p.getSeller().setReputationLevel(null);
+        p.getSeller().setCompletedSales(1);
+        p.getSeller().setSalesObservedAt(LocalDateTime.now());
+        p.setMlItemReviews("MLA123456789", new BigDecimal("4.9"), 90, LocalDateTime.now());
+        var result = new RiskEngine(new RiskCoverageCalculator())
+                .evaluate(p, 45, new BigDecimal("100000"), 5);
+
+        assertEquals(60, result.getScore());
+        assertEquals(RiskLevel.HIGH, result.getLevel());
+        assertEquals(3, result.getAvailableFactors());
+        assertEquals(3, result.getTotalFactors());
+        assertTrue(result.getFactors().stream().anyMatch(f ->
+                "ML_ITEM_REVIEWS_VERIFIED".equals(f.getCode())
+                && f.getScoreContribution() == 0));
+    }
+
+    @Test
     void sharedProductRatingsDoNotCompleteAnUnverifiedItemReviewFactor() {
         Publication p = regularItem();
         p.setMlProductRating(new BigDecimal("4.9"));
