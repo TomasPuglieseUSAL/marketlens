@@ -11,6 +11,7 @@ import com.marketlens.backend.service.PriceRiskScoring;
 import com.marketlens.backend.service.TemuSellerRiskScoring;
 import com.marketlens.backend.service.TemuProductReviewEvidence;
 import com.marketlens.backend.service.MercadoLibreProductReviewEvidence;
+import com.marketlens.backend.service.MercadoLibreItemReviewEvidence;
 import com.marketlens.backend.service.MercadoLibreSellerEvidence;
 import com.marketlens.backend.service.CommunityReportRiskScoring;
 import com.marketlens.backend.service.TemuCommercialEvidence;
@@ -108,13 +109,25 @@ public class RiskEngine {
             score += productSignal.points();
         }
 
-        // Opiniones generales del catálogo de Mercado Libre: CONTEXTO
-        // no puntuable, pues no describen al vendedor ni a esta oferta.
-        // Los factores aparecen como información, siempre con 0 puntos.
-        for (MercadoLibreProductReviewEvidence.Signal mlSignal :
-                MercadoLibreProductReviewEvidence.evaluateSignals(publication, LocalDateTime.now())) {
-            addFactor(evaluation, mlSignal.code(), mlSignal.description(), mlSignal.points());
-            score += mlSignal.points();
+        // Preferir las reseñas cuya pertenencia al item fue verificada
+        // independientemente por la API. No mezclar con la valoración del
+        // modelo del catálogo ni convertir reputación de producto en la
+        // reputación de un vendedor. La señal suma 0 puntos: refuerza
+        // cobertura, no simula una garantía ni reduce anomalías de precio.
+        boolean verifiedItemReviews = MercadoLibreItemReviewEvidence
+                .hasVerifiedEvidence(publication, LocalDateTime.now());
+        if (verifiedItemReviews) {
+            addFactor(evaluation, "ML_ITEM_REVIEWS_VERIFIED",
+                    MercadoLibreItemReviewEvidence.description(publication), 0);
+        } else {
+            // Las reseñas generales del catálogo son solo contexto.
+            for (MercadoLibreProductReviewEvidence.Signal mlSignal :
+                    MercadoLibreProductReviewEvidence.evaluateSignals(
+                            publication, LocalDateTime.now())) {
+                addFactor(evaluation, mlSignal.code(),
+                        mlSignal.description(), mlSignal.points());
+                score += mlSignal.points();
+            }
         }
         // Reputación observada (sin OAuth): puntuar una sola vez si NO
         // existe un nivel verificado. Nunca sumarla duplicada.
