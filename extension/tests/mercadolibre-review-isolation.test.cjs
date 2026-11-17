@@ -831,3 +831,49 @@ test('Galaxy A13 caja abierta: precio estructurado contradictorio se rechaza', (
         structuredPrice: '149000'
     }).found, false);
 });
+
+
+test('User Product: no importa datos del A13 como si fueran del A15', () => {
+    const a15Url =
+        'https://www.mercadolibre.com.ar/celular-samsung-a15/up/MLAU3897495269';
+    const previousId = 'MLAU3344351864';
+    // El HTML conserva un h1 y un Product de la ficha anterior, pero
+    // location ya apunta al nuevo /up/MLAU.
+    const result = extract({
+        currentUrl: a15Url,
+        mainProduct: {
+            '@type': 'Product',
+            name: publicationTitle,
+            sku: previousId,
+            productID: previousId,
+            offers: {price: 111552, priceCurrency: 'ARS'}
+        }
+    });
+    assert.equal(result.found, false);
+    assert.ok(result.message.includes('no coinciden'));
+});
+
+test('User Product: la identidad coherente no se rechaza', () => {
+    const result = extract({
+        mainProduct: {
+            '@type': 'Product',
+            name: publicationTitle,
+            sku: 'MLAU2874874181',
+            productID: 'MLAU2874874181',
+            aggregateRating: {ratingValue: 4.9, reviewCount: 1552}
+        }
+    });
+    assert.equal(result.found, true);
+    assert.equal(result.externalId, 'MLAU2874874181');
+});
+
+test('User Product: no confundir producto recomendado con ficha principal', () => {
+    const result = extract({
+        mainProduct: {
+            '@type': 'Product',
+            name: 'Televisor OLED 65 pulgadas',
+            sku: 'MLAU3344351864'
+        }
+    });
+    assert.equal(result.found, true);
+});
