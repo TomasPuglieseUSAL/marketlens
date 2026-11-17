@@ -172,6 +172,13 @@ class GenericProductMatchingServiceTest {
     }
 
     @Test
+    void reorderingRamAndStorageDoesNotChangeSpecifications() {
+        assertStatus("PROVISIONAL_MATCH",
+                "Samsung Galaxy A13 4GB RAM 64GB (Usado)", "",
+                "Samsung Galaxy A13 64GB 4GB RAM (Usado)", "", 0.6);
+    }
+
+    @Test
     void contradictoryDescriptionDoesNotOverrideExplicitTitle() {
         assertStatus("INSUFFICIENT_DATA",
                 "Samsung Galaxy A13 64GB (Usado)",
