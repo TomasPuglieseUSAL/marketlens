@@ -138,6 +138,22 @@ class GenericProductMatchingServiceTest {
     }
 
     @Test
+    void descriptionCanCompleteMissingCondition() {
+        assertStatus("PROVISIONAL_MATCH",
+                "Consola PX5 Digital 1TB",
+                "La consola está usada, totalmente funcional.",
+                "Consola PX5 Digital 1000 GB (Usado)", "", 0.6);
+    }
+
+    @Test
+    void titleWithContradictoryConditionsRemainsUncertain() {
+        assertStatus("INSUFFICIENT_DATA",
+                "Consola PX5 Digital 1TB nuevo usado",
+                "La consola está usada.",
+                "Consola PX5 Digital 1TB (Usado)", "", 0.6);
+    }
+
+    @Test
     void shortTitleUsesDescriptionToConfirmSameStorageAndRam() {
         assertStatus("PROVISIONAL_MATCH",
                 "Samsung A13 (Usado)",
