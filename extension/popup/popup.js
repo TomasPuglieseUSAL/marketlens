@@ -579,15 +579,6 @@ function conciseFactorLabel(factor) {
             return prefix + ratingLabel + ' (' + reviews[1] + ' opiniones).';
         }
     }
-    if (code === 'ML_ITEM_REVIEWS_VERIFIED') {
-        // Distinguir de opiniones compartidas y no presentar una valoración
-        // positiva como garantía de que la transacción es segura.
-        const count = full.match(/publicaci[oó]n \((\d+)\)/i)?.[1];
-        return 'Opiniones verificadas de esta publicación: '
-            + (ratingLabel || 'calificación disponible')
-            + (count ? ' (' + count + ' opiniones)' : '')
-            + '. Son experiencias anteriores, no una garantía.';
-    }
     if (code === 'ML_SELLER_REPUTATION_OBSERVED' && ratingLabel)
         return 'Reputación del vendedor: ' + ratingLabel + ' (observada).';
     if (code === 'MODERATE_SELLER_REPUTATION')
